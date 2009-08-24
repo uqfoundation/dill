@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-hacking pshell.py to the pickle interface
+dill: a full python state pickler
+
+Based on code written by Oren Tirosh and Armin Ronacher.
+Extended to a (near) full set of python types (in types module),
+and coded to the pickle interface, by mmckerns@caltech.edu
 """
 import __builtin__
 import __main__ as _main_module
