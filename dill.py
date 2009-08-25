@@ -6,6 +6,9 @@ Based on code written by Oren Tirosh and Armin Ronacher.
 Extended to a (near) full set of python types (in types module),
 and coded to the pickle interface, by mmckerns@caltech.edu
 """
+__all__ = ['dump','dumps','load','loads','dump_session','load_session',\
+           'Pickler','Unpickler','register']
+
 import __builtin__
 import __main__ as _main_module
 import sys
@@ -27,17 +30,20 @@ except ImportError:
     from StringIO import StringIO
 
 def dump(obj, file, protocol=HIGHEST_PROTOCOL):
+    """pickle an object to a file"""
     pik = Pickler(file, protocol)
     pik._main_module = _main_module
     pik.dump(obj)
     return
 
 def dumps(obj, protocol=HIGHEST_PROTOCOL):
+    """pickle an object to a string"""
     file = StringIO()
     dump(obj, file, protocol)
     return file.getvalue()
 
 def load(file):
+    """unpickle an object from a file"""
     pik = Unpickler(file)
     pik._main_module = _main_module
     obj = pik.load()
@@ -45,6 +51,7 @@ def load(file):
     return obj
 
 def loads(str):
+    """unpickle an object from a string"""
     file = StringIO(str)
     return load(file)
 
@@ -52,7 +59,7 @@ def loads(str):
 
 ### Pickle the Interpreter Session
 def dump_session(filename='/tmp/console.sess', main_module=_main_module):
-    """Dump the main module into a session file."""
+    """pickle the current state of __main__ to a file"""
     f = file(filename, 'wb')
     try:
         pickler = Pickler(f, 2)
@@ -63,7 +70,7 @@ def dump_session(filename='/tmp/console.sess', main_module=_main_module):
     return
 
 def load_session(filename='/tmp/console.sess', main_module=_main_module):
-    """Update the main module with the state from the session file."""
+    """update the __main__ module with the state from the session file"""
     f = file(filename, 'rb')
     try:
         unpickler = Unpickler(f)
