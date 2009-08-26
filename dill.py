@@ -126,11 +126,11 @@ def _load_type(name):
 def _create_type(type, *args):
     return type(*args)
 
+ctypes.pythonapi.PyCell_New.restype = ctypes.py_object
+ctypes.pythonapi.PyCell_New.argtypes = [ctypes.py_object]
+# thanks to Paul Kienzle for cleaning the ctypes CellType logic
 def _create_cell(obj):
-    d = {}
-    p = ctypes.pythonapi.PyCell_New(ctypes.py_object(obj))
-    ctypes.pythonapi.PyDict_SetItemString(ctypes.py_object(d), 'x', p)
-    return d['x']
+     return ctypes.pythonapi.PyCell_New(obj)
 
 def _import_module(import_name):
     if '.' in import_name:
