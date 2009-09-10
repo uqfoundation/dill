@@ -18,10 +18,14 @@ from pickle import HIGHEST_PROTOCOL
 from pickle import Pickler as StockPickler
 from pickle import Unpickler as StockUnpickler
 from types import CodeType, FunctionType, ClassType, MethodType, \
-     ModuleType, GetSetDescriptorType, BuiltinMethodType
+     GeneratorType, DictProxyType, XRangeType, SliceType, TracebackType, \
+     NotImplementedType, EllipsisType, MemberDescriptorType, FrameType, \
+     ModuleType, GetSetDescriptorType, BuiltinMethodType 
+from weakref import ReferenceType, ProxyType, CallableProxyType
 
 CellType = type((lambda x: lambda y: x)(0).func_closure[0])
 WrapperDescriptorType = type(type.__repr__)
+MethodDescriptorType = type(type.__dict__['mro'])
 
 ### Shorthands (modified from python2.5/lib/pickle.py)
 try:
@@ -113,7 +117,8 @@ def _create_typemap():
     return
 _typemap = dict(_create_typemap(), **{
     CellType:                   'CellType',
-    WrapperDescriptorType:      'WrapperDescriptorType'
+    WrapperDescriptorType:      'WrapperDescriptorType',
+    MethodDescriptorType:       'MethodDescriptorType'
 })
 _reverse_typemap = dict((v, k) for k, v in _typemap.iteritems())
 
@@ -131,6 +136,20 @@ ctypes.pythonapi.PyCell_New.argtypes = [ctypes.py_object]
 # thanks to Paul Kienzle for cleaning the ctypes CellType logic
 def _create_cell(obj):
      return ctypes.pythonapi.PyCell_New(obj)
+
+ctypes.pythonapi.PyDictProxy_New.restype = ctypes.py_object
+ctypes.pythonapi.PyDictProxy_New.argtypes = [ctypes.py_object]
+def _create_dictproxy(obj):
+     return ctypes.pythonapi.PyDictProxy_New(obj)
+
+def _dict_from_dictproxy(dictproxy):
+     _dict = dictproxy.copy() # convert dictproxy to dict
+     _dict.pop('__dict__')
+     try:
+         _dict.pop('__weakref__')
+     except KeyError:
+         pass
+     return _dict
 
 def _import_module(import_name):
     if '.' in import_name:
@@ -197,6 +216,8 @@ def save_builtin_method(pickler, obj):
         StockPickler.save_global(pickler, obj)
     return
 
+@register(MethodDescriptorType)
+@register(MemberDescriptorType)
 @register(GetSetDescriptorType)
 @register(WrapperDescriptorType)
 def save_wrapper_descriptor(pickler, obj):
@@ -206,6 +227,12 @@ def save_wrapper_descriptor(pickler, obj):
 @register(CellType)
 def save_cell(pickler, obj):
     pickler.save_reduce(_create_cell, (obj.cell_contents,), obj=obj)
+    return
+
+@register(DictProxyType)
+def save_dictproxy(pickler, obj):
+    pickler.save_reduce(_create_dictproxy, (dict(obj),), obj=obj)
+   #StockPickler.save_dict(pickler, obj)
     return
 
 @register(ModuleType)
@@ -223,9 +250,7 @@ def save_type(pickler, obj):
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
     elif obj.__module__ == '__main__':
         if type(obj) == type:
-            _dict = obj.__dict__.copy() # convert dictproxy to dict
-            _dict.pop('__dict__')
-            _dict.pop('__weakref__')
+            _dict = _dict_from_dictproxy(obj.__dict__)
         else:
             _dict = obj.__dict__
        #print "%s\n%s" % (type(obj), obj.__name__)

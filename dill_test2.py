@@ -38,17 +38,23 @@ _method = _class()._method; typelist.append(_method) # pickle fails
 _ubmethod = _class._method; typelist.append(_ubmethod) # pickle fails
 _module = pickle; typelist.append(_module) # pickle fails
 _code = compile('','','exec'); typelist.append(_code) # pickle fails
+_dictproxy = type.__dict__; typelist.append(_dictproxy) # pickle fails
+_methoddescrip = _dictproxy['mro']; typelist.append(_methoddescrip) # pickle fails
 import array; _getsetdescrip = array.array.typecode; typelist.append(_getsetdescrip) # pickle fails
+import datetime; _membdescrip = datetime.timedelta.days; typelist.append(_membdescrip) # pickle fails
+_wrapperdescrip = type.__repr__; typelist.append(_wrapperdescrip) # pickle fails
 #_generator = _function(1); typelist.append(_generator) # pickle fails #XXX: FAILS
-#_dictproxy = type.__dict__; typelist.append(_dictproxy) # pickle fails #XXX: FAILS
+#_frame = _generator.gi_frame; typelist.append(_frame) # pickle fails #XXX: FAILS
 #_xrange = xrange(1); typelist.append(_xrange) # pickle fails #XXX: FAILS
 #_slice = slice(1); typelist.append(_slice) # pickle fails #XXX: FAILS
 #_nimp = NotImplemented; typelist.append(_nimp) # pickle fails #XXX: FAILS
 #_ellipsis = Ellipsis; typelist.append(_ellipsis) # pickle fails #XXX: FAILS
-#import datetime; _membdescrip = datetime.timedelta.days; typelist.append(_membdescrip) # pickle fails #XXX: FAILS
 #---------------
 #_traceback = ???
-#_frame = ???
+#---------------
+#_reference = ???
+#_proxy = ???
+#_callable = ???
 
 
 if __name__ == '__main__':
