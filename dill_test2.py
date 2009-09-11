@@ -32,23 +32,24 @@ typelist.append(_newclass) # <type 'type'>
 _instance = _class(); typelist.append(_instance)
 _object = _newclass(); typelist.append(_object) # <type 'class'>
 def _function(x): yield x; typelist.append(_function)
-_lambda = lambda x: lambda y: x; typelist.append(_lambda) # pickle fails
-_cell = (_lambda)(0).func_closure[0]; typelist.append(_cell) # pickle fails
-_method = _class()._method; typelist.append(_method) # pickle fails
-_ubmethod = _class._method; typelist.append(_ubmethod) # pickle fails
-_module = pickle; typelist.append(_module) # pickle fails
-_code = compile('','','exec'); typelist.append(_code) # pickle fails
-_dictproxy = type.__dict__; typelist.append(_dictproxy) # pickle fails
-_methoddescrip = _dictproxy['mro']; typelist.append(_methoddescrip) # pickle fails
-import array; _getsetdescrip = array.array.typecode; typelist.append(_getsetdescrip) # pickle fails
-import datetime; _membdescrip = datetime.timedelta.days; typelist.append(_membdescrip) # pickle fails
-_wrapperdescrip = type.__repr__; typelist.append(_wrapperdescrip) # pickle fails
-#_generator = _function(1); typelist.append(_generator) # pickle fails #XXX: FAILS
-#_frame = _generator.gi_frame; typelist.append(_frame) # pickle fails #XXX: FAILS
-#_xrange = xrange(1); typelist.append(_xrange) # pickle fails #XXX: FAILS
-#_slice = slice(1); typelist.append(_slice) # pickle fails #XXX: FAILS
-#_nimp = NotImplemented; typelist.append(_nimp) # pickle fails #XXX: FAILS
-#_ellipsis = Ellipsis; typelist.append(_ellipsis) # pickle fails #XXX: FAILS
+# pickle fails on all below here -------------------------------------------
+_lambda = lambda x: lambda y: x; typelist.append(_lambda)
+_cell = (_lambda)(0).func_closure[0]; typelist.append(_cell)
+_method = _class()._method; typelist.append(_method)
+_ubmethod = _class._method; typelist.append(_ubmethod)
+_module = pickle; typelist.append(_module)
+_code = compile('','','exec'); typelist.append(_code)
+_dictproxy = type.__dict__; typelist.append(_dictproxy)
+_methoddescrip = _dictproxy['mro']; typelist.append(_methoddescrip)
+import array; _getsetdescrip = array.array.typecode; typelist.append(_getsetdescrip)
+import datetime; _membdescrip = datetime.timedelta.days; typelist.append(_membdescrip)
+_wrapperdescrip = type.__repr__; typelist.append(_wrapperdescrip)
+_generator = _function(1); typelist.append(_generator)
+_frame = _generator.gi_frame; typelist.append(_frame)
+_xrange = xrange(1); typelist.append(_xrange)
+_slice = slice(1); typelist.append(_slice)
+_nimp = NotImplemented; typelist.append(_nimp)
+_ellipsis = Ellipsis; typelist.append(_ellipsis)
 #---------------
 #_traceback = ???
 #---------------
@@ -60,6 +61,10 @@ _wrapperdescrip = type.__repr__; typelist.append(_wrapperdescrip) # pickle fails
 if __name__ == '__main__':
 
   for member in typelist:
-      p = pickle.dumps(member)
-      _member = pickle.loads(p)
+      if not pickle.pickles(member):
+          print "COPY failure: %s" % type(member)
+  for member in typelist:
+      try: pickle.copy(member)
+      except:
+          print "PICKLE failure: %s" % type(member)
 

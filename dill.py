@@ -7,7 +7,7 @@ Extended to a (near) full set of python types (in types module),
 and coded to the pickle interface, by mmckerns@caltech.edu
 """
 __all__ = ['dump','dumps','load','loads','dump_session','load_session',\
-           'Pickler','Unpickler','register']
+           'Pickler','Unpickler','register','copy','pickle','pickles']
 
 import __builtin__
 import __main__ as _main_module
@@ -32,6 +32,10 @@ try:
     from cStringIO import StringIO
 except ImportError:
     from StringIO import StringIO
+
+def copy(obj):
+    """use pickling to 'copy' an object"""
+    return loads(dumps(obj))
 
 def dump(obj, file, protocol=HIGHEST_PROTOCOL):
     """pickle an object to a file"""
@@ -102,6 +106,11 @@ class Unpickler(StockUnpickler):
         return StockUnpickler.find_class(self, module, name)
     pass
 
+def pickle(ob_type, pickle_function):
+    """expose dispatch table for user-created extensions"""
+    Pickler.dispatch[t] = func
+    return
+
 def register(t):
     def proxy(func):
         Pickler.dispatch[t] = func
@@ -139,8 +148,12 @@ def _create_cell(obj):
 
 ctypes.pythonapi.PyDictProxy_New.restype = ctypes.py_object
 ctypes.pythonapi.PyDictProxy_New.argtypes = [ctypes.py_object]
-def _create_dictproxy(obj):
-     return ctypes.pythonapi.PyDictProxy_New(obj)
+def _create_dictproxy(obj, *args):
+     dprox = ctypes.pythonapi.PyDictProxy_New(obj)
+     # hack to take care of pickle 'nesting' the correct dictproxy
+     if 'nested' in args and type(dprox['__dict__']) == DictProxyType:
+         return dprox['__dict__']
+     return dprox
 
 def _dict_from_dictproxy(dictproxy):
      _dict = dictproxy.copy() # convert dictproxy to dict
@@ -216,9 +229,9 @@ def save_builtin_method(pickler, obj):
         StockPickler.save_global(pickler, obj)
     return
 
-@register(MethodDescriptorType)
 @register(MemberDescriptorType)
 @register(GetSetDescriptorType)
+@register(MethodDescriptorType)
 @register(WrapperDescriptorType)
 def save_wrapper_descriptor(pickler, obj):
     pickler.save_reduce(getattr, (obj.__objclass__, obj.__name__), obj=obj)
@@ -231,7 +244,7 @@ def save_cell(pickler, obj):
 
 @register(DictProxyType)
 def save_dictproxy(pickler, obj):
-    pickler.save_reduce(_create_dictproxy, (dict(obj),), obj=obj)
+    pickler.save_reduce(_create_dictproxy, (dict(obj),'nested'), obj=obj)
    #StockPickler.save_dict(pickler, obj)
     return
 
@@ -260,5 +273,16 @@ def save_type(pickler, obj):
     else:
         StockPickler.save_global(pickler, obj)
     return
+
+# quick sanity checking
+def pickles(obj,exact=False):
+    """quick check if object pickles with dill"""
+    try:
+        pik = copy(obj)
+        if exact:
+          return pik == obj 
+        return type(pik) == type(obj)
+    except TypeError, err:
+        return False
 
 # EOF
