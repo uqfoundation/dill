@@ -150,10 +150,18 @@ ctypes.pythonapi.PyDictProxy_New.restype = ctypes.py_object
 ctypes.pythonapi.PyDictProxy_New.argtypes = [ctypes.py_object]
 def _create_dictproxy(obj, *args):
      dprox = ctypes.pythonapi.PyDictProxy_New(obj)
-     # hack to take care of pickle 'nesting' the correct dictproxy
+     #XXX: hack to take care of pickle 'nesting' the correct dictproxy
      if 'nested' in args and type(dprox['__dict__']) == DictProxyType:
          return dprox['__dict__']
      return dprox
+
+def _getattr(objclass, name, repr_str):
+    # hack to grab the reference directly
+    try: #XXX: works only for __builtin__ ?
+        attr = repr_str.split("'")[3]
+        return eval(attr+'.__dict__["'+name+'"]')
+    except:
+        return getattr(objclass,name)
 
 def _dict_from_dictproxy(dictproxy):
      _dict = dictproxy.copy() # convert dictproxy to dict
@@ -234,7 +242,8 @@ def save_builtin_method(pickler, obj):
 @register(MethodDescriptorType)
 @register(WrapperDescriptorType)
 def save_wrapper_descriptor(pickler, obj):
-    pickler.save_reduce(getattr, (obj.__objclass__, obj.__name__), obj=obj)
+    pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
+                                   obj.__repr__()), obj=obj)
     return
 
 @register(CellType)
