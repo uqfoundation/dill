@@ -155,6 +155,9 @@ def _create_dictproxy(obj, *args):
          return dprox['__dict__']
      return dprox
 
+def _get_singleton(repr_str):
+    return eval(repr_str)
+
 def _getattr(objclass, name, repr_str):
     # hack to grab the reference directly
     try: #XXX: works only for __builtin__ ?
@@ -255,6 +258,17 @@ def save_cell(pickler, obj):
 def save_dictproxy(pickler, obj):
     pickler.save_reduce(_create_dictproxy, (dict(obj),'nested'), obj=obj)
    #StockPickler.save_dict(pickler, obj)
+    return
+
+@register(SliceType)
+def save_slice(pickler, obj):
+    pickler.save_reduce(slice, (obj.start, obj.stop, obj.step), obj=obj)
+    return
+
+@register(EllipsisType)
+@register(NotImplementedType)
+def save_singleton(pickler, obj):
+    pickler.save_reduce(_get_singleton, (obj.__repr__(),), obj=obj)
     return
 
 @register(ModuleType)
