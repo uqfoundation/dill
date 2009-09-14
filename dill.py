@@ -14,7 +14,7 @@ import __main__ as _main_module
 import sys
 import marshal
 import ctypes
-from pickle import HIGHEST_PROTOCOL
+from pickle import HIGHEST_PROTOCOL, PicklingError
 from pickle import Pickler as StockPickler
 from pickle import Unpickler as StockUnpickler
 from types import CodeType, FunctionType, ClassType, MethodType, \
@@ -305,7 +305,7 @@ def pickles(obj,exact=False):
         if exact:
           return pik == obj 
         return type(pik) == type(obj)
-    except TypeError, err:
+    except (TypeError, PicklingError), err:
         return False
 
 # EOF

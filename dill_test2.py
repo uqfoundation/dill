@@ -33,11 +33,14 @@ _instance = _class(); typelist.append(_instance)
 _object = _newclass(); typelist.append(_object) # <type 'class'>
 def __f():
     try: raise
-    except TypeError, e:
-      return e
-_exception = __f(); typelist.append(_exception)
+    except:
+      from sys import exc_info
+      e, er, tb = exc_info()
+      return er, tb
+_exception = __f()[0]; typelist.append(_exception)
 def _function(x): yield x; typelist.append(_function)
 # pickle fails on all below here -------------------------------------------
+_traceback = __f()[1]; typelist.append(_traceback)
 _lambda = lambda x: lambda y: x; typelist.append(_lambda)
 _cell = (_lambda)(0).func_closure[0]; typelist.append(_cell)
 _method = _class()._method; typelist.append(_method)
@@ -59,8 +62,6 @@ _slice = slice(1); typelist.append(_slice)
 _nimp = NotImplemented; typelist.append(_nimp)
 _ellipsis = Ellipsis; typelist.append(_ellipsis)
 #---------------
-#_traceback = ???
-#---------------
 #_dictitemiter = type.__dict__.iteritems()
 #---------------
 #_reference = ???
@@ -74,7 +75,8 @@ if __name__ == '__main__':
       if not pickle.pickles(member):
           print "COPY failure: %s" % type(member)
   for member in typelist:
-      try: pickle.copy(member)
+      try:
+          pickle.copy(member)
       except:
           print "PICKLE failure: %s" % type(member)
 
