@@ -31,6 +31,11 @@ typelist.append(_class)
 typelist.append(_newclass) # <type 'type'>
 _instance = _class(); typelist.append(_instance)
 _object = _newclass(); typelist.append(_object) # <type 'class'>
+def __f():
+    try: raise
+    except TypeError, e:
+      return e
+_exception = __f(); typelist.append(_exception)
 def _function(x): yield x; typelist.append(_function)
 # pickle fails on all below here -------------------------------------------
 _lambda = lambda x: lambda y: x; typelist.append(_lambda)
@@ -55,6 +60,8 @@ _nimp = NotImplemented; typelist.append(_nimp)
 _ellipsis = Ellipsis; typelist.append(_ellipsis)
 #---------------
 #_traceback = ???
+#---------------
+#_dictitemiter = type.__dict__.iteritems()
 #---------------
 #_reference = ???
 #_proxy = ???
