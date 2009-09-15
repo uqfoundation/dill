@@ -31,16 +31,16 @@ typelist.append(_class)
 typelist.append(_newclass) # <type 'type'>
 _instance = _class(); typelist.append(_instance)
 _object = _newclass(); typelist.append(_object) # <type 'class'>
-def __f():
+def _function2():
     try: raise
     except:
       from sys import exc_info
       e, er, tb = exc_info()
       return er, tb
-_exception = __f()[0]; typelist.append(_exception)
+_exception = _function2()[0]; typelist.append(_exception)
 def _function(x): yield x; typelist.append(_function)
 # pickle fails on all below here -------------------------------------------
-_traceback = __f()[1]; typelist.append(_traceback)
+_traceback = _function2()[1]; typelist.append(_traceback)
 _lambda = lambda x: lambda y: x; typelist.append(_lambda)
 _cell = (_lambda)(0).func_closure[0]; typelist.append(_cell)
 _method = _class()._method; typelist.append(_method)
@@ -62,11 +62,20 @@ _slice = slice(1); typelist.append(_slice)
 _nimp = NotImplemented; typelist.append(_nimp)
 _ellipsis = Ellipsis; typelist.append(_ellipsis)
 #---------------
+import weakref
+_ref = weakref.ref(_instance); typelist.append(_ref)
+#_deadref = weakref.ref(_class()); typelist.append(_deadref)
+_proxy = weakref.proxy(_instance); typelist.append(_proxy)
+#_deadproxy = weakref.proxy(_class()); typelist.append(_deadproxy)
+class _class2:
+    def __call__(self):
+        pass
+_instance2 = _class2()
+_callable = weakref.proxy(_instance2); typelist.append(_callable)
+#_deadcallable = weakref.proxy(_class2()); typelist.append(_deadcallable)
+#---------------
 #_dictitemiter = type.__dict__.iteritems()
 #---------------
-#_reference = ???
-#_proxy = ???
-#_callable = ???
 
 
 if __name__ == '__main__':
