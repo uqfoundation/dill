@@ -31,12 +31,14 @@ print ""
 #  print "%s: %s, %s" % (dill.pickles(i), type(i), i)
 #print ""
 
+"""
 # (__main__) class instance for new-style classes
 o = _d()
 oo = _newclass()
 print "%s: %s, %s" % (dill.pickles(o), type(o), o)
 print "%s: %s, %s" % (dill.pickles(oo), type(oo), oo)
 print ""
+"""
 
 # frames, generators, and tracebacks (all depend on frame)
 g = _g(1)

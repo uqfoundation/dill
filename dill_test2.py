@@ -31,6 +31,10 @@ typelist.append(_class)
 typelist.append(_newclass) # <type 'type'>
 _instance = _class(); typelist.append(_instance)
 _object = _newclass(); typelist.append(_object) # <type 'class'>
+_object2 = object(); typelist.append(_object2)
+_set = set(); typelist.append(_set)
+_frozenset = frozenset(); typelist.append(_frozenset)
+import array; _array = array.array("f"); typelist.append(_array)
 def _function2():
     try: raise
     except:
@@ -61,6 +65,10 @@ _xrange = xrange(1); typelist.append(_xrange)
 _slice = slice(1); typelist.append(_slice)
 _nimp = NotImplemented; typelist.append(_nimp)
 _ellipsis = Ellipsis; typelist.append(_ellipsis)
+#_property = property()
+#_super = super(type)
+#_staticmethod = staticmethod(0)
+#_classmethod = ???
 #---------------
 import weakref
 _ref = weakref.ref(_instance); typelist.append(_ref)
@@ -81,10 +89,12 @@ _instance2 = _class2()
 if __name__ == '__main__':
 
   for member in typelist:
+     #print "%s ==> %s" % (member, type(member)) # DEBUG
       if not pickle.pickles(member):
           print "COPY failure: %s" % type(member)
          #print " --> %s" % pickle.copy(member)
   for member in typelist:
+     #print "%s ==> %s" % (member, type(member)) # DEBUG
       try:
           pickle.copy(member)
       except:
