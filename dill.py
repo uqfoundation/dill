@@ -181,7 +181,7 @@ def _getattr(objclass, name, repr_str):
 def _dict_from_dictproxy(dictproxy):
      _dict = dictproxy.copy() # convert dictproxy to dict
      _dict.pop('__dict__')
-     try:
+     try: # new classes have weakref (while not all others do)
          _dict.pop('__weakref__')
      except KeyError:
          pass
@@ -333,15 +333,19 @@ def save_type(pickler, obj):
     if obj in _typemap:
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
     elif obj.__module__ == '__main__':
-        if type(obj) == type:
+        if type(obj) == type: #XXX: need better filter for new classes?
             _dict = _dict_from_dictproxy(obj.__dict__)
         else:
             _dict = obj.__dict__
+       #print obj; print _dict
        #print "%s\n%s" % (type(obj), obj.__name__)
        #print "%s\n%s" % (obj.__bases__, obj.__dict__)
         pickler.save_reduce(_create_type, (type(obj), obj.__name__,
                                            obj.__bases__, _dict), obj=obj)
     else:
+       #print obj; print obj.__dict__
+       #print "%s\n%s" % (type(obj), obj.__name__)
+       #print "%s\n%s" % (obj.__bases__, obj.__dict__)
         StockPickler.save_global(pickler, obj)
     return
 

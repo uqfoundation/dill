@@ -83,6 +83,7 @@ if __name__ == '__main__':
   for member in typelist:
       if not pickle.pickles(member):
           print "COPY failure: %s" % type(member)
+         #print " --> %s" % pickle.copy(member)
   for member in typelist:
       try:
           pickle.copy(member)
