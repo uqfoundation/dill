@@ -155,7 +155,6 @@ def _create_dictproxy(obj, *args):
          return dprox['__dict__']
      return dprox
 
-"""
 ctypes.pythonapi.PyWeakref_GetObject.restype = ctypes.py_object
 ctypes.pythonapi.PyWeakref_GetObject.argtypes = [ctypes.py_object]
 def _create_weakref(obj, *args):
@@ -167,7 +166,6 @@ def _create_weakproxy(obj, *args):
      from weakref import proxy, ReferenceError
      if obj: return proxy(obj) #XXX: callback?
      raise ReferenceError, "Cannot pickle reference to dead object"
-"""
 
 def _eval_repr(repr_str):
     return eval(repr_str)
@@ -285,20 +283,34 @@ def save_singleton(pickler, obj):
     pickler.save_reduce(_eval_repr, (obj.__repr__(),), obj=obj)
     return
 
+def _locate_refobj(oid, module):
+    for obj in module.__dict__.values():
+        if oid == id(obj):
+            return obj
+    #XXX: nothing found... so return None? or Error?
+    return None
+
 """
 @register(ReferenceType)
 def save_weakref(pickler, obj):
-    ref_obj = ctypes.pythonapi.PyWeakref_GetObject(obj) # dead returns "None"
-    if ref_obj:
-        pickler.save_reduce(_create_weakref, (ref_obj,), obj=obj)
-    else: # FIXME: dead referenced object will raise an error
-        pickler.save_reduce(_create_weakref, (ref_obj,), obj=obj)
+    #FIXME: creates a dead weak ref, need to preserve "refobj"
+    pickler.save_reduce(_create_weakref, (obj(),), obj=obj)
+    #FIXME: first need to locate the module the ref obj lives
+  # refobj = _locate_refobj(obj.__hash__(), pickler._main_module )
+  # pickler.save_reduce(_create_weakref, (refobj,), obj=obj)
+    #FIXME: can lead to Segmentation Fault
+   #ref_obj = ctypes.pythonapi.PyWeakref_GetObject(obj) # dead returns "None"
+   #if ref_obj:
+   #    pickler.save_reduce(_create_weakref, (ref_obj,), obj=obj)
+   #else: # FIXME: dead referenced object will raise an error
+   #    pickler.save_reduce(_create_weakref, (ref_obj,), obj=obj)
     return
+"""
 
+"""
 @register(ProxyType)
 @register(CallableProxyType)
 def save_weakproxy(pickler, obj):
-    pickler.save_reduce(_create_weakproxy, (obj(),), obj=obj)
     ref_obj = ctypes.pythonapi.PyWeakref_GetObject(obj) # dead returns "None"
     if ref_obj:
         pickler.save_reduce(_create_weakproxy, (ref_obj,), obj=obj)

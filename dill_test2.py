@@ -64,15 +64,15 @@ _ellipsis = Ellipsis; typelist.append(_ellipsis)
 #---------------
 import weakref
 _ref = weakref.ref(_instance); typelist.append(_ref)
-#_deadref = weakref.ref(_class()); typelist.append(_deadref)
-_proxy = weakref.proxy(_instance); typelist.append(_proxy)
-#_deadproxy = weakref.proxy(_class()); typelist.append(_deadproxy)
+##_deadref = weakref.ref(_class()); typelist.append(_deadref)
+#_proxy = weakref.proxy(_instance); typelist.append(_proxy)
+##_deadproxy = weakref.proxy(_class()); typelist.append(_deadproxy)
 class _class2:
     def __call__(self):
         pass
 _instance2 = _class2()
-_callable = weakref.proxy(_instance2); typelist.append(_callable)
-#_deadcallable = weakref.proxy(_class2()); typelist.append(_deadcallable)
+#_callable = weakref.proxy(_instance2); typelist.append(_callable)
+##_deadcallable = weakref.proxy(_class2()); typelist.append(_deadcallable)
 #---------------
 #_dictitemiter = type.__dict__.iteritems()
 #---------------
