@@ -74,7 +74,7 @@ def dump_session(filename='/tmp/console.sess', main_module=_main_module):
     try:
         pickler = Pickler(f, 2)
         pickler._main_module = main_module
-        pickler._session = True
+        pickler._session = True # is best indicator of when pickling a session
         pickler.dump(main_module)
         pickler._session = False
     finally:
@@ -184,7 +184,10 @@ def _getattr(objclass, name, repr_str):
         attr = repr_str.split("'")[3]
         return eval(attr+'.__dict__["'+name+'"]')
     except:
-        return getattr(objclass,name)
+        attr = getattr(objclass,name)
+        if name == '__dict__':
+            attr = attr[name]
+        return attr
 
 def _dict_from_dictproxy(dictproxy):
      _dict = dictproxy.copy() # convert dictproxy to dict
@@ -204,8 +207,8 @@ def _import_module(import_name):
         return __import__(import_name)
     return getattr(__import__(module, None, None, [obj]), obj)
 
-def _locate_function(obj):
-    if obj.__module__ == '__main__':
+def _locate_function(obj, session=False):
+    if obj.__module__ == '__main__': # and session:
         return False
     try:
         found = _import_module(obj.__module__ + '.' + obj.__name__)
@@ -221,7 +224,7 @@ def save_code(pickler, obj):
 
 @register(FunctionType)
 def save_function(pickler, obj):
-    if not _locate_function(obj):
+    if not _locate_function(obj): #, pickler._session):
         if _DEBUG: print "F1: %s" % obj
         pickler.save_reduce(FunctionType, (obj.func_code, obj.func_globals,
                                            obj.func_name, obj.func_defaults,
@@ -234,10 +237,10 @@ def save_function(pickler, obj):
 @register(dict)
 def save_module_dict(pickler, obj):
     if obj is pickler._main_module.__dict__:
-        if _DEBUG: print "D1: %s" % "<dict>" # obj
+        if _DEBUG: print "D1: %s" % "<dict ...>" # obj
         pickler.write('c__builtin__\n__main__\n')
     else:
-        if _DEBUG: print "D2: %s" % "<dict>" #obj
+        if _DEBUG: print "D2: %s" % "<dict ...>" #obj
         StockPickler.save_dict(pickler, obj)
     return
 

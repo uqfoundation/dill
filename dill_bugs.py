@@ -17,19 +17,20 @@ def _f():
     return er, tb
 
 class _d(object):
-  pass
+  def _method(self):
+    pass
 
 from dill_test2 import _newclass
 
-# getset_descriptor "__dict__" for new-style classes
+# getset_descriptor for new-style classes (fails on '_method', if not __main__)
 d = _d.__dict__
 for i in d.values():
   print "%s: %s, %s" % (dill.pickles(i), type(i), i)
 print ""
-#od = _newclass.__dict__
-#for i in od.values():
-#  print "%s: %s, %s" % (dill.pickles(i), type(i), i)
-#print ""
+od = _newclass.__dict__
+for i in od.values():
+  print "%s: %s, %s" % (dill.pickles(i), type(i), i)
+print ""
 
 """
 # (__main__) class instance for new-style classes
