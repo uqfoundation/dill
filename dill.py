@@ -28,6 +28,7 @@ from weakref import ReferenceType, ProxyType, CallableProxyType
 CellType = type((lambda x: lambda y: x)(0).func_closure[0])
 WrapperDescriptorType = type(type.__repr__)
 MethodDescriptorType = type(type.__dict__['mro'])
+ExitType = type(exit)
 
 ### Shorthands (modified from python2.5/lib/pickle.py)
 try:
@@ -134,6 +135,7 @@ def _create_typemap():
     return
 _typemap = dict(_create_typemap(), **{
     CellType:                   'CellType',
+    ExitType:                   'ExitType',
     WrapperDescriptorType:      'WrapperDescriptorType',
     MethodDescriptorType:       'MethodDescriptorType'
 })
