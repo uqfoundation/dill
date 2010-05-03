@@ -119,7 +119,7 @@ If you use this software to do productive scientific research that leads to
 publication, we ask that you acknowledge use of the software by citing the
 following paper in your publication::
 
-    "pathos: a grid-services lite framework",
+    "pathos: a framework for heterogeneous computing",
      Michael McKerns and Michael Aivazis, unpublished;
      http://dev.danse.us/trac/pathos
 
