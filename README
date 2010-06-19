@@ -1,0 +1,15 @@
+dill: a utility for serialization of python objects
+
+Current release:
+    dill-0.1a1
+
+Installation:
+    $ python setup.py build
+    $ python setup.py install
+
+License:
+    >>> print dill.__license__
+
+More information:
+    http://www.cacr.caltech.edu/~mmckerns/
+

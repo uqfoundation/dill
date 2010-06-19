@@ -3,12 +3,12 @@
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
 #                              Mike McKerns, Caltech
-#                        (C) 2008-2009  All Rights Reserved
+#                        (C) 2008-2010  All Rights Reserved
 #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
 """
-dill: a full python state pickler
+dill: a utility for serialization of python objects
 
 < package summary >
 
@@ -112,7 +112,7 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Copyright (c) 2009 California Institute of Technology. All rights reserved.
+Copyright (c) 2010 California Institute of Technology. All rights reserved.
 
 
 If you use this software to do productive scientific research that leads to

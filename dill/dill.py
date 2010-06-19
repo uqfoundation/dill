@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-dill: a full python state pickler
+dill: a utility for serialization of python objects
 
 Based on code written by Oren Tirosh and Armin Ronacher.
 Extended to a (near) full set of python types (in types module),

@@ -28,7 +28,7 @@ setup(name='dill',
                      'Topic :: Physics Programming'),
 
       packages = ['dill'],
-      package_dir = {'dill':''},
+      package_dir = {'dill':'dill'},
 """
 
 # add dependencies

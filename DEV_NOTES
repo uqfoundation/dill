@@ -1,0 +1,100 @@
+create a weakref:
+
+>>> import dill 
+>>> import weakref
+>>> class Object:
+...   pass
+... 
+>>> o = Object()
+>>> r = weakref.ref(o)  #XXX: type: weakref.ReferenceType
+
+>>> r
+<weakref at 0xb12f60; to 'instance' at 0xb23080>
+>>> o
+<__main__.Object instance at 0xb23080>
+>>> r()
+<__main__.Object instance at 0xb23080>
+>>> r.__call__()
+<__main__.Object instance at 0xb23080>
+>>> r.__hash__()
+11677824
+>>> id(o)
+11677824
+
+
+>>> o2 = Object()
+>>> r2 = weakref.ref(o2)
+>>> del o2
+
+>>> r2
+<weakref at 0xb306f0; dead>
+>>> r2()
+>>> r2.__call__()
+>>> r2.__hash__()
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+TypeError: weak object has gone away
+
+
+>>> o3 = Object()
+>>> r3 = weakref.proxy(o3)  #XXX: type: weakref.ProxyType
+
+>>> r3
+<weakproxy at 0x85b10 to instance at 0x8d530>
+>>> o3
+<__main__.Object instance at 0x8d530>
+>>> r3.__class__
+<class __main__.Object at 0x6aa50>
+>>> o3.__class__
+<class __main__.Object at 0x6aa50>
+
+>>> del o3
+>>> r3
+<weakproxy at 0x85b10 to NoneType at 0x4f1aa0>
+>>> r3.__class__
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+ReferenceError: weakly-referenced object no longer exists
+
+
+>>> class Object2:
+...   def __call__(self):
+...     pass
+... 
+>>> oo = Object2()
+>>> oo
+<__main__.Object instance at 0x8ca30>
+>>> oo()
+>>> rr = weakref.proxy(oo)  #XXX: type: weakref.CallableProxyType
+>>> rr
+<weakproxy at 0x82930 to instance at 0x8ca30>
+>>> rr()
+>>> rr.__call__
+<bound method Object.__call__ of <__main__.Object instance at 0x8ca30>>
+>>> rr.__call__()
+>>> 
+
+
+
+########################################
+approach to pickling weakrefs:
+
+*) register the weakref types ?  (see line ~228 of dill.py)
+
+*) use hash to create hard copy of ref object
+   then upon unpickle, create new weakref
+
+*) propose that pickling a weakref will always provide a dead reference
+   unless the reference object is pickled along with the weakref
+
+########################################
+pickling generators:
+
+*) need to avoid the "new" method for FrameTypes...
+don't see how to do that, without going into C to get the GID Thread.
+
+*) currently inspecting: Objects/object.c Objects/dictobject.c Objects/genobject.c Objects/frameobject.c Python/pystate.c Python/thread.c Python/pythonrun.c 
+
+*) the package "generator_tools" may have the answer.
+
+########################################
