@@ -36,8 +36,8 @@ ctypes_version = '>=1.0.1'
 import sys
 if has_setuptools and hex(sys.hexversion) < '0x20500f0':
     setup_code += """
-        install_requires = ('ctypes%s'),
-""" % ctypes_version
+        install_requires = ['ctypes%s'],
+""" % (ctypes_version)
 
 # close 'setup' call
 setup_code += """    
