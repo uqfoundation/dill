@@ -32,7 +32,12 @@ setup(name='dill',
 """
 
 # add dependencies
-#
+ctypes_version = '>=1.0.1'
+import sys
+if has_setuptools and hex(sys.hexversion) < '0x20500f0':
+    setup_code += """
+        install_requires = ('ctypes%s'),
+""" % ctypes_version
 
 # close 'setup' call
 setup_code += """    
@@ -44,7 +49,14 @@ setup_code += """
 exec setup_code
 
 # if dependencies are missing, print a warning
-# 
+try:
+    import ctypes
+except ImportError:
+    print "\n***********************************************************"
+    print "WARNING: One of the following dependencies is unresolved:"
+    print "    ctypes %s" % ctypes_version
+    print "***********************************************************\n"
+
 
 if __name__=='__main__':
     pass

@@ -21,9 +21,12 @@ from pickle import Pickler as StockPickler
 from pickle import Unpickler as StockUnpickler
 from types import CodeType, FunctionType, ClassType, MethodType, \
      GeneratorType, DictProxyType, XRangeType, SliceType, TracebackType, \
-     NotImplementedType, EllipsisType, MemberDescriptorType, FrameType, \
-     ModuleType, GetSetDescriptorType, BuiltinMethodType, TypeType
+     NotImplementedType, EllipsisType, FrameType, ModuleType, \
+     BuiltinMethodType, TypeType
 from weakref import ReferenceType, ProxyType, CallableProxyType
+# new in python2.5
+if hex(sys.hexversion) >= '0x20500f0':
+    from types import MemberDescriptorType, GetSetDescriptorType
 
 CellType = type((lambda x: lambda y: x)(0).func_closure[0])
 WrapperDescriptorType = type(type.__repr__)
@@ -275,15 +278,24 @@ def save_builtin_method(pickler, obj):
         StockPickler.save_global(pickler, obj)
     return
 
-@register(MemberDescriptorType)
-@register(GetSetDescriptorType)
-@register(MethodDescriptorType)
-@register(WrapperDescriptorType)
-def save_wrapper_descriptor(pickler, obj):
-    if _DEBUG: print "Wr: %s" % obj
-    pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
-                                   obj.__repr__()), obj=obj)
-    return
+if hex(sys.hexversion) >= '0x20500f0':
+    @register(MemberDescriptorType)
+    @register(GetSetDescriptorType)
+    @register(MethodDescriptorType)
+    @register(WrapperDescriptorType)
+    def save_wrapper_descriptor(pickler, obj):
+        if _DEBUG: print "Wr: %s" % obj
+        pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
+                                       obj.__repr__()), obj=obj)
+        return
+else:
+    @register(MethodDescriptorType)
+    @register(WrapperDescriptorType)
+    def save_wrapper_descriptor(pickler, obj):
+        if _DEBUG: print "Wr: %s" % obj
+        pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
+                                       obj.__repr__()), obj=obj)
+        return
 
 @register(CellType)
 def save_cell(pickler, obj):
