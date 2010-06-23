@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+"""
+demonstrate dill's ability to pickle different python types
+"""
 
 import dill as pickle
 #import pickle

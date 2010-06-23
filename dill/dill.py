@@ -103,12 +103,14 @@ def load_session(filename='/tmp/console.sess', main_module=_main_module):
 
 ### Extend the Picklers
 class Pickler(StockPickler):
+    """python's Pickler extended to interpreter sessions"""
     dispatch = StockPickler.dispatch.copy()
     _main_module = None
     _session = False
     pass
 
 class Unpickler(StockUnpickler):
+    """python's Unpickler extended to interpreter sessions and more types"""
     _main_module = None
     _session = False
 

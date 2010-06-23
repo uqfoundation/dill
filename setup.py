@@ -16,7 +16,7 @@ except ImportError:
 setup_code = """
 setup(name='dill',
       version='0.1a1',
-      description='a full python state pickler',
+      description='a utility for serialization of python objects',
       author = 'Mike McKerns',
       maintainer = 'Mike McKerns',
       maintainer_email = 'mmckerns@caltech.edu',

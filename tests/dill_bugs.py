@@ -1,3 +1,7 @@
+"""
+demonstrate current bugs in some of dill's advanced features
+"""
+
 import dill
 
 """

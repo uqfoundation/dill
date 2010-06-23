@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+"""
+test dill's ability to handle nested functions
+"""
 
 import dill as pickle
 #import pickle
