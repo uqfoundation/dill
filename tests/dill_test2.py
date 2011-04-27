@@ -73,6 +73,15 @@ _quitter = quit; typelist.append(_quitter)
 #_super = super(type)
 #_staticmethod = staticmethod(0)
 #_classmethod = ???
+try:
+  from numpy import ufunc as _numpy_ufunc
+  typelist.append(_numpy_ufunc)
+  from numpy import array as _numpy_array
+  typelist.append(_numpy_array)
+  from numpy import int32 as _numpy_int32
+  typelist.append(_numpy_int32)
+except ImportError:
+  pass
 #---------------
 import weakref
 _ref = weakref.ref(_instance); typelist.append(_ref)

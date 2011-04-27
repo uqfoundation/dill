@@ -28,6 +28,11 @@ from weakref import ReferenceType, ProxyType, CallableProxyType
 if hex(sys.hexversion) >= '0x20500f0':
     from types import MemberDescriptorType, GetSetDescriptorType
 
+try:
+    from numpy import ufunc as NumpyUfuncType
+except ImportError:
+    NumpyUfuncType = None
+
 CellType = type((lambda x: lambda y: x)(0).func_closure[0])
 WrapperDescriptorType = type(type.__repr__)
 MethodDescriptorType = type(type.__dict__['mro'])
@@ -324,6 +329,19 @@ def save_singleton(pickler, obj):
     if _DEBUG: print "Si: %s" % obj
     pickler.save_reduce(_eval_repr, (obj.__repr__(),), obj=obj)
     return
+
+# thanks to Paul Kienzle for pointing out ufuncs didn't pickle
+if NumpyUfuncType:
+    @register(NumpyUfuncType)
+    def save_numpy_ufunc(pickler, obj):
+        if _DEBUG: print "Nu: %s" % obj
+        StockPickler.save_global(pickler, obj)
+        return
+# NOTE: the above 'save' performs like:
+#   import copy_reg
+#   def udump(f): return f.__name__
+#   def uload(name): return getattr(numpy, name)
+#   copy_reg.pickle(NumpyUfuncType, udump, uload)
 
 def _locate_refobj(oid, module):
     for obj in module.__dict__.values():
