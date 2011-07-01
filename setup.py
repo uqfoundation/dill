@@ -15,7 +15,7 @@ except ImportError:
 # build the 'setup' call
 setup_code = """
 setup(name='dill',
-      version='0.1a1',
+      version='0.1a2.dev',
       description='a utility for serialization of python objects',
       author = 'Mike McKerns',
       maintainer = 'Mike McKerns',

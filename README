@@ -1,7 +1,7 @@
 dill: a utility for serialization of python objects
 
 Current release:
-    dill-0.1a1
+    dill-0.1a2.dev
 
 Installation:
     $ python setup.py build
