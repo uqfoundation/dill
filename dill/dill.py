@@ -125,7 +125,7 @@ class Unpickler(StockUnpickler):
         return StockUnpickler.find_class(self, module, name)
     pass
 
-def pickle(ob_type, pickle_function):
+def pickle(t, func):
     """expose dispatch table for user-created extensions"""
     Pickler.dispatch[t] = func
     return
@@ -430,5 +430,20 @@ def pickles(obj,exact=False):
         return type(pik) == type(obj)
     except (TypeError, PicklingError), err:
         return False
+
+def dispatch_table():
+    """get the dispatch table of registered types"""
+    return Pickler.dispatch
+
+def _extend():
+    """extend pickle's dispatch_table with all registered types"""
+    import copy_reg
+    for t,func in Pickler.dispatch.items():
+        try:
+            copy_reg.pickle(t, func)
+        except: #TypeError, PicklingError
+            if _DEBUG: print "skip: %s" % t
+        else: pass
+    return
 
 # EOF
