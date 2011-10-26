@@ -7,7 +7,8 @@ Extended to a (near) full set of python types (in types module),
 and coded to the pickle interface, by mmckerns@caltech.edu
 """
 __all__ = ['dump','dumps','load','loads','dump_session','load_session',\
-           'Pickler','Unpickler','register','copy','pickle','pickles']
+           'Pickler','Unpickler','register','copy','pickle','pickles',\
+           'HIGHEST_PROTOCOL','PicklingError']
 
 _DEBUG = False  # print trace through pickling process
 
