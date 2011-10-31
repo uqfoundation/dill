@@ -168,9 +168,15 @@ following in your publication::
 """
 from dill import *
 
+def __extend():
+    from dill import _extend
+    _extend()
+    return
+__extend(); del __extend
+
 def copyright():
     """print copyright and reference"""
-    print __license__[-417:]
+    print __license__[-599:]
     return
 
 # end of file
