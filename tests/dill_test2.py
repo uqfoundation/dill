@@ -101,15 +101,25 @@ _instance2 = _class2()
 
 if __name__ == '__main__':
 
+  def pickles(x):
+    try:
+      p = pickle.loads(pickle.dumps(x))
+      try:
+        assert x == p
+      except AssertionError, err:
+        assert type(x) == type(p)
+        print "weak: %s" % type(x)
+    except (TypeError, pickle.PicklingError), err:
+      print "COPY failure: %s" % type(x)
+    return
+
   for member in typelist:
      #print "%s ==> %s" % (member, type(member)) # DEBUG
-      if not pickle.pickles(member):
-          print "COPY failure: %s" % type(member)
-         #print " --> %s" % pickle.copy(member)
+      pickles(member)
   for member in typelist:
      #print "%s ==> %s" % (member, type(member)) # DEBUG
       try:
-          pickle.copy(member)
+          pickle.loads(pickle.dumps(member))
       except:
           print "PICKLE failure: %s" % type(member)
 

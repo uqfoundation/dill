@@ -258,6 +258,9 @@ def save_module_dict(pickler, obj):
     if is_dill(pickler) and obj is pickler._main_module.__dict__:
         if _DEBUG: print "D1: %s" % "<dict ...>" # obj
         pickler.write('c__builtin__\n__main__\n')
+    elif not is_dill(pickler) and obj is _main_module.__dict__:
+        if _DEBUG: print "D3: %s" % "<dict ...>" # obj
+        pickler.write('c__main__\n__dict__\n')   #XXX: works in general?
     else:
         if _DEBUG: print "D2: %s" % "<dict ...>" #obj
         StockPickler.save_dict(pickler, obj)
@@ -445,51 +448,15 @@ def is_dill(pickler):
     return 'dill' in pickler.__module__
    #return hasattr(pickler,'_main_module')
 
-'''
-def __avoid_memo(): # some deep magic to skirt the memoize trap
-    try: raise
-    except:
-        from sys import exc_info
-        e, er, tb = exc_info()
-        return er, tb
-'''
-
 def _extend():
-    """extend pickle with all of dill's registered types
-
-    Currently fails (where dill succeeds) on:
-        - old-style class objects     <type 'classobj'>
-        - functions built on lambda   <type 'function'>
-        - bound class methods         <type 'instancemethod'>
-        - unbound class methods       <type 'instancemethod'>
-        - new-style class dictproxies <type 'dictproxy'>
-    Also, fails on all types dill fails to pickle.
-    """
+    """extend pickle with all of dill's registered types"""
     # need to have pickle not choke on _main_module?  use is_dill(pickler)
     for t,func in Pickler.dispatch.items():
         try:
             StockPickler.dispatch[t] = func
-           # to get around StockPickler.memoize assertion,
-           # could try setting StockPickler.fast = True, or
-           # don't pass in t where id(obj) in StockPickler.memo.
-           # Currently, sidestep this by some magic.
         except: #TypeError, PicklingError
             if _DEBUG: print "skip: %s" % t
         else: pass
-   #try: # use the below magic to avoid AssertionError on failures
-   #    _traceback = __avoid_memo()[1]
-   #    import pickle
-   #    p = pickle.loads(pickle.dumps(_traceback))
-   #except (TypeError, PicklingError), err:
-   #    pass
     return
-
-'''
-def extend():
-    for obj in _typemap.keys():
-        pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
-       #StockPickler.save_global(pickler, obj)
-    return
-'''
 
 # EOF
