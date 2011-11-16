@@ -4,6 +4,7 @@ demonstrate dill's ability to pickle different python types
 """
 
 import dill as pickle
+#pickle._trace(True)
 #import pickle
 
 typelist = []

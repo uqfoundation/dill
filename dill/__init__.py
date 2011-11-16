@@ -167,6 +167,7 @@ following in your publication::
 
 """
 from dill import *
+from dill import _trace
 
 def __extend():
     from dill import _extend
