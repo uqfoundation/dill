@@ -69,7 +69,10 @@ _xrange = xrange(1); typelist.append(_xrange)
 _slice = slice(1); typelist.append(_slice)
 _nimp = NotImplemented; typelist.append(_nimp)
 _ellipsis = Ellipsis; typelist.append(_ellipsis)
-_quitter = quit; typelist.append(_quitter)
+try:
+  __IPYTHON__ is True # is ipython
+except NameError:
+  _quitter = quit; typelist.append(_quitter)
 #_property = property()
 #_super = super(type)
 #_staticmethod = staticmethod(0)
@@ -103,6 +106,7 @@ _instance2 = _class2()
 if __name__ == '__main__':
 
   def pickles(x):
+    #print type(x)
     try:
       p = pickle.loads(pickle.dumps(x))
       try:

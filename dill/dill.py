@@ -22,6 +22,7 @@ import __main__ as _main_module
 import sys
 import marshal
 import ctypes
+# import zlib
 from pickle import HIGHEST_PROTOCOL, PicklingError
 from pickle import Pickler as StockPickler
 from pickle import Unpickler as StockUnpickler
@@ -42,7 +43,11 @@ except ImportError:
 CellType = type((lambda x: lambda y: x)(0).func_closure[0])
 WrapperDescriptorType = type(type.__repr__)
 MethodDescriptorType = type(type.__dict__['mro'])
-ExitType = type(exit)
+try:
+    __IPYTHON__ is True # is ipython
+    ExitType = None     # IPython.core.autocall.ExitAutocall
+except NameError:
+    ExitType = type(exit)
 
 ### Shorthands (modified from python2.5/lib/pickle.py)
 try:
@@ -79,6 +84,14 @@ def loads(str):
     """unpickle an object from a string"""
     file = StringIO(str)
     return load(file)
+
+# def dumpzs(obj, protocol=HIGHEST_PROTOCOL):
+#     """pickle an object to a compressed string"""
+#     return zlib.compress(dumps(obj, protocol))
+
+# def loadzs(str):
+#     """unpickle an object from a compressed string"""
+#     return loads(zlib.decompress(str))
 
 ### End: Shorthands ###
 
@@ -155,12 +168,14 @@ def _create_typemap():
            type(value) is type:
             yield value, key
     return
-_typemap = dict(_create_typemap(), **{
+_typedict = {
     CellType:                   'CellType',
-    ExitType:                   'ExitType',
     WrapperDescriptorType:      'WrapperDescriptorType',
     MethodDescriptorType:       'MethodDescriptorType'
-})
+}
+if ExitType:
+    _typedict[ExitType] = 'ExitType'
+_typemap = dict(_create_typemap(), **_typedict)
 _reverse_typemap = dict((v, k) for k, v in _typemap.iteritems())
 
 def _unmarshal(string):
