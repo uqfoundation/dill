@@ -26,6 +26,7 @@ __license__ = """
 
 from dill import *
 from dill import _trace
+import source, temp
 
 def __extend():
     from dill import _extend
@@ -42,5 +43,6 @@ def citation():
     """print citation"""
     print __doc__[-499:-140]
     return
+
 
 # end of file
