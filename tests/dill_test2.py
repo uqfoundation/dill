@@ -77,6 +77,9 @@ except NameError:
 #_super = super(type)
 #_staticmethod = staticmethod(0)
 #_classmethod = ???
+#_bytearray = bitearray([0])
+#_memoryview = ???
+#_array = array.array('i')
 try:
   from numpy import ufunc as _numpy_ufunc
   typelist.append(_numpy_ufunc)
@@ -100,6 +103,8 @@ _instance2 = _class2()
 ##_deadcallable = weakref.proxy(_class2()); typelist.append(_deadcallable)
 #---------------
 #_dictitemiter = type.__dict__.iteritems()
+#_defaultdict = collections.defautdict()
+#_deque = collections.deque([0])
 #---------------
 
 
