@@ -241,10 +241,10 @@ if has_setuptools and hex(sys.hexversion) < '0x20500f0':
         install_requires = ['ctypes%s'],
 """ % (ctypes_version)
 
-# close 'setup' call
+# add the scripts, and close 'setup' call
 setup_code += """    
-      zip_safe=True,
-      scripts=[])
+      zip_safe=False,
+      scripts=['scripts/unpickle.py'])
 """
 
 # exec the 'setup' code
