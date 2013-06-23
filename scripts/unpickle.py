@@ -1,5 +1,6 @@
 if __name__ == '__main__':
   import sys
   import dill
-  print dill.load(open(sys.argv[1],'r'))
+  for file in sys.argv[1:]:
+    print dill.load(open(file,'r'))
 
