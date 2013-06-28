@@ -61,8 +61,10 @@ except NameError:
 ### Shorthands (modified from python2.5/lib/pickle.py)
 try:
     from cStringIO import StringIO
+    from cStringIO import StringO as StringIOClass
 except ImportError:
     from StringIO import StringIO
+    StringIOClass = StringIO
 
 def copy(obj, main_module=None):
     """use pickling to 'copy' an object"""
@@ -127,7 +129,9 @@ def dump_session(filename='/tmp/console.sess', main_module=None):
         pickler.dump(main_module)
         pickler._session = False
     finally:
-        f.close()
+        # don't close StringIO (so callee can get value)
+        if not isinstance(f, StringIOClass):
+            f.close()
     return
 
 def load_session(filename='/tmp/console.sess', main_module=None):
@@ -161,7 +165,6 @@ def load_session(filename='/tmp/console.sess', main_module=None):
 
 def dumps_session(main_module=None):
     file = StringIO()
-    file.close = lambda: None # don't let dump_session close the StringIO
     dump_session(file, main_module)
     return file.getvalue()
 
