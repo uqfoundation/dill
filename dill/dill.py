@@ -7,7 +7,8 @@ Extended to a (near) full set of python types (in types module),
 and coded to the pickle interface, by mmckerns@caltech.edu
 """
 __all__ = ['dump','dumps','load','loads','dump_session','load_session',\
-           'Pickler','Unpickler','register','copy','pickle','pickles',\
+           'dumps_session', 'loads_session', 'Pickler','Unpickler',\
+           'register','copy','pickle','pickles',\
            'HIGHEST_PROTOCOL','PicklingError']
 
 import logging
@@ -115,7 +116,10 @@ def dump_session(filename='/tmp/console.sess', main_module=None):
     if main_module is None:
         main_module = DEFAULT_MAIN_MODULE
 
-    f = file(filename, 'wb')
+    if hasattr(filename, 'write'):
+        f = filename
+    else:
+        f = file(filename, 'wb')
     try:
         pickler = Pickler(f, 2)
         pickler._main_module = main_module
@@ -131,7 +135,10 @@ def load_session(filename='/tmp/console.sess', main_module=None):
     if main_module is None:
         main_module = DEFAULT_MAIN_MODULE
 
-    f = file(filename, 'rb')
+    if hasattr(filename, 'read'):
+        f = filename
+    else:
+        f = file(filename, 'rb')
     try:
         # for custom modules, make sure dill can import the module
         old_module = sys.modules.get(main_module.__name__)
@@ -151,6 +158,19 @@ def load_session(filename='/tmp/console.sess', main_module=None):
     finally:
         f.close()
     return
+
+def dumps_session(main_module=None):
+    file = StringIO()
+    file.close = lambda: None # don't let dump_session close the StringIO
+    dump_session(file, main_module)
+    return file.getvalue()
+
+def loads_session(val, main_module=None):
+    file = StringIO()
+    file.write(val)
+    file.seek(0)
+    load_session(file, main_module)
+    return main_module
 
 ### End: Pickle the Interpreter
 
