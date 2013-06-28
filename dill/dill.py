@@ -25,9 +25,9 @@ import marshal
 try:
     import __main__ as DEFAULT_MAIN_MODULE
     import ctypes
-    APP_ENGINE_MODE = False
+    HAS_CTYPES = True
 except:
-    APP_ENGINE_MODE = True
+    HAS_CTYPES = False
     DEFAULT_MAIN_MODULE = None
 
 # import zlib
@@ -207,9 +207,7 @@ def _load_type(name):
 def _create_type(typeobj, *args):
     return typeobj(*args)
 
-if APP_ENGINE_MODE:
-    pass
-else:
+if HAS_CTYPES:
     ctypes.pythonapi.PyCell_New.restype = ctypes.py_object
     ctypes.pythonapi.PyCell_New.argtypes = [ctypes.py_object]
     # thanks to Paul Kienzle for cleaning the ctypes CellType logic
@@ -360,9 +358,7 @@ else:
                                        obj.__repr__()), obj=obj)
         return
 
-if APP_ENGINE_MODE:
-    pass
-else:
+if HAS_CTYPES:
     @register(CellType)
     def save_cell(pickler, obj):
         log.info("Ce: %s" % obj)
