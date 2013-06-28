@@ -133,12 +133,21 @@ def load_session(filename='/tmp/console.sess', main_module=None):
 
     f = file(filename, 'rb')
     try:
+        # for custom modules, make sure dill can import the module
+        old_module = sys.modules.get(main_module.__name__)
+        sys.modules[main_module.__name__] = main_module
+
         unpickler = Unpickler(f)
         unpickler._main_module = main_module
         unpickler._session = True
         module = unpickler.load()
         unpickler._session = False
         main_module.__dict__.update(module.__dict__)
+
+        if old_module:
+            sys.modules[main_module.__name__] = old_module
+        else:
+            del sys.modules[main_module.__name__]
     finally:
         f.close()
     return
@@ -451,6 +460,12 @@ def save_type(pickler, obj):
     if obj in _typemap:
         log.info("T1: %s" % obj)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
+    # we are pickling the interpreter, using a custom module
+    elif is_dill(pickler) and pickler._session and type(obj) == type:
+        log.info("T2: %s" % obj)
+        _dict = _dict_from_dictproxy(obj.__dict__)
+        pickler.save_reduce(_create_type, (type(obj), obj.__name__,
+                                           obj.__bases__, _dict), obj=obj)
     elif obj.__module__ == '__main__':
         if type(obj) == type:
             # we are pickling the interpreter
