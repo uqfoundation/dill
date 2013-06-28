@@ -484,7 +484,10 @@ def save_type(pickler, obj):
         log.info("T1: %s" % obj)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
     # we are pickling the interpreter, using a custom module
-    elif is_dill(pickler) and pickler._session and type(obj) == type:
+    elif (is_dill(pickler) and
+          pickler._session and
+          obj.__module__ == pickler._main_module.__name__ and
+          type(obj) == type):
         log.info("T2: %s" % obj)
         _dict = _dict_from_dictproxy(obj.__dict__)
         pickler.save_reduce(_create_type, (type(obj), obj.__name__,
