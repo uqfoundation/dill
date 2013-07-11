@@ -36,24 +36,28 @@ issues is maintained at http://trac.mystic.cacr.caltech.edu/project/pathos/query
 Major Features
 --------------
 Dill can pickle the following standard types::
-    * none, type, bool, int, long, float, complex, str, unicode,
-    * tuple, list, dict, file, buffer, builtin,
-    * both old and new style classes,
-    * instances of old and new style classes,
-    * set, frozenset, array, functions, exceptions
+
+* none, type, bool, int, long, float, complex, str, unicode,
+* tuple, list, dict, file, buffer, builtin,
+* both old and new style classes,
+* instances of old and new style classes,
+* set, frozenset, array, functions, exceptions
 
 Dill can also pickle more 'exotic' standard types::
-    * functions with yields, nested functions, lambdas
-    * cell, method, unboundmethod, module, code,
-    * dictproxy, methoddescriptor, getsetdescriptor, memberdescriptor,
-    * wrapperdescriptor, xrange, slice,
-    * notimplemented, ellipsis, quit
+
+* functions with yields, nested functions, lambdas
+* cell, method, unboundmethod, module, code,
+* dictproxy, methoddescriptor, getsetdescriptor, memberdescriptor,
+* wrapperdescriptor, xrange, slice,
+* notimplemented, ellipsis, quit
 
 Dill cannot yet pickle these standard types::
-    * frame, generator, traceback
+
+* frame, generator, traceback
 
 Dill also provides the capability to::
-    * save and load python interpreter sessions
+
+* save and load python interpreter sessions
 
 Current Release
 ---------------
