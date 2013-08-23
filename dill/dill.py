@@ -48,8 +48,10 @@ MethodDescriptorType = type(type.__dict__['mro'])
 try:
     __IPYTHON__ is True # is ipython
     ExitType = None     # IPython.core.autocall.ExitAutocall
+    singletontypes = ['exit', 'quit', 'get_ipython']
 except NameError:
     ExitType = type(exit)
+    singletontypes = []
 
 ### Shorthands (modified from python2.5/lib/pickle.py)
 try:
@@ -98,7 +100,7 @@ def loads(str):
 ### End: Shorthands ###
 
 ### Pickle the Interpreter Session
-def dump_session(filename='/tmp/console.sess', main_module=_main_module):
+def dump_session(filename='/tmp/session.pkl', main_module=_main_module):
     """pickle the current state of __main__ to a file"""
     f = file(filename, 'wb')
     try:
@@ -111,7 +113,7 @@ def dump_session(filename='/tmp/console.sess', main_module=_main_module):
         f.close()
     return
 
-def load_session(filename='/tmp/console.sess', main_module=_main_module):
+def load_session(filename='/tmp/session.pkl', main_module=_main_module):
     """update the __main__ module with the state from the session file"""
     f = file(filename, 'rb')
     try:
@@ -415,8 +417,10 @@ def save_weakproxy(pickler, obj):
 def save_module(pickler, obj):
     if is_dill(pickler) and obj is pickler._main_module:
         log.info("M1: %s" % obj)
+        _main_dict = obj.__dict__.copy()
+        [_main_dict.pop(item,None) for item in singletontypes]
         pickler.save_reduce(__import__, (obj.__name__,), obj=obj,
-                            state=obj.__dict__.copy())
+                            state=_main_dict)
     else:
         log.info("M2: %s" % obj)
         pickler.save_reduce(_import_module, (obj.__name__,), obj=obj)
