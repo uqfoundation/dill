@@ -14,16 +14,15 @@ import logging
 log = logging.getLogger("dill")
 log.addHandler(logging.StreamHandler())
 def _trace(boolean):
-  """print a trace through the stack when pickling; useful for debugging"""
-  if boolean: log.setLevel(logging.DEBUG)
-  else: log.setLevel(logging.WARN)
-  return
+    """print a trace through the stack when pickling; useful for debugging"""
+    if boolean: log.setLevel(logging.DEBUG)
+    else: log.setLevel(logging.WARN)
+    return
 
 import __builtin__
 import __main__ as _main_module
 import sys
 import marshal
-import ctypes
 # import zlib
 from pickle import HIGHEST_PROTOCOL, PicklingError
 from pickle import Pickler as StockPickler
@@ -36,7 +35,11 @@ from weakref import ReferenceType, ProxyType, CallableProxyType
 # new in python2.5
 if hex(sys.hexversion) >= '0x20500f0':
     from types import MemberDescriptorType, GetSetDescriptorType
-
+try:
+    import ctypes
+    HAS_CTYPES = True
+except ImportError:
+    HAS_CTYPES = False
 try:
     from numpy import ufunc as NumpyUfuncType
 except ImportError:
@@ -191,32 +194,33 @@ def _load_type(name):
 def _create_type(typeobj, *args):
     return typeobj(*args)
 
-ctypes.pythonapi.PyCell_New.restype = ctypes.py_object
-ctypes.pythonapi.PyCell_New.argtypes = [ctypes.py_object]
-# thanks to Paul Kienzle for cleaning the ctypes CellType logic
-def _create_cell(obj):
-     return ctypes.pythonapi.PyCell_New(obj)
+if HAS_CTYPES:
+    ctypes.pythonapi.PyCell_New.restype = ctypes.py_object
+    ctypes.pythonapi.PyCell_New.argtypes = [ctypes.py_object]
+    # thanks to Paul Kienzle for cleaning the ctypes CellType logic
+    def _create_cell(obj):
+        return ctypes.pythonapi.PyCell_New(obj)
 
-ctypes.pythonapi.PyDictProxy_New.restype = ctypes.py_object
-ctypes.pythonapi.PyDictProxy_New.argtypes = [ctypes.py_object]
-def _create_dictproxy(obj, *args):
-     dprox = ctypes.pythonapi.PyDictProxy_New(obj)
-     #XXX: hack to take care of pickle 'nesting' the correct dictproxy
-     if 'nested' in args and type(dprox['__dict__']) == DictProxyType:
-         return dprox['__dict__']
-     return dprox
+    ctypes.pythonapi.PyDictProxy_New.restype = ctypes.py_object
+    ctypes.pythonapi.PyDictProxy_New.argtypes = [ctypes.py_object]
+    def _create_dictproxy(obj, *args):
+        dprox = ctypes.pythonapi.PyDictProxy_New(obj)
+        #XXX: hack to take care of pickle 'nesting' the correct dictproxy
+        if 'nested' in args and type(dprox['__dict__']) == DictProxyType:
+            return dprox['__dict__']
+        return dprox
 
-ctypes.pythonapi.PyWeakref_GetObject.restype = ctypes.py_object
-ctypes.pythonapi.PyWeakref_GetObject.argtypes = [ctypes.py_object]
-def _create_weakref(obj, *args):
-     from weakref import ref, ReferenceError
-     if obj: return ref(obj) #XXX: callback?
-     raise ReferenceError, "Cannot pickle reference to dead object"
+    ctypes.pythonapi.PyWeakref_GetObject.restype = ctypes.py_object
+    ctypes.pythonapi.PyWeakref_GetObject.argtypes = [ctypes.py_object]
+    def _create_weakref(obj, *args):
+        from weakref import ref, ReferenceError
+        if obj: return ref(obj) #XXX: callback?
+        raise ReferenceError, "Cannot pickle reference to dead object"
 
 def _create_weakproxy(obj, *args):
-     from weakref import proxy, ReferenceError
-     if obj: return proxy(obj) #XXX: callback?
-     raise ReferenceError, "Cannot pickle reference to dead object"
+    from weakref import proxy, ReferenceError
+    if obj: return proxy(obj) #XXX: callback?
+    raise ReferenceError, "Cannot pickle reference to dead object"
 
 def _eval_repr(repr_str):
     return eval(repr_str)
@@ -233,13 +237,13 @@ def _getattr(objclass, name, repr_str):
         return attr
 
 def _dict_from_dictproxy(dictproxy):
-     _dict = dictproxy.copy() # convert dictproxy to dict
-     _dict.pop('__dict__')
-     try: # new classes have weakref (while not all others do)
-         _dict.pop('__weakref__')
-     except KeyError:
-         pass
-     return _dict
+    _dict = dictproxy.copy() # convert dictproxy to dict
+    _dict.pop('__dict__')
+    try: # new classes have weakref (while not all others do)
+        _dict.pop('__weakref__')
+    except KeyError:
+        pass
+    return _dict
 
 def _import_module(import_name):
     if '.' in import_name:
@@ -338,17 +342,18 @@ else:
                                        obj.__repr__()), obj=obj)
         return
 
-@register(CellType)
-def save_cell(pickler, obj):
-    log.info("Ce: %s" % obj)
-    pickler.save_reduce(_create_cell, (obj.cell_contents,), obj=obj)
-    return
+if HAS_CTYPES:
+    @register(CellType)
+    def save_cell(pickler, obj):
+        log.info("Ce: %s" % obj)
+        pickler.save_reduce(_create_cell, (obj.cell_contents,), obj=obj)
+        return
 
-@register(DictProxyType)
-def save_dictproxy(pickler, obj):
-    log.info("Dp: %s" % obj)
-    pickler.save_reduce(_create_dictproxy, (dict(obj),'nested'), obj=obj)
-    return
+    @register(DictProxyType)
+    def save_dictproxy(pickler, obj):
+        log.info("Dp: %s" % obj)
+        pickler.save_reduce(_create_dictproxy, (dict(obj),'nested'), obj=obj)
+        return
 
 @register(SliceType)
 def save_slice(pickler, obj):
@@ -432,7 +437,7 @@ def save_type(pickler, obj):
         log.info("T1: %s" % obj)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
     elif obj.__module__ == '__main__':
-        if type(obj) == type: 
+        if type(obj) == type:
             # we are pickling the interpreter
             if is_dill(pickler) and pickler._session:
                 log.info("T2: %s" % obj)
@@ -463,7 +468,7 @@ def pickles(obj,exact=False):
     try:
         pik = copy(obj)
         if exact:
-          return pik == obj 
+            return pik == obj
         return type(pik) == type(obj)
     except (TypeError, PicklingError), err:
         return False
