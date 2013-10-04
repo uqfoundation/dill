@@ -8,6 +8,7 @@ import dill as pickle
 #import pickle
 
 typelist = []
+import warnings; warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # testing types
 _none = None; typelist.append(_none)
@@ -38,6 +39,8 @@ _object = _newclass(); typelist.append(_object) # <type 'class'>
 _object2 = object(); typelist.append(_object2)
 _set = set(); typelist.append(_set)
 _frozenset = frozenset(); typelist.append(_frozenset)
+import sets; _set2 = sets.Set(); typelist.append(_set2)  # Deprecated
+_immutableset = sets.ImmutableSet(); typelist.append(_immutableset)
 import array; _array = array.array("f"); typelist.append(_array)
 def _function2():
     try: raise
@@ -46,7 +49,22 @@ def _function2():
       e, er, tb = exc_info()
       return er, tb
 _exception = _function2()[0]; typelist.append(_exception)
+import decimal; _decimal = decimal.Decimal(1); typelist.append(_decimal)
+_copyright = copyright; typelist.append(_copyright)
 def _function(x): yield x; typelist.append(_function)
+import collections; _deque = collections.deque([0]); typelist.append(_deque)
+_ddict = collections.defaultdict(_function, _dict); typelist.append(_ddict)
+try: # python 2.6
+  import fractions; _fraction = fractions.Fraction(); typelist.append(_fraction)
+  _bytearray = bytearray([1]); typelist.append(_bytearray)
+except ImportError:
+  pass
+try: # python 2.7
+  import number; _number = numbers.Number(); typelist.append(_number)
+  _odict = collections.OrderedDict(_dict); typelist.append(_odict) # 2.7
+  _counter = collections.Counter(_dict); typelist.append(_counter) # 2.7
+except ImportError:
+  pass
 # pickle fails on all below here -------------------------------------------
 _traceback = _function2()[1]; typelist.append(_traceback)
 _lambda = lambda x: lambda y: x; typelist.append(_lambda)
@@ -69,17 +87,15 @@ _xrange = xrange(1); typelist.append(_xrange)
 _slice = slice(1); typelist.append(_slice)
 _nimp = NotImplemented; typelist.append(_nimp)
 _ellipsis = Ellipsis; typelist.append(_ellipsis)
+_staticmethod = staticmethod(_method); typelist.append(_staticmethod)
+_classmethod = classmethod(_method); typelist.append(_classmethod)
 try:
   __IPYTHON__ is True # is ipython
 except NameError:
   _quitter = quit; typelist.append(_quitter)
 #_property = property()
 #_super = super(type)
-#_staticmethod = staticmethod(0)
-#_classmethod = ???
-#_bytearray = bitearray([0])
 #_memoryview = ???
-#_array = array.array('i')
 try:
   from numpy import ufunc as _numpy_ufunc
   typelist.append(_numpy_ufunc)
@@ -90,8 +106,7 @@ try:
 except ImportError:
   pass
 #---------------
-import weakref
-_ref = weakref.ref(_instance); typelist.append(_ref)
+import weakref; _ref = weakref.ref(_instance); typelist.append(_ref)
 ##_deadref = weakref.ref(_class()); typelist.append(_deadref)
 #_proxy = weakref.proxy(_instance); typelist.append(_proxy)
 ##_deadproxy = weakref.proxy(_class()); typelist.append(_deadproxy)
@@ -103,8 +118,6 @@ _instance2 = _class2()
 ##_deadcallable = weakref.proxy(_class2()); typelist.append(_deadcallable)
 #---------------
 #_dictitemiter = type.__dict__.iteritems()
-#_defaultdict = collections.defautdict()
-#_deque = collections.deque([0])
 #---------------
 
 
