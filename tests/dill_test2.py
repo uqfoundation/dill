@@ -52,8 +52,14 @@ _exception = _function2()[0]; typelist.append(_exception)
 import decimal; _decimal = decimal.Decimal(1); typelist.append(_decimal)
 _copyright = copyright; typelist.append(_copyright)
 def _function(x): yield x; typelist.append(_function)
+import logging; _logger = logging.getLogger(); typelist.append(_logger)
+import re; _srepattern = re.compile(''); typelist.append(_srepattern)
 import collections; _deque = collections.deque([0]); typelist.append(_deque)
 _ddict = collections.defaultdict(_function, _dict); typelist.append(_ddict)
+import datetime; _tzinfo = datetime.tzinfo(); typelist.append(_tzinfo)
+_datetime = datetime.datetime.today(); typelist.append(_datetime)
+import calendar; _calendar = calendar.Calendar(); typelist.append(_calendar)
+import mutex; _mutex = mutex.mutex(); typelist.append(_mutex)
 try: # python 2.6
   import fractions; _fraction = fractions.Fraction(); typelist.append(_fraction)
   _bytearray = bytearray([1]); typelist.append(_bytearray)
@@ -66,7 +72,6 @@ try: # python 2.7
 except ImportError:
   pass
 # pickle fails on all below here -------------------------------------------
-_traceback = _function2()[1]; typelist.append(_traceback)
 _lambda = lambda x: lambda y: x; typelist.append(_lambda)
 _cell = (_lambda)(0).func_closure[0]; typelist.append(_cell)
 _method = _class()._method; typelist.append(_method)
@@ -75,27 +80,28 @@ _module = pickle; typelist.append(_module)
 _code = compile('','','exec'); typelist.append(_code)
 _dictproxy = type.__dict__; typelist.append(_dictproxy)
 _dictprox2 = _newclass.__dict__; typelist.append(_dictprox2)
-_methoddescrip = type.__dict__['mro']; typelist.append(_methoddescrip)
-import array; _getsetdescrip = array.array.typecode; typelist.append(_getsetdescrip)
-import datetime; _membdescrip = datetime.timedelta.days; typelist.append(_membdescrip)
+_methoddescr = type.__dict__['mro']; typelist.append(_methoddescr)
+_memdescr = datetime.timedelta.days; typelist.append(_memdescr)
 _memdescr2 = type.__dict__['__weakrefoffset__']; typelist.append(_memdescr2)
-_wrapperdescrip = type.__repr__; typelist.append(_wrapperdescrip)
-_wrapdescr2 = type.__dict__['__module__']; typelist.append(_wrapdescr2)
-_generator = _function(1); typelist.append(_generator)
-_frame = _generator.gi_frame; typelist.append(_frame)
+import array; _getsetdescr = array.array.typecode; typelist.append(_getsetdescr)
+_wrapperdescr = type.__repr__; typelist.append(_wrapperdescr)
+_wrapperdescr2 = type.__dict__['__module__']; typelist.append(_wrapperdescr2)
 _xrange = xrange(1); typelist.append(_xrange)
 _slice = slice(1); typelist.append(_slice)
 _nimp = NotImplemented; typelist.append(_nimp)
 _ellipsis = Ellipsis; typelist.append(_ellipsis)
 _staticmethod = staticmethod(_method); typelist.append(_staticmethod)
 _classmethod = classmethod(_method); typelist.append(_classmethod)
+_property = property(); typelist.append(_property)
+_super = super(type); typelist.append(_super)
+import tempfile; _file2 = tempfile.TemporaryFile('w'); typelist.append(_file2)
+import pprint; _printer = pprint.PrettyPrinter(); typelist.append(_printer)
+import socket; _socket = socket.socket(); typelist.append(_socket)
+import contextlib; _ctxmgr = contextlib.GeneratorContextManager(max); typelist.append(_ctxmgr)
 try:
   __IPYTHON__ is True # is ipython
 except NameError:
   _quitter = quit; typelist.append(_quitter)
-#_property = property()
-#_super = super(type)
-#_memoryview = ???
 try:
   from numpy import ufunc as _numpy_ufunc
   typelist.append(_numpy_ufunc)
@@ -105,7 +111,32 @@ try:
   typelist.append(_numpy_int32)
 except ImportError:
   pass
-#---------------
+# dill fails on all below here -------------------------------------------
+_traceback = _function2()[1]; typelist.append(_traceback)
+_generator = _function(1); typelist.append(_generator)
+_frame = _generator.gi_frame; typelist.append(_frame)
+#_socketpair = _socket._sock
+##_logger2 = logging.getLogger(__name__)
+##import thread; _lock = thread.allocate()
+##import Queue; _queue = Queue.Queue()
+##_methodwrapper = (1).__repr__
+##_listiter = iter(_list)
+##_tupleiter = iter(_tuple)
+##_xrangeiter = iter(_xrange)
+##_setiter = iter(_set)
+##_dictitemiter = type.__dict__.iteritems()
+##_dictkeyiter = type.__dict__.iterkeys()
+##_dictvaliter = type.__dict__.itervalues()
+##_dictitems = _dict.viewitems() # 2.7
+##_dictkeys = _dict.viewkeys() # 2.7
+##_dictvalues = _dict.viewvalues() # 2.7
+##_memory = memoryview('0') # 2.7
+##_memory2 = memoryview(bytearray('0')) # 2.7
+##import cStringIO; _stringi = cStringIO.InputType
+##_stringo = cStringIO.OutputType
+##import operator; _itemgetter = operator.itemgetter('')
+##_attrgetter = operator.attrgetter('')
+##import struct; _struct = struct.Struct('c')
 import weakref; _ref = weakref.ref(_instance); typelist.append(_ref)
 ##_deadref = weakref.ref(_class()); typelist.append(_deadref)
 #_proxy = weakref.proxy(_instance); typelist.append(_proxy)
@@ -116,9 +147,13 @@ class _class2:
 _instance2 = _class2()
 #_callable = weakref.proxy(_instance2); typelist.append(_callable)
 ##_deadcallable = weakref.proxy(_class2()); typelist.append(_deadcallable)
-#---------------
-#_dictitemiter = type.__dict__.iteritems()
-#---------------
+##_weakset = weakref.WeakSet(); typelist.append(_weakset) # 2.7
+##_weakkeydict = weakref.WeakKeyDictionary(); typelist.append(_weakkeydict)
+##_weakvaldict = weakref.WeakValueDictionary(); typelist.append(_weakvaldict)
+##_callableiter = _srepattern.finditer(''); typelist.append(_callableiter)
+##_srematch = _srepattern.match(''); typelist.append(_srematch)
+##_srescanner = _srepattern.scanner(''); typelist.append(_srescanner)
+##import codecs; _streamreader = codecs.StreamReader(_file2) # etc
 
 
 if __name__ == '__main__':
