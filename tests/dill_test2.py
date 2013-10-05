@@ -60,16 +60,17 @@ import datetime; _tzinfo = datetime.tzinfo(); typelist.append(_tzinfo)
 _datetime = datetime.datetime.today(); typelist.append(_datetime)
 import calendar; _calendar = calendar.Calendar(); typelist.append(_calendar)
 import mutex; _mutex = mutex.mutex(); typelist.append(_mutex)
+import itertools; _count = itertools.count(0); typelist.append(_count)
 try: # python 2.6
   import fractions; _fraction = fractions.Fraction(); typelist.append(_fraction)
+  import number; _number = numbers.Number(); typelist.append(_number)
   _bytearray = bytearray([1]); typelist.append(_bytearray)
 except ImportError:
   pass
 try: # python 2.7
-  import number; _number = numbers.Number(); typelist.append(_number)
   _odict = collections.OrderedDict(_dict); typelist.append(_odict) # 2.7
   _counter = collections.Counter(_dict); typelist.append(_counter) # 2.7
-except ImportError:
+except AttributeError:
   pass
 # pickle fails on all below here -------------------------------------------
 _lambda = lambda x: lambda y: x; typelist.append(_lambda)
@@ -94,6 +95,8 @@ _staticmethod = staticmethod(_method); typelist.append(_staticmethod)
 _classmethod = classmethod(_method); typelist.append(_classmethod)
 _property = property(); typelist.append(_property)
 _super = super(type); typelist.append(_super)
+_izip = itertools.izip('0','1'); typelist.append(_izip)
+_chain = itertools.chain('0','1'); typelist.append(_chain)
 import tempfile; _file2 = tempfile.TemporaryFile('w'); typelist.append(_file2)
 import pprint; _printer = pprint.PrettyPrinter(); typelist.append(_printer)
 import socket; _socket = socket.socket(); typelist.append(_socket)
@@ -111,6 +114,10 @@ try:
   typelist.append(_numpy_int32)
 except ImportError:
   pass
+try: # python 2.6
+  _product = itertools.product('0','1'); typelist.append(_product)
+except AttributeError:
+  pass
 # dill fails on all below here -------------------------------------------
 _traceback = _function2()[1]; typelist.append(_traceback)
 _generator = _function(1); typelist.append(_generator)
@@ -124,6 +131,11 @@ _frame = _generator.gi_frame; typelist.append(_frame)
 ##_tupleiter = iter(_tuple)
 ##_xrangeiter = iter(_xrange)
 ##_setiter = iter(_set)
+##_cycle = itertools.cycle('0')
+##_repeat = itertools.repeat(0) # 2.7
+##_compress = itertools.compress('0',[1]) # etc
+##_permute = itertools.permutations('0')
+##_combine = itertools.combinations('0',1)
 ##_dictitemiter = type.__dict__.iteritems()
 ##_dictkeyiter = type.__dict__.iterkeys()
 ##_dictvaliter = type.__dict__.itervalues()
@@ -134,8 +146,9 @@ _frame = _generator.gi_frame; typelist.append(_frame)
 ##_memory2 = memoryview(bytearray('0')) # 2.7
 ##import cStringIO; _stringi = cStringIO.InputType
 ##_stringo = cStringIO.OutputType
-##import operator; _itemgetter = operator.itemgetter('')
-##_attrgetter = operator.attrgetter('')
+##import operator; _itemgetter = operator.itemgetter(0)
+##_attrgetter = operator.attrgetter('__repr__')
+##_methodcall = operator.methodcaller('mro') # 2.6
 ##import struct; _struct = struct.Struct('c')
 import weakref; _ref = weakref.ref(_instance); typelist.append(_ref)
 ##_deadref = weakref.ref(_class()); typelist.append(_deadref)
@@ -154,6 +167,9 @@ _instance2 = _class2()
 ##_srematch = _srepattern.match(''); typelist.append(_srematch)
 ##_srescanner = _srepattern.scanner(''); typelist.append(_srescanner)
 ##import codecs; _streamreader = codecs.StreamReader(_file2) # etc
+import functools; _part = functools.partial(int, base=2); typelist.append(_part)
+##import locale; _cmpkey = functools.cmp_to_key(locale.strcoll) # 2.7
+##_cmpkeyobj = _cmpkey('0') #2.7
 
 
 if __name__ == '__main__':
