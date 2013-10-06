@@ -61,6 +61,7 @@ _datetime = datetime.datetime.today(); typelist.append(_datetime)
 import calendar; _calendar = calendar.Calendar(); typelist.append(_calendar)
 import mutex; _mutex = mutex.mutex(); typelist.append(_mutex)
 import itertools; _count = itertools.count(0); typelist.append(_count)
+import tarfile; _tinfo = tarfile.TarInfo(); typelist.append(_tinfo)
 try: # python 2.6
   import fractions; _fraction = fractions.Fraction(); typelist.append(_fraction)
   import number; _number = numbers.Number(); typelist.append(_number)
@@ -97,7 +98,17 @@ _property = property(); typelist.append(_property)
 _super = super(type); typelist.append(_super)
 _izip = itertools.izip('0','1'); typelist.append(_izip)
 _chain = itertools.chain('0','1'); typelist.append(_chain)
+import sqlite3; _conn = sqlite3.connect(':memory:'); typelist.append(_conn)
+_cursor = _conn.cursor(); typelist.append(_cursor)
 import tempfile; _file2 = tempfile.TemporaryFile('w'); typelist.append(_file2)
+_filedescrip, _tempfile = tempfile.mkstemp('w') # used for pickle-testing
+import bz2; _bz2 = bz2.BZ2File(_tempfile); typelist.append(_bz2)
+_bz2compress = bz2.BZ2Compressor(); typelist.append(_bz2compress)
+_bz2decompress = bz2.BZ2Decompressor(); typelist.append(_bz2decompress)
+#import zipfile; _zip = zipfile.ZipFile(_tempfile,'w'); typelist.append(_zip)
+#_zip.write(_tempfile,'x'); _zinfo = _zip.getinfo('x'); typelist.append(_zinfo)
+_tar = tarfile.open(fileobj=_file2,mode='w'); typelist.append(_tar)
+import csv; _dialect = csv.get_dialect('excel'); typelist.append(_dialect)
 import pprint; _printer = pprint.PrettyPrinter(); typelist.append(_printer)
 import socket; _socket = socket.socket(); typelist.append(_socket)
 import contextlib; _ctxmgr = contextlib.GeneratorContextManager(max); typelist.append(_ctxmgr)
@@ -118,6 +129,9 @@ try: # python 2.6
   _product = itertools.product('0','1'); typelist.append(_product)
 except AttributeError:
   pass
+# dill fails in 2.5/2.6 below here -------------------------------------------
+#import gzip; _gzip = gzip.GzipFile(fileobj=_file2); typelist.append(_gzip)
+#import functools; _part = functools.partial(int,base=2); typelist.append(_part)
 # dill fails on all below here -------------------------------------------
 _traceback = _function2()[1]; typelist.append(_traceback)
 _generator = _function(1); typelist.append(_generator)
@@ -167,9 +181,23 @@ _instance2 = _class2()
 ##_srematch = _srepattern.match(''); typelist.append(_srematch)
 ##_srescanner = _srepattern.scanner(''); typelist.append(_srescanner)
 ##import codecs; _streamreader = codecs.StreamReader(_file2) # etc
-import functools; _part = functools.partial(int, base=2); typelist.append(_part)
 ##import locale; _cmpkey = functools.cmp_to_key(locale.strcoll) # 2.7
 ##_cmpkeyobj = _cmpkey('0') #2.7
+##import shelve; _shelve = shelve.Shelf({})
+##import dbm; _dbm = dbm.open('foo','n')
+##import anydbm; _dbcursor = anydbm.open('foo','n')
+##_db = _dbcursor.db
+##import zlib; _zcompress = zlib.compressobj()
+##_zdecompress = zlib.decompressobj()
+##_csvreader = csv.reader(_file2)
+##_csvwriter = csv.writer(_file2)
+##_csvdreader = csv.DictReader(_file2)
+##_csvdwriter = csv.DictWriter(_file2,{})
+##import xdrlib; _xdr = xdrlib.Packer()
+##import hashlib; _hash = hashlib.md5()
+##import hmac; _hmac = hmac.new('')
+# cleanup -------------------------------------------
+import os; os.remove(_tempfile)
 
 
 if __name__ == '__main__':
