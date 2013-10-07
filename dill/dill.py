@@ -8,7 +8,7 @@ and coded to the pickle interface, by mmckerns@caltech.edu
 """
 __all__ = ['dump','dumps','load','loads','dump_session','load_session',\
            'Pickler','Unpickler','register','copy','pickle','pickles',\
-           'HIGHEST_PROTOCOL','PicklingError']
+           'HIGHEST_PROTOCOL','PicklingError','UnpicklingError']
 
 import logging
 log = logging.getLogger("dill")
@@ -24,7 +24,7 @@ import __main__ as _main_module
 import sys
 import marshal
 # import zlib
-from pickle import HIGHEST_PROTOCOL, PicklingError
+from pickle import HIGHEST_PROTOCOL, PicklingError, UnpicklingError
 from pickle import Pickler as StockPickler
 from pickle import Unpickler as StockUnpickler
 from types import CodeType, FunctionType, ClassType, MethodType, \
@@ -32,6 +32,7 @@ from types import CodeType, FunctionType, ClassType, MethodType, \
      NotImplementedType, EllipsisType, FrameType, ModuleType, \
      BuiltinMethodType, TypeType
 from weakref import ReferenceType, ProxyType, CallableProxyType
+from thread import LockType
 # new in python2.5
 if hex(sys.hexversion) >= '0x20500f0':
     from types import MemberDescriptorType, GetSetDescriptorType
@@ -194,17 +195,25 @@ def _load_type(name):
 def _create_type(typeobj, *args):
     return typeobj(*args)
 
+def _create_lock(locked, *args):
+    from threading import Lock
+    lock = Lock()
+    if locked:
+        if not lock.acquire(False):
+            raise UnpicklingError, "Cannot acquire lock"
+    return lock
+
 if HAS_CTYPES:
     ctypes.pythonapi.PyCell_New.restype = ctypes.py_object
     ctypes.pythonapi.PyCell_New.argtypes = [ctypes.py_object]
     # thanks to Paul Kienzle for cleaning the ctypes CellType logic
-    def _create_cell(obj):
-        return ctypes.pythonapi.PyCell_New(obj)
+    def _create_cell(contents):
+        return ctypes.pythonapi.PyCell_New(contents)
 
     ctypes.pythonapi.PyDictProxy_New.restype = ctypes.py_object
     ctypes.pythonapi.PyDictProxy_New.argtypes = [ctypes.py_object]
-    def _create_dictproxy(obj, *args):
-        dprox = ctypes.pythonapi.PyDictProxy_New(obj)
+    def _create_dictproxy(dictobj, *args):
+        dprox = ctypes.pythonapi.PyDictProxy_New(dictobj)
         #XXX: hack to take care of pickle 'nesting' the correct dictproxy
         if 'nested' in args and type(dprox['__dict__']) == DictProxyType:
             return dprox['__dict__']
@@ -284,13 +293,13 @@ def save_function(pickler, obj):
 @register(dict)
 def save_module_dict(pickler, obj):
     if is_dill(pickler) and obj is pickler._main_module.__dict__:
-        log.info("D1: %s" % "<dict ...>") # obj
+        log.info("D1: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         pickler.write('c__builtin__\n__main__\n')
     elif not is_dill(pickler) and obj is _main_module.__dict__:
-        log.info("D3: %s" % "<dict ...>") # obj
+        log.info("D3: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         pickler.write('c__main__\n__dict__\n')   #XXX: works in general?
     else:
-        log.info("D2: %s" % "<dict ...>") #obj
+        log.info("D2: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         StockPickler.save_dict(pickler, obj)
     return
 
@@ -304,6 +313,12 @@ def save_classobj(pickler, obj):
     else:
         log.info("C2: %s" % obj)
         StockPickler.save_global(pickler, obj)
+    return
+
+@register(LockType)
+def save_lock(pickler, obj):
+    log.info("Lo: %s" % obj)
+    pickler.save_reduce(_create_lock, (obj.locked(),), obj=obj)
     return
 
 @register(MethodType)
@@ -470,7 +485,7 @@ def pickles(obj,exact=False):
         if exact:
             return pik == obj
         return type(pik) == type(obj)
-    except (TypeError, PicklingError), err:
+    except (TypeError, PicklingError, UnpicklingError), err:
         return False
 
 # use to protect against missing attributes
@@ -485,7 +500,7 @@ def _extend():
     for t,func in Pickler.dispatch.items():
         try:
             StockPickler.dispatch[t] = func
-        except: #TypeError, PicklingError
+        except: #TypeError, PicklingError, UnpicklingError
             log.info("skip: %s" % t)
         else: pass
     return

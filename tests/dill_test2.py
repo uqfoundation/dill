@@ -2,6 +2,7 @@
 """
 demonstrate dill's ability to pickle different python types
 """
+# pickle-test all Python Standard Library objects (currently: CH 1-14 @ 2.7)
 
 import dill as pickle
 #pickle._trace(True)
@@ -98,6 +99,9 @@ _property = property(); typelist.append(_property)
 _super = super(type); typelist.append(_super)
 _izip = itertools.izip('0','1'); typelist.append(_izip)
 _chain = itertools.chain('0','1'); typelist.append(_chain)
+import threading; _lock = threading.Lock(); typelist.append(_lock)
+_rlock = threading.RLock(); typelist.append(_rlock)
+import Queue; _queue = Queue.Queue(); typelist.append(_queue)
 import sqlite3; _conn = sqlite3.connect(':memory:'); typelist.append(_conn)
 _cursor = _conn.cursor(); typelist.append(_cursor)
 import tempfile; _file2 = tempfile.TemporaryFile('w'); typelist.append(_file2)
@@ -138,8 +142,6 @@ _generator = _function(1); typelist.append(_generator)
 _frame = _generator.gi_frame; typelist.append(_frame)
 #_socketpair = _socket._sock
 ##_logger2 = logging.getLogger(__name__)
-##import thread; _lock = thread.allocate()
-##import Queue; _queue = Queue.Queue()
 ##_methodwrapper = (1).__repr__
 ##_listiter = iter(_list)
 ##_tupleiter = iter(_tuple)
