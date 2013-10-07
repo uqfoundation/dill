@@ -25,8 +25,7 @@ __license__ = """
 """ + __license__
 
 from dill import *
-from dill import _trace
-import source, temp
+import source, temp, debug
 
 def __extend():
     from dill import _extend

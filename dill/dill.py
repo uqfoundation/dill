@@ -33,6 +33,7 @@ from types import CodeType, FunctionType, ClassType, MethodType, \
      BuiltinMethodType, TypeType
 from weakref import ReferenceType, ProxyType, CallableProxyType
 from thread import LockType
+from functools import partial
 # new in python2.5
 if hex(sys.hexversion) >= '0x20500f0':
     from types import MemberDescriptorType, GetSetDescriptorType
@@ -49,6 +50,7 @@ except ImportError:
 CellType = type((lambda x: lambda y: x)(0).func_closure[0])
 WrapperDescriptorType = type(type.__repr__)
 MethodDescriptorType = type(type.__dict__['mro'])
+PartialType = type(partial(int,base=2))
 try:
     __IPYTHON__ is True # is ipython
     ExitType = None     # IPython.core.autocall.ExitAutocall
@@ -195,6 +197,9 @@ def _load_type(name):
 def _create_type(typeobj, *args):
     return typeobj(*args)
 
+def _create_ftype(ftypeobj, func, args, kwds):
+    return ftypeobj(func, *args, **kwds)
+
 def _create_lock(locked, *args):
     from threading import Lock
     lock = Lock()
@@ -321,8 +326,15 @@ def save_lock(pickler, obj):
     pickler.save_reduce(_create_lock, (obj.locked(),), obj=obj)
     return
 
-@register(MethodType)
-def save_instancemethod(pickler, obj):
+@register(PartialType) #XXX: remove if can pickle "method-wrapper"
+def save_functor(pickler, obj):
+    log.info("Fu: %s" % obj)
+    pickler.save_reduce(_create_ftype, (type(obj), obj.func, obj.args,
+                                        obj.keywords), obj=obj)
+    return
+
+@register(MethodType) #FIXME: fails for 'hidden' or 'name-mangled' classes...
+def save_instancemethod(pickler, obj):# examples: functools.K, cStringIO.StringI
     log.info("Me: %s" % obj)
     pickler.save_reduce(MethodType, (obj.im_func, obj.im_self,
                                      obj.im_class), obj=obj)
@@ -485,7 +497,7 @@ def pickles(obj,exact=False):
         if exact:
             return pik == obj
         return type(pik) == type(obj)
-    except (TypeError, PicklingError, UnpicklingError), err:
+    except (TypeError, AssertionError, PicklingError, UnpicklingError), err:
         return False
 
 # use to protect against missing attributes

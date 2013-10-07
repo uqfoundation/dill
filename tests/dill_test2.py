@@ -97,6 +97,7 @@ _staticmethod = staticmethod(_method); typelist.append(_staticmethod)
 _classmethod = classmethod(_method); typelist.append(_classmethod)
 _property = property(); typelist.append(_property)
 _super = super(type); typelist.append(_super)
+import functools; _part = functools.partial(int,base=2); typelist.append(_part)
 _izip = itertools.izip('0','1'); typelist.append(_izip)
 _chain = itertools.chain('0','1'); typelist.append(_chain)
 import threading; _lock = threading.Lock(); typelist.append(_lock)
@@ -135,7 +136,6 @@ except AttributeError:
   pass
 # dill fails in 2.5/2.6 below here -------------------------------------------
 #import gzip; _gzip = gzip.GzipFile(fileobj=_file2); typelist.append(_gzip)
-#import functools; _part = functools.partial(int,base=2); typelist.append(_part)
 # dill fails on all below here -------------------------------------------
 _traceback = _function2()[1]; typelist.append(_traceback)
 _generator = _function(1); typelist.append(_generator)
