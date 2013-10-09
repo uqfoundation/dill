@@ -150,14 +150,14 @@ a['CodeType'] = compile('','','exec')
 a['DictProxyType'] = type.__dict__
 a['EllipsisType'] = Ellipsis
 a['GetSetDescriptorType'] = array.array.typecode
-x['LambdaType'] = _lambda = lambda x: lambda y: x #XXX: works when not imported!
+a['LambdaType'] = _lambda = lambda x: lambda y: x #XXX: works when not imported!
 a['MemberDescriptorType'] = type.__dict__['__weakrefoffset__']
 a['MemberDescriptorType2'] = datetime.timedelta.days
-x['MethodType'] = _method = _class()._method #XXX: works when not imported!
+a['MethodType'] = _method = _class()._method #XXX: works when not imported!
 a['ModuleType'] = datetime
 a['NotImplementedType'] = NotImplemented
 a['SliceType'] = slice(1)
-x['UnboundMethodType'] = _class._method #XXX: works when not imported!
+a['UnboundMethodType'] = _class._method #XXX: works when not imported!
 a['XRangeType'] = _xrange = xrange(1)
 # other (concrete) object types
 a['CellType'] = (_lambda)(0).func_closure[0]
@@ -165,6 +165,7 @@ a['MethodDescriptorType'] = type.__dict__['mro']
 a['WrapperDescriptorType'] = type.__repr__
 a['WrapperDescriptorType2'] = type.__dict__['__module__']
 # built-in functions (CH 2)
+a['MethodWrapperType'] = [].__repr__
 a['StaticMethodType'] = staticmethod(_method)
 a['ClassMethodType'] = classmethod(_method)
 a['PropertyType'] = property()
@@ -194,8 +195,11 @@ a['DialectType'] = csv.get_dialect('excel')
 # optional operating system services (CH 16)
 a['LockType'] = threading.Lock()
 a['RLockType'] = threading.RLock()
+# generic operating system services (CH 15)
+a['NamedLoggerType'] = logging.getLogger(__name__)
 # interprocess communication (CH 17)
 a['SocketType'] = _socket = socket.socket()
+a['SocketPairType'] = _socket._sock
 # python runtime services (CH 27)
 a['GeneratorContextManagerType'] = contextlib.GeneratorContextManager(max)
 
@@ -231,7 +235,6 @@ x['TracebackType'] = _function2()[1] #(see: inspect.getouterframes,getframeinfo)
 # other (concrete) object types
 # (also: Capsule, CObject, ...?)
 # built-in functions (CH 2)
-x['MethodWrapperType'] = [].__repr__ #XXX: priority
 x['ListIteratorType'] = iter(_list) #XXX: empty vs non-empty
 x['TupleIteratorType']= iter(_tuple) #XXX: empty vs non-empty
 x['XRangeIteratorType'] = iter(_xrange) #XXX: empty vs non-empty
@@ -278,10 +281,6 @@ x['AttrGetterType'] = operator.attrgetter('__repr__')
 # cryptographic services (CH 14)
 ##import hashlib; _hash = hashlib.md5()
 ##import hmac; _hmac = hmac.new('')
-# generic operating system services (CH 15)
-x['NamedLoggerType'] = logging.getLogger(__name__)
-# interprocess communication (CH 17)
-x['SocketPairType'] = _socket._sock
 
 try: # python 2.6
     # numeric and mathematical types (CH 9)

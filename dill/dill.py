@@ -47,9 +47,11 @@ try:
 except ImportError:
     NumpyUfuncType = None
 
+# make sure to add these 'hand-built' types to _typedict
 CellType = type((lambda x: lambda y: x)(0).func_closure[0])
 WrapperDescriptorType = type(type.__repr__)
 MethodDescriptorType = type(type.__dict__['mro'])
+MethodWrapperType = type([].__repr__)
 PartialType = type(partial(int,base=2))
 try:
     __IPYTHON__ is True # is ipython
@@ -181,7 +183,9 @@ def _create_typemap():
 _typedict = {
     CellType:                   'CellType',
     WrapperDescriptorType:      'WrapperDescriptorType',
-    MethodDescriptorType:       'MethodDescriptorType'
+    MethodDescriptorType:       'MethodDescriptorType',
+    MethodWrapperType:          'MethodWrapperType',
+    PartialType:                'PartialType',
 }
 if ExitType:
     _typedict[ExitType] = 'ExitType'
@@ -326,18 +330,11 @@ def save_lock(pickler, obj):
     pickler.save_reduce(_create_lock, (obj.locked(),), obj=obj)
     return
 
-@register(PartialType) #XXX: remove if can pickle "method-wrapper"
+@register(PartialType)
 def save_functor(pickler, obj):
     log.info("Fu: %s" % obj)
     pickler.save_reduce(_create_ftype, (type(obj), obj.func, obj.args,
                                         obj.keywords), obj=obj)
-    return
-
-@register(MethodType) #FIXME: fails for 'hidden' or 'name-mangled' classes...
-def save_instancemethod(pickler, obj):# examples: functools.K, cStringIO.StringI
-    log.info("Me: %s" % obj)
-    pickler.save_reduce(MethodType, (obj.im_func, obj.im_self,
-                                     obj.im_class), obj=obj)
     return
 
 @register(BuiltinMethodType)
@@ -349,6 +346,33 @@ def save_builtin_method(pickler, obj):
         log.info("B2: %s" % obj)
         StockPickler.save_global(pickler, obj)
     return
+
+if hex(sys.hexversion) >= '0x20600f0':
+    @register(MethodWrapperType)
+    @register(MethodType)
+    def save_instancemethod(pickler, obj):
+        log.info("Me: %s" % obj)
+        pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
+        return
+if hex(sys.hexversion) >= '0x20500f0':
+    @register(MethodWrapperType)
+    def save_instancemethod(pickler, obj):
+        log.info("Me: %s" % obj)
+        pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
+        return
+    @register(MethodType) #FIXME: fails for 'hidden' or 'name-mangled' classes
+    def save_instancemethod0(pickler, obj):# example: cStringIO.StringI
+        log.info("Me: %s" % obj)
+        pickler.save_reduce(MethodType, (obj.im_func, obj.im_self,
+                                         obj.im_class), obj=obj)
+        return
+else:
+    @register(MethodType) #FIXME: fails for 'hidden' or 'name-mangled' classes
+    def save_instancemethod0(pickler, obj):# example: cStringIO.StringI
+        log.info("Me: %s" % obj)
+        pickler.save_reduce(MethodType, (obj.im_func, obj.im_self,
+                                         obj.im_class), obj=obj)
+        return
 
 if hex(sys.hexversion) >= '0x20500f0':
     @register(MemberDescriptorType)
