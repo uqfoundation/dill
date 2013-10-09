@@ -24,7 +24,11 @@ class _d(object):
   def _method(self):
     pass
 
-from dill_test2 import _newclass
+from dill.detect import objects
+from dill.detect import load_types
+load_types(pickleable=True,unpickleable=False)
+_newclass = objects['ClassObjectType']
+del objects
 
 # getset_descriptor for new-style classes (fails on '_method', if not __main__)
 d = _d.__dict__
