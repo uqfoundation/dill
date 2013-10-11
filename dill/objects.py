@@ -12,7 +12,10 @@ import sets # Deprecated
 import re
 import array
 import collections
-import cStringIO
+try:
+    import cStringIO # has StringI and StringO types
+except ImportError:
+    import StringIO as cStringIO # has StringIO type
 import codecs
 import struct
 import datetime
@@ -26,12 +29,20 @@ import functools
 import itertools
 import operator
 import tempfile
+import shelve
+import dbm
+import anydbm
 import sqlite3
+import zlib
 import bz2
 import gzip
 import zipfile
 import tarfile
+import xdrlib
 import csv
+import hashlib
+import hmac
+import os
 import logging
 import threading
 import socket
@@ -85,7 +96,6 @@ a['ClassType'] = _class
 a['ComplexType'] = complex(1)
 a['DictType'] = _dict = {}
 a['DictionaryType'] = a['DictType']
-a['FileType'] = file
 a['FloatType'] = float(1)
 a['FunctionType'] = _function
 a['InstanceType'] = _instance = _class()
@@ -108,7 +118,7 @@ a['FrozenSetType'] = frozenset()
 # built-in exceptions (CH 6)
 a['ExceptionType'] = _function2()[0]
 # string services (CH 7)
-a['RegexPatternType'] = _srepattern = re.compile('')
+a['SREPatternType'] = _srepattern = re.compile('')
 # data types (CH 8)
 a['SetsType'] = sets.Set()
 a['ImmutableSetType'] = sets.ImmutableSet()
@@ -149,6 +159,7 @@ except AttributeError:
 a['CodeType'] = compile('','','exec')
 a['DictProxyType'] = type.__dict__
 a['EllipsisType'] = Ellipsis
+# a['FileType'] = file('foo','w') #XXX: use tmpfile
 a['GetSetDescriptorType'] = array.array.typecode
 a['LambdaType'] = _lambda = lambda x: lambda y: x #XXX: works when not imported!
 a['MemberDescriptorType'] = type.__dict__['__weakrefoffset__']
@@ -182,6 +193,7 @@ a['TemporaryFileType'] = _file2 = tempfile.TemporaryFile('w')
 # data persistence (CH 11)
 a['ConnectionType'] = _conn = sqlite3.connect(':memory:')
 a['CursorType'] = _conn.cursor()
+a['ShelveType'] = shelve.Shelf({})
 # data compression and archiving (CH 12)
 a['BZ2FileType'] = bz2.BZ2File(_tempfile)
 a['BZ2CompressorType'] = bz2.BZ2Compressor()
@@ -195,7 +207,8 @@ a['DialectType'] = csv.get_dialect('excel')
 # optional operating system services (CH 16)
 a['LockType'] = threading.Lock()
 a['RLockType'] = threading.RLock()
-# generic operating system services (CH 15)
+# generic operating system services (CH 15) # also closed/open and r/w/etc...
+# a['NullFileType'] = open(os.devnull, 'r') #FIXME: needs (f.name, f.mode)
 a['NamedLoggerType'] = logging.getLogger(__name__)
 # interprocess communication (CH 17)
 a['SocketType'] = _socket = socket.socket()
@@ -233,7 +246,7 @@ x['GeneratorType'] = _generator = _function(1) #XXX: priority
 x['FrameType'] = _generator.gi_frame #XXX: inspect.currentframe()
 x['TracebackType'] = _function2()[1] #(see: inspect.getouterframes,getframeinfo)
 # other (concrete) object types
-# (also: Capsule, CObject, ...?)
+# (also: Capsule / CObject ?)
 # built-in functions (CH 2)
 x['ListIteratorType'] = iter(_list) #XXX: empty vs non-empty
 x['TupleIteratorType']= iter(_tuple) #XXX: empty vs non-empty
@@ -244,13 +257,13 @@ x['DictionaryItemIteratorType'] = type.__dict__.iteritems()
 x['DictionaryKeyIteratorType'] = type.__dict__.iterkeys()
 x['DictionaryValueIteratorType'] = type.__dict__.itervalues()
 # string services (CH 7)
-# x['InputType'] = cStringIO.InputType #FIXME: write me #XXX: priority
-# x['OutputType'] = cStringIO.OutputType # FIXME: write me #XXX: priority
+x['InputType'] = _cstrI = cStringIO.StringIO('') #XXX: (use instead of tempfile)
+x['OutputType'] = _cstrO = cStringIO.StringIO()  #XXX: (from StringIO.StringIO?)
 x['StructType'] = struct.Struct('c')
-##_callableiter = _srepattern.finditer('')
-##_srematch = _srepattern.match('')
-##_srescanner = _srepattern.scanner('')
-##_streamreader = codecs.StreamReader(_file2) # etc
+x['CallableIteratorType'] = _srepattern.finditer('')
+x['SREMatchType'] = _srepattern.match('')
+x['SREScannerType'] = _srepattern.scanner('')
+x['StreamReader'] = codecs.StreamReader(_cstrI) #XXX: ... and etc
 # data types (CH 8)
 x['ReferenceType'] = weakref.ref(_instance) #XXX: priority
 # x['DeadReferenceType'] = weakref.ref(_class())
@@ -265,22 +278,22 @@ x['CycleType'] = itertools.cycle('0')
 x['ItemGetterType'] = operator.itemgetter(0)
 x['AttrGetterType'] = operator.attrgetter('__repr__')
 # python object persistence (CH 11)
-##import shelve; _shelve = shelve.Shelf({})
-##import dbm; _dbm = dbm.open('foo','n')
-##import anydbm; _dbcursor = anydbm.open('foo','n')
-##_db = _dbcursor.db
+# x['DbShelveType'] = shelve.open('foobar')#,protocol=2) #XXX: use tmpfile
+# x['DbmType'] = dbm.open('foo','n') #XXX: use tmpfile
+# x['DbCursorType'] = _dbcursor = anydbm.open('foo','n') #XXX: use tmpfile
+# x['DbType'] = _dbcursor.db
 # data compression and archiving (CH 12)
-##import zlib; _zcompress = zlib.compressobj()
-##_zdecompress = zlib.decompressobj()
+x['ZlibCompressType'] = zlib.compressobj()
+x['ZlibDecompressType'] = zlib.decompressobj()
 # file formats (CH 13)
-##_csvreader = csv.reader(_file2)
-##_csvwriter = csv.writer(_file2)
-##_csvdreader = csv.DictReader(_file2)
-##_csvdwriter = csv.DictWriter(_file2,{})
-##import xdrlib; _xdr = xdrlib.Packer()
+x['CSVReaderType'] = csv.reader(_cstrI)
+x['CSVWriterType'] = csv.writer(_cstrO)
+x['CSVDictReaderType'] = csv.DictReader(_cstrI)
+x['CSVDictWriterType'] = csv.DictWriter(_cstrO,{})
+x['PackerType'] = xdrlib.Packer()
 # cryptographic services (CH 14)
-##import hashlib; _hash = hashlib.md5()
-##import hmac; _hmac = hmac.new('')
+x['HashType'] = hashlib.md5()
+x['HMACType'] = hmac.new('')
 
 try: # python 2.6
     # numeric and mathematical types (CH 9)
@@ -290,7 +303,6 @@ try: # python 2.6
 except AttributeError:
     pass
 try: # python 2.7
-    ##import locale
     # built-in types (CH 5)
     x['DictItemsType'] = _dict.viewitems() # 2.7
     x['DictKeysType'] = _dict.viewkeys() # 2.7
@@ -302,13 +314,13 @@ try: # python 2.7
     # numeric and mathematical types (CH 9)
     x['RepeatType'] = itertools.repeat(0) # 2.7
     x['CompressType'] = itertools.compress('0',[1]) #XXX: ...and etc
-    ##_cmpkey = functools.cmp_to_key(locale.strcoll) # 2.7
-    ##_cmpkeyobj = _cmpkey('0') #2.7
+    x['CmpKeyType'] = _cmpkey = functools.cmp_to_key((1).__cmp__) # 2.7
+    x['CmpKeyObjType'] = _cmpkey('0') #2.7
 except AttributeError:
     pass
 
 # -- cleanup ----------------------------------------------------------------
-import os; os.remove(_tempfile)
+os.remove(_tempfile)
 
 
 # EOF
