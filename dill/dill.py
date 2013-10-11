@@ -34,6 +34,7 @@ from types import CodeType, FunctionType, ClassType, MethodType, \
 from weakref import ReferenceType, ProxyType, CallableProxyType
 from thread import LockType
 from functools import partial
+from operator import itemgetter, attrgetter
 # new in python2.5
 if hex(sys.hexversion) >= '0x20500f0':
     from types import MemberDescriptorType, GetSetDescriptorType
@@ -53,6 +54,8 @@ WrapperDescriptorType = type(type.__repr__)
 MethodDescriptorType = type(type.__dict__['mro'])
 MethodWrapperType = type([].__repr__)
 PartialType = type(partial(int,base=2))
+ItemGetterType = type(itemgetter(0))
+AttrGetterType = type(attrgetter('__repr__'))
 try:
     __IPYTHON__ is True # is ipython
     ExitType = None     # IPython.core.autocall.ExitAutocall
@@ -63,9 +66,10 @@ except NameError:
 
 ### Shorthands (modified from python2.5/lib/pickle.py)
 try:
-    from cStringIO import StringIO
+    from cStringIO import StringIO, InputType, OutputType
 except ImportError:
     from StringIO import StringIO
+    InputType = OutputType = None
 
 def copy(obj):
     """use pickling to 'copy' an object"""
@@ -181,14 +185,19 @@ def _create_typemap():
             yield value, key
     return
 _typedict = {
-    CellType:                   'CellType',
-    WrapperDescriptorType:      'WrapperDescriptorType',
-    MethodDescriptorType:       'MethodDescriptorType',
-    MethodWrapperType:          'MethodWrapperType',
-    PartialType:                'PartialType',
+    CellType: 'CellType',
+    WrapperDescriptorType: 'WrapperDescriptorType',
+    MethodDescriptorType: 'MethodDescriptorType',
+    MethodWrapperType: 'MethodWrapperType',
+    PartialType: 'PartialType',
+    ItemGetterType: 'ItemGetterType',
+    AttrGetterType: 'AttrGetterType',
 }
 if ExitType:
     _typedict[ExitType] = 'ExitType'
+if InputType:
+    _typedict[InputType] = 'InputType'
+    _typedict[OutputType] = 'OutputType'
 _typemap = dict(_create_typemap(), **_typedict)
 _reverse_typemap = dict((v, k) for k, v in _typemap.iteritems())
 
@@ -211,6 +220,51 @@ def _create_lock(locked, *args):
         if not lock.acquire(False):
             raise UnpicklingError, "Cannot acquire lock"
     return lock
+
+def _create_stringi(value, position, closed):
+    #if closed: value = ''
+    f = StringIO(value)
+    if closed: f.close()
+    else: f.seek(position)
+    return f
+
+def _create_stringo(value, position, closed):
+    f = StringIO()
+    if closed: f.close()
+    else:
+       f.write(value)
+       f.seek(position)
+    return f
+
+class _itemgetter_helper(object):
+    def __init__(self):
+        self.items = []
+    def __getitem__(self, item):
+        self.items.append(item)
+        return
+
+class _attrgetter_helper(object):
+    def __init__(self, attrs, index=None):
+        self.attrs = attrs
+        self.index = index
+    def __getattribute__(self, attr):
+        attrs = object.__getattribute__(self, "attrs")
+        index = object.__getattribute__(self, "index")
+        if index is None:
+            index = len(attrs)
+            attrs.append(attr)
+        else:
+            attrs[index] = ".".join([attrs[index], attr])
+        return type(self)(attrs, index)
+
+def _create_lock(locked, *args):
+    from threading import Lock
+    lock = Lock()
+    if locked:
+        if not lock.acquire(False):
+            raise UnpicklingError, "Cannot acquire lock"
+    return lock
+
 
 if HAS_CTYPES:
     ctypes.pythonapi.PyCell_New.restype = ctypes.py_object
@@ -329,6 +383,46 @@ def save_lock(pickler, obj):
     log.info("Lo: %s" % obj)
     pickler.save_reduce(_create_lock, (obj.locked(),), obj=obj)
     return
+
+@register(ItemGetterType)
+def save_itemgetter(pickler, obj):
+    log.info("Ig: %s" % obj)
+    helper = _itemgetter_helper()
+    obj(helper)
+    pickler.save_reduce(type(obj), tuple(helper.items), obj=obj)
+    return
+
+@register(AttrGetterType)
+def save_attrgetter(pickler, obj):
+    log.info("Ag: %s" % obj)
+    attrs = []
+    helper = _attrgetter_helper(attrs)
+    obj(helper)
+    pickler.save_reduce(type(obj), tuple(attrs), obj=obj)
+    return
+
+if InputType:
+    @register(InputType)
+    def save_stringi(pickler, obj):
+        log.info("Io: %s" % obj)
+        if obj.closed:
+            value = ''; position = None
+        else:
+            value = obj.getvalue(); position = obj.tell()
+        pickler.save_reduce(_create_stringi, (value, position, \
+                                              obj.closed), obj=obj)
+        return
+
+    @register(OutputType)
+    def save_stringo(pickler, obj):
+        log.info("Io: %s" % obj)
+        if obj.closed:
+            value = ''; position = None
+        else:
+            value = obj.getvalue(); position = obj.tell()
+        pickler.save_reduce(_create_stringo, (value, position, \
+                                              obj.closed), obj=obj)
+        return
 
 @register(PartialType)
 def save_functor(pickler, obj):
