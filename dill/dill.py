@@ -29,7 +29,7 @@ from pickle import Pickler as StockPickler
 from pickle import Unpickler as StockUnpickler
 from types import CodeType, FunctionType, ClassType, MethodType, \
      GeneratorType, DictProxyType, XRangeType, SliceType, TracebackType, \
-     NotImplementedType, EllipsisType, FrameType, ModuleType, \
+     NotImplementedType, EllipsisType, FileType, FrameType, ModuleType, \
      BuiltinMethodType, TypeType
 from weakref import ReferenceType, ProxyType, CallableProxyType
 from thread import LockType
@@ -221,8 +221,29 @@ def _create_lock(locked, *args):
             raise UnpicklingError, "Cannot acquire lock"
     return lock
 
+def _create_filehandle(name, mode, position, closed):
+    # only pickles the handle, not the file contents... good? or StringIO(data)?
+    # (for file contents see: http://effbot.org/librarybook/copy-reg.htm)
+    # NOTE: handle special cases first (are there more special cases?)
+    names = {'<stdin>':sys.__stdin__, '<stdout>':sys.__stdout__,
+             '<stderr>':sys.__stderr__} #XXX: better fileno=(0,1,2) ?
+    if name in names.keys(): f = names[name] #XXX: safer "f=sys.stdin"
+    elif name == '<tmpfile>': import os; f = os.tmpfile()
+    elif name == '<fdopen>': import tempfile; f = tempfile.TemporaryFile(mode)
+    else:
+        try: # try to open the file by name   # NOTE: has different fileno
+            f = open(name, mode) #XXX: missing: encoding, softspace
+        except IOError, err:
+            try: # failing, then use /dev/null #XXX: better to just fail here?
+                import os; f = open(os.devnull, mode)
+            except IOError, err2:
+                raise UnpicklingError, err
+                #XXX: python default is closed '<uninitialized file>' file/mode
+    if closed: f.close()
+    else: f.seek(position)
+    return f
+
 def _create_stringi(value, position, closed):
-    #if closed: value = ''
     f = StringIO(value)
     if closed: f.close()
     else: f.seek(position)
@@ -399,6 +420,17 @@ def save_attrgetter(pickler, obj):
     helper = _attrgetter_helper(attrs)
     obj(helper)
     pickler.save_reduce(type(obj), tuple(attrs), obj=obj)
+    return
+
+@register(FileType)
+def save_file(pickler, obj):
+    log.info("Fi: %s" % obj)
+    if obj.closed:
+        position = None
+    else:
+        position = obj.tell()
+    pickler.save_reduce(_create_filehandle, (obj.name, obj.mode, position, \
+                                             obj.closed), obj=obj)
     return
 
 if InputType:

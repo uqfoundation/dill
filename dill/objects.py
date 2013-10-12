@@ -78,7 +78,7 @@ def _function2():
         from sys import exc_info
         e, er, tb = exc_info()
         return er, tb
-_filedescrip, _tempfile = tempfile.mkstemp('w') # deleted in cleanup
+_filedescrip, _tempfile = tempfile.mkstemp('r') # deleted in cleanup
 
 # objects used by dill for type declaration
 registered = d = {}
@@ -159,7 +159,8 @@ except AttributeError:
 a['CodeType'] = compile('','','exec')
 a['DictProxyType'] = type.__dict__
 a['EllipsisType'] = Ellipsis
-# a['FileType'] = file('foo','w') #XXX: use tmpfile
+a['FileType'] = _fileR = open(os.devnull,'r')
+a['ClosedFileType'] = open(os.devnull, 'w').close()
 a['GetSetDescriptorType'] = array.array.typecode
 a['LambdaType'] = _lambda = lambda x: lambda y: x #XXX: works when not imported!
 a['MemberDescriptorType'] = type.__dict__['__weakrefoffset__']
@@ -182,7 +183,7 @@ a['ClassMethodType'] = classmethod(_method)
 a['PropertyType'] = property()
 a['SuperType'] = super(type)
 # string services (CH 7)
-a['InputType'] = _cstrI = cStringIO.StringIO('') #XXX: use instead of _file2 ?
+a['InputType'] = _cstrI = cStringIO.StringIO('')
 a['OutputType'] = _cstrO = cStringIO.StringIO()
 # data types (CH 8)
 a['QueueType'] = Queue.Queue()
@@ -194,19 +195,19 @@ a['ChainType'] = itertools.chain('0','1')
 a['ItemGetterType'] = operator.itemgetter(0)
 a['AttrGetterType'] = operator.attrgetter('__repr__')
 # file and directory access (CH 10)
-a['TemporaryFileType'] = _file2 = tempfile.TemporaryFile('w')
+a['TemporaryFileType'] = _fileW = tempfile.TemporaryFile('w')
 # data persistence (CH 11)
 a['ConnectionType'] = _conn = sqlite3.connect(':memory:')
 a['CursorType'] = _conn.cursor()
 a['ShelveType'] = shelve.Shelf({})
 # data compression and archiving (CH 12)
-a['BZ2FileType'] = bz2.BZ2File(_tempfile)
+a['BZ2FileType'] = bz2.BZ2File(os.devnull)
 a['BZ2CompressorType'] = bz2.BZ2Compressor()
 a['BZ2DecompressorType'] = bz2.BZ2Decompressor()
-# a['ZipFileType'] = _zip = zipfile.ZipFile(_tempfile,'w')
-# _zip.write(_tempfile,'x') # FIXME: pickling throws weird error
-# a['ZipInfoType'] = _zip.getinfo('x')
-a['TarFileType'] = tarfile.open(fileobj=_file2,mode='w')
+a['ZipFileType'] = _zip = zipfile.ZipFile(os.devnull,'w')
+_zip.write(_tempfile,'x')
+a['ZipInfoType'] = _zip.getinfo('x')
+a['TarFileType'] = tarfile.open(fileobj=_fileW,mode='w')
 # file formats (CH 13)
 a['DialectType'] = csv.get_dialect('excel')
 a['PackerType'] = xdrlib.Packer()
@@ -214,7 +215,6 @@ a['PackerType'] = xdrlib.Packer()
 a['LockType'] = threading.Lock()
 a['RLockType'] = threading.RLock()
 # generic operating system services (CH 15) # also closed/open and r/w/etc...
-# a['NullFileType'] = open(os.devnull, 'r') #FIXME: needs (f.name, f.mode)
 a['NamedLoggerType'] = logging.getLogger(__name__)
 # interprocess communication (CH 17)
 a['SocketType'] = _socket = socket.socket()
@@ -244,7 +244,7 @@ except AttributeError:
     pass
 
 # -- dill fails in 2.5/2.6 below here ---------------------------------------
-x['GzipFileType'] = gzip.GzipFile(fileobj=_file2)
+x['GzipFileType'] = gzip.GzipFile(fileobj=_fileW)
 # -- dill fails on all below here -------------------------------------------
 # types module (part of CH 8)
 x['DictProxyType2'] = _newclass.__dict__
@@ -280,9 +280,9 @@ x['WeakValueDictionaryType'] = weakref.WeakValueDictionary()
 # numeric and mathematical types (CH 9)
 x['CycleType'] = itertools.cycle('0')
 # python object persistence (CH 11)
-# x['DbShelveType'] = shelve.open('foobar')#,protocol=2) #XXX: use tmpfile
-# x['DbmType'] = dbm.open('foo','n') #XXX: use tmpfile
-# x['DbCursorType'] = _dbcursor = anydbm.open('foo','n') #XXX: use tmpfile
+# x['DbShelveType'] = shelve.open('foo','n')#,protocol=2) #XXX: delete foo
+x['DbmType'] = dbm.open(_tempfile,'n')
+# x['DbCursorType'] = _dbcursor = anydbm.open('foo','n') #XXX: delete foo
 # x['DbType'] = _dbcursor.db
 # data compression and archiving (CH 12)
 x['ZlibCompressType'] = zlib.compressobj()
