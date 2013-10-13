@@ -37,8 +37,7 @@ def pickles(obj,exact=False):
                 print "weak: %s" % type(obj)
         else:
             assert type(obj) == type(pik)
-    except (TypeError, AssertionError, pickle.PicklingError, \
-                                       pickle.UnpicklingError), err:
+    except Exception, err:
         print "COPY failure: %s" % type(obj)
     return
 

@@ -286,7 +286,6 @@ def _create_lock(locked, *args):
             raise UnpicklingError, "Cannot acquire lock"
     return lock
 
-
 if HAS_CTYPES:
     ctypes.pythonapi.PyCell_New.restype = ctypes.py_object
     ctypes.pythonapi.PyCell_New.argtypes = [ctypes.py_object]
@@ -296,24 +295,26 @@ if HAS_CTYPES:
 
     ctypes.pythonapi.PyDictProxy_New.restype = ctypes.py_object
     ctypes.pythonapi.PyDictProxy_New.argtypes = [ctypes.py_object]
-    def _create_dictproxy(dictobj, *args):
+    def _create_dictproxy(dictobj, *args): #FIXME: revisit/update ?
         dprox = ctypes.pythonapi.PyDictProxy_New(dictobj)
         #XXX: hack to take care of pickle 'nesting' the correct dictproxy
         if 'nested' in args and type(dprox['__dict__']) == DictProxyType:
             return dprox['__dict__']
         return dprox
 
-    ctypes.pythonapi.PyWeakref_GetObject.restype = ctypes.py_object
-    ctypes.pythonapi.PyWeakref_GetObject.argtypes = [ctypes.py_object]
-    def _create_weakref(obj, *args):
-        from weakref import ref, ReferenceError
-        if obj: return ref(obj) #XXX: callback?
-        raise ReferenceError, "Cannot pickle reference to dead object"
+def _create_weakref(obj, *args):
+    from weakref import ref
+    if obj is None: # it's dead
+        import UserDict
+        return ref(UserDict.UserDict(), *args)
+    return ref(obj, *args)
 
-def _create_weakproxy(obj, *args):
-    from weakref import proxy, ReferenceError
-    if obj: return proxy(obj) #XXX: callback?
-    raise ReferenceError, "Cannot pickle reference to dead object"
+#def _create_weakproxy(obj, *args): #FIXME: revisit/update
+#    from weakref import proxy
+#    if obj is None: # it's dead
+#        import UserDict
+#        return proxy(UserDict.UserDict(), *args)
+#    return proxy(obj, *args)
 
 def _eval_repr(repr_str):
     return eval(repr_str)
@@ -329,7 +330,7 @@ def _getattr(objclass, name, repr_str):
             attr = attr[name]
         return attr
 
-def _dict_from_dictproxy(dictproxy):
+def _dict_from_dictproxy(dictproxy): #FIXME: revisit/update
     _dict = dictproxy.copy() # convert dictproxy to dict
     _dict.pop('__dict__')
     try: # new classes have weakref (while not all others do)
@@ -560,28 +561,19 @@ if NumpyUfuncType:
 #   copy_reg.pickle(NumpyUfuncType, udump, uload)
 
 def _locate_refobj(oid, module):
+    # call: _locate_refobj(obj.__hash__(), pickler._main_module)
     for obj in module.__dict__.values():
         if oid == id(obj):
             return obj
     #XXX: nothing found... so return None? or Error?
     return None
 
-"""
 @register(ReferenceType)
 def save_weakref(pickler, obj):
-    #FIXME: creates a dead weak ref, need to preserve "refobj"
-    pickler.save_reduce(_create_weakref, (obj(),), obj=obj)
-    #FIXME: first need to locate the module the ref obj lives
-  # refobj = _locate_refobj(obj.__hash__(), pickler._main_module )
-  # pickler.save_reduce(_create_weakref, (refobj,), obj=obj)
-    #FIXME: can lead to Segmentation Fault
-   #ref_obj = ctypes.pythonapi.PyWeakref_GetObject(obj) # dead returns "None"
-   #if ref_obj:
-   #    pickler.save_reduce(_create_weakref, (ref_obj,), obj=obj)
-   #else: # FIXME: dead referenced object will raise an error
-   #    pickler.save_reduce(_create_weakref, (ref_obj,), obj=obj)
+    refobj = obj()
+   #refobj = ctypes.pythonapi.PyWeakref_GetObject(obj) # dead returns "None"
+    pickler.save_reduce(_create_weakref, (refobj,), obj=obj)
     return
-"""
 
 """
 @register(ProxyType)

@@ -186,6 +186,8 @@ a['SuperType'] = super(type)
 a['InputType'] = _cstrI = cStringIO.StringIO('')
 a['OutputType'] = _cstrO = cStringIO.StringIO()
 # data types (CH 8)
+a['ReferenceType'] = weakref.ref(_instance)
+a['DeadReferenceType'] = weakref.ref(_class())
 a['QueueType'] = Queue.Queue()
 a['PrettyPrinterType'] = pprint.PrettyPrinter()
 # numeric and mathematical types (CH 9)
@@ -267,14 +269,12 @@ x['StructType'] = struct.Struct('c')
 x['CallableIteratorType'] = _srepattern.finditer('')
 x['SREMatchType'] = _srepattern.match('')
 x['SREScannerType'] = _srepattern.scanner('')
-# x['StreamReader'] = codecs.StreamReader(_cstrI) #XXX: ... and etc
+x['StreamReader'] = codecs.StreamReader(_cstrI) #XXX: ... and etc
 # data types (CH 8)
-x['ReferenceType'] = weakref.ref(_instance) #XXX: priority
-# x['DeadReferenceType'] = weakref.ref(_class())
 x['ProxyType'] = weakref.proxy(_instance) #XXX: priority
-# x['DeadProxyType'] = weakref.proxy(_class())
+x['DeadProxyType'] = weakref.proxy(_class())
 x['CallableProxyType'] = weakref.proxy(_instance2) #XXX: priority
-# x['DeadCallableProxyType'] = weakref.proxy(_class2())
+x['DeadCallableProxyType'] = weakref.proxy(_class2())
 x['WeakKeyDictionaryType'] = weakref.WeakKeyDictionary()
 x['WeakValueDictionaryType'] = weakref.WeakValueDictionary()
 # numeric and mathematical types (CH 9)
