@@ -23,6 +23,7 @@ import __builtin__
 import __main__ as _main_module
 import sys
 import marshal
+import gc
 # import zlib
 from pickle import HIGHEST_PROTOCOL, PicklingError, UnpicklingError
 from pickle import Pickler as StockPickler
@@ -309,12 +310,13 @@ def _create_weakref(obj, *args):
         return ref(UserDict.UserDict(), *args)
     return ref(obj, *args)
 
-#def _create_weakproxy(obj, *args): #FIXME: revisit/update
-#    from weakref import proxy
-#    if obj is None: # it's dead
-#        import UserDict
-#        return proxy(UserDict.UserDict(), *args)
-#    return proxy(obj, *args)
+def _create_weakproxy(obj, callable=False, *args):
+    from weakref import proxy
+    if obj is None: # it's dead
+        if callable: return proxy(lambda x:x, *args)
+        import UserDict
+        return proxy(UserDict.UserDict(), *args)
+    return proxy(obj, *args)
 
 def _eval_repr(repr_str):
     return eval(repr_str)
@@ -560,13 +562,25 @@ if NumpyUfuncType:
 #   def uload(name): return getattr(numpy, name)
 #   copy_reg.pickle(NumpyUfuncType, udump, uload)
 
-def _locate_refobj(oid, module):
-    # call: _locate_refobj(obj.__hash__(), pickler._main_module)
-    for obj in module.__dict__.values():
-        if oid == id(obj):
-            return obj
-    #XXX: nothing found... so return None? or Error?
-    return None
+def _proxy_helper(obj): # a dead proxy returns a reference to None
+    # get memory address of proxy's reference object
+    address = int(repr(obj).rstrip('>').split(' at ')[-1], base=16)
+    return address
+
+def _locate_object(address, module=None):
+    # get the object located at the given memory address
+    if module: objects = module.__dict__.itervalues()
+    else: objects = gc.get_objects()
+    for obj in objects:
+        if address == id(obj): return obj
+    for obj in [None, True, False]: # other singletons...?
+        if address == id(obj): return obj
+    # all bad below... nothing found so throw ReferenceError or TypeError
+    from weakref import ReferenceError
+    try: address = hex(address)
+    except TypeError, err:
+        raise TypeError, "'%s' is not a valid memory address" % str(address)
+    raise ReferenceError, "Cannot reference object at '%s'" % address
 
 @register(ReferenceType)
 def save_weakref(pickler, obj):
@@ -575,17 +589,15 @@ def save_weakref(pickler, obj):
     pickler.save_reduce(_create_weakref, (refobj,), obj=obj)
     return
 
-"""
 @register(ProxyType)
 @register(CallableProxyType)
 def save_weakproxy(pickler, obj):
-    ref_obj = ctypes.pythonapi.PyWeakref_GetObject(obj) # dead returns "None"
-    if ref_obj:
-        pickler.save_reduce(_create_weakproxy, (ref_obj,), obj=obj)
-    else: # FIXME: dead referenced object will raise an error
-        pickler.save_reduce(_create_weakproxy, (ref_obj,), obj=obj)
+    refobj = _locate_object(_proxy_helper(obj))
+   #callable = bool(getattr(refobj, '__call__', None))
+    if type(obj) is CallableProxyType: callable = True
+    else: callable = False
+    pickler.save_reduce(_create_weakproxy, (refobj, callable), obj=obj)
     return
-"""
 
 @register(ModuleType)
 def save_module(pickler, obj):
