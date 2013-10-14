@@ -294,14 +294,14 @@ if HAS_CTYPES:
     def _create_cell(contents):
         return ctypes.pythonapi.PyCell_New(contents)
 
-    ctypes.pythonapi.PyDictProxy_New.restype = ctypes.py_object
-    ctypes.pythonapi.PyDictProxy_New.argtypes = [ctypes.py_object]
-    def _create_dictproxy(dictobj, *args): #FIXME: revisit/update ?
-        dprox = ctypes.pythonapi.PyDictProxy_New(dictobj)
-        #XXX: hack to take care of pickle 'nesting' the correct dictproxy
-        if 'nested' in args and type(dprox['__dict__']) == DictProxyType:
-            return dprox['__dict__']
-        return dprox
+#   ctypes.pythonapi.PyDictProxy_New.restype = ctypes.py_object
+#   ctypes.pythonapi.PyDictProxy_New.argtypes = [ctypes.py_object]
+#   def _create_dictproxy(dictobj, *args):
+#       dprox = ctypes.pythonapi.PyDictProxy_New(dictobj)
+#       #XXX: hack to take care of pickle 'nesting' the correct dictproxy
+#       if 'nested' in args and type(dprox['__dict__']) == DictProxyType:
+#           return dprox['__dict__']
+#       return dprox
 
 def _create_weakref(obj, *args):
     from weakref import ref
@@ -332,7 +332,7 @@ def _getattr(objclass, name, repr_str):
             attr = attr[name]
         return attr
 
-def _dict_from_dictproxy(dictproxy): #FIXME: revisit/update
+def _dict_from_dictproxy(dictproxy):
     _dict = dictproxy.copy() # convert dictproxy to dict
     _dict.pop('__dict__')
     try: # new classes have weakref (while not all others do)
@@ -436,6 +436,10 @@ def save_file(pickler, obj):
                                              obj.closed), obj=obj)
     return
 
+# The following two functions are based on 'saveCStringIoInput'
+# and 'saveCStringIoOutput' from spickle
+# Copyright (c) 2011 by science+computing ag
+# License: http://www.apache.org/licenses/LICENSE-2.0
 if InputType:
     @register(InputType)
     def save_stringi(pickler, obj):
@@ -528,12 +532,22 @@ if HAS_CTYPES:
         log.info("Ce: %s" % obj)
         pickler.save_reduce(_create_cell, (obj.cell_contents,), obj=obj)
         return
-
-    @register(DictProxyType)
-    def save_dictproxy(pickler, obj):
-        log.info("Dp: %s" % obj)
-        pickler.save_reduce(_create_dictproxy, (dict(obj),'nested'), obj=obj)
+ 
+# The following function is based on 'saveDictProxy' from spickle
+# Copyright (c) 2011 by science+computing ag
+# License: http://www.apache.org/licenses/LICENSE-2.0
+@register(DictProxyType)
+def save_dictproxy(pickler, obj):
+    log.info("Dp: %s" % obj)
+    attr = obj.get('__dict__')
+   #pickler.save_reduce(_create_dictproxy, (attr,'nested'), obj=obj)
+    if type(attr) == GetSetDescriptorType and attr.__name__ == "__dict__" \
+    and getattr(attr.__objclass__, "__dict__", None) == obj:
+        pickler.save_reduce(getattr, (attr.__objclass__, "__dict__"), obj=obj)
         return
+    # all bad below... so throw ReferenceError or TypeError
+    from weakref import ReferenceError
+    raise ReferenceError, "%s does not reference a class __dict__" % obj
 
 @register(SliceType)
 def save_slice(pickler, obj):
@@ -571,9 +585,8 @@ def _locate_object(address, module=None):
     # get the object located at the given memory address
     if module: objects = module.__dict__.itervalues()
     else: objects = gc.get_objects()
-    for obj in objects:
-        if address == id(obj): return obj
-    for obj in [None, True, False]: # other singletons...?
+    special = [None, True, False] #XXX: more...?
+    for obj in objects+special:
         if address == id(obj): return obj
     # all bad below... nothing found so throw ReferenceError or TypeError
     from weakref import ReferenceError
@@ -585,6 +598,7 @@ def _locate_object(address, module=None):
 @register(ReferenceType)
 def save_weakref(pickler, obj):
     refobj = obj()
+    log.info("Rf: %s" % obj)
    #refobj = ctypes.pythonapi.PyWeakref_GetObject(obj) # dead returns "None"
     pickler.save_reduce(_create_weakref, (refobj,), obj=obj)
     return
@@ -593,6 +607,8 @@ def save_weakref(pickler, obj):
 @register(CallableProxyType)
 def save_weakproxy(pickler, obj):
     refobj = _locate_object(_proxy_helper(obj))
+    try: log.info("Rf: %s" % obj)
+    except ReferenceError, err: log.info("Rf: %s" % err)
    #callable = bool(getattr(refobj, '__call__', None))
     if type(obj) is CallableProxyType: callable = True
     else: callable = False

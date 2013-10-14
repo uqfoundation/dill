@@ -158,6 +158,7 @@ except AttributeError:
 # types module (part of CH 8)
 a['CodeType'] = compile('','','exec')
 a['DictProxyType'] = type.__dict__
+a['DictProxyType2'] = _newclass.__dict__
 a['EllipsisType'] = Ellipsis
 a['FileType'] = _fileR = open(os.devnull,'r')
 a['ClosedFileType'] = open(os.devnull, 'w').close()
@@ -253,7 +254,6 @@ except AttributeError:
 x['GzipFileType'] = gzip.GzipFile(fileobj=_fileW)
 # -- dill fails on all below here -------------------------------------------
 # types module (part of CH 8)
-x['DictProxyType2'] = _newclass.__dict__
 x['GeneratorType'] = _generator = _function(1) #XXX: priority
 x['FrameType'] = _generator.gi_frame #XXX: inspect.currentframe()
 x['TracebackType'] = _function2()[1] #(see: inspect.getouterframes,getframeinfo)
