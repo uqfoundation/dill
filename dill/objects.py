@@ -116,7 +116,7 @@ a['ClassInstanceType'] = _newclass() # <type 'class'>
 a['SetType'] = _set = set()
 a['FrozenSetType'] = frozenset()
 # built-in exceptions (CH 6)
-a['ExceptionType'] = _function2()[0]
+a['ExceptionType'] = _exception = _function2()[0]
 # string services (CH 7)
 a['SREPatternType'] = _srepattern = re.compile('')
 # data types (CH 8)
@@ -173,16 +173,16 @@ a['SliceType'] = slice(1)
 a['UnboundMethodType'] = _class._method #XXX: works when not imported!
 a['XRangeType'] = _xrange = xrange(1)
 # other (concrete) object types
-a['CellType'] = (_lambda)(0).func_closure[0]
-a['MethodDescriptorType'] = type.__dict__['mro']
-a['WrapperDescriptorType'] = type.__repr__
+d['CellType'] = (_lambda)(0).func_closure[0]
+d['MethodDescriptorType'] = type.__dict__['mro']
+d['WrapperDescriptorType'] = type.__repr__
 a['WrapperDescriptorType2'] = type.__dict__['__module__']
 # built-in functions (CH 2)
-a['MethodWrapperType'] = [].__repr__
+d['MethodWrapperType'] = [].__repr__
 a['StaticMethodType'] = staticmethod(_method)
 a['ClassMethodType'] = classmethod(_method)
 a['PropertyType'] = property()
-a['SuperType'] = super(type)
+d['SuperType'] = super(Exception, _exception)
 # string services (CH 7)
 a['InputType'] = _cstrI = cStringIO.StringIO('')
 a['OutputType'] = _cstrO = cStringIO.StringIO()
@@ -196,11 +196,11 @@ a['DeadCallableProxyType'] = weakref.proxy(_class2())
 a['QueueType'] = Queue.Queue()
 a['PrettyPrinterType'] = pprint.PrettyPrinter()
 # numeric and mathematical types (CH 9)
-a['PartialType'] = functools.partial(int,base=2)
+d['PartialType'] = functools.partial(int,base=2)
 a['IzipType'] = itertools.izip('0','1')
 a['ChainType'] = itertools.chain('0','1')
-a['ItemGetterType'] = operator.itemgetter(0)
-a['AttrGetterType'] = operator.attrgetter('__repr__')
+d['ItemGetterType'] = operator.itemgetter(0)
+d['AttrGetterType'] = operator.attrgetter('__repr__')
 # file and directory access (CH 10)
 a['TemporaryFileType'] = _fileW = tempfile.TemporaryFile('w')
 # data persistence (CH 11)
@@ -234,7 +234,7 @@ try: # ipython
 except NameError:
     # built-in constants (CH 4)
     a['QuitterType'] = quit
-    a['ExitType'] = a['QuitterType']
+    d['ExitType'] = a['QuitterType']
 try: # numpy
     from numpy import ufunc as _numpy_ufunc
     from numpy import array as _numpy_array
@@ -321,6 +321,7 @@ except AttributeError:
     pass
 
 # -- cleanup ----------------------------------------------------------------
+a.update(d) # registered also succeed
 os.remove(_tempfile)
 
 

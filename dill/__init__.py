@@ -26,6 +26,10 @@ __license__ = """
 
 from dill import *
 import source, temp, detect
+# load types and make types module available
+from detect import types as _types
+detect.types = _types
+del _types
 
 def __extend():
     from dill import _extend

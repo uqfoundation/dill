@@ -7,6 +7,9 @@ Methods for detecting objects leading to pickling failures.
 from dill import _trace as trace
 
 objects = {}
+import objects as _objects # local import of dill.objects
+objects.update(_objects.succeeds)
+del _objects
 import objtypes as types # local import of dill.objtypes
 
 def load_types(pickleable=True, unpickleable=True):

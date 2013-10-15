@@ -55,6 +55,7 @@ WrapperDescriptorType = type(type.__repr__)
 MethodDescriptorType = type(type.__dict__['mro'])
 MethodWrapperType = type([].__repr__)
 PartialType = type(partial(int,base=2))
+SuperType = type(super(Exception, TypeError()))
 ItemGetterType = type(itemgetter(0))
 AttrGetterType = type(attrgetter('__repr__'))
 try:
@@ -191,6 +192,7 @@ _typedict = {
     MethodDescriptorType: 'MethodDescriptorType',
     MethodWrapperType: 'MethodWrapperType',
     PartialType: 'PartialType',
+    SuperType: 'SuperType',
     ItemGetterType: 'ItemGetterType',
     AttrGetterType: 'AttrGetterType',
 }
@@ -468,6 +470,12 @@ def save_functor(pickler, obj):
     log.info("Fu: %s" % obj)
     pickler.save_reduce(_create_ftype, (type(obj), obj.func, obj.args,
                                         obj.keywords), obj=obj)
+    return
+
+@register(SuperType)
+def save_functor(pickler, obj):
+    log.info("Su: %s" % obj)
+    pickler.save_reduce(super, (obj.__thisclass__, obj.__self__), obj=obj)
     return
 
 @register(BuiltinMethodType)
