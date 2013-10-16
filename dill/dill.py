@@ -3,8 +3,11 @@
 dill: a utility for serialization of python objects
 
 Based on code written by Oren Tirosh and Armin Ronacher.
-Extended to a (near) full set of python types (in types module),
-and coded to the pickle interface, by mmckerns@caltech.edu
+Extended to a (near) full set of the builtin types (in types module),
+and coded to the pickle interface, by <mmckerns@caltech.edu>.
+Initial port to python3 by Jonathan Dobson, continued by mmckerns.
+Test against "all" python types (CH 1-14 Std. Lib.) by mmckerns.
+Test against CH15+ Std. Lib. ... TBD.
 """
 __all__ = ['dump','dumps','load','loads','dump_session','load_session',\
            'Pickler','Unpickler','register','copy','pickle','pickles',\
@@ -19,21 +22,53 @@ def _trace(boolean):
     else: log.setLevel(logging.WARN)
     return
 
-import __builtin__
-import __main__ as _main_module
 import sys
+PYTHON3 = (hex(sys.hexversion) >= '0x30000f0')
+if PYTHON3: #FIXME: get types from dill.objtypes
+    import builtins as __builtin__
+    from pickle import _Pickler as StockPickler, _Unpickler as StockUnpickler
+    from _thread import LockType
+    from io import IOBase
+    from types import CodeType, FunctionType, MethodType, GeneratorType, \
+        TracebackType, FrameType, ModuleType, BuiltinMethodType
+    BooleanType = bool
+    BufferType = memoryview #XXX
+    BuiltinFunctionType = BuiltinMethodType
+    ClassType = type #XXX
+    ComplexType = complex
+    DictType = dict
+    DictionaryType = dict
+    EllipsisType = type(Ellipsis)
+    FileType = IOBase
+    FloatType = float
+    IntType = int
+    ListType = list
+    LongType = int
+    ObjectType = object
+    NoneType = type(None)
+    NotImplementedType = type(NotImplemented)
+    SliceType = slice
+    StringType = bytes #XXX
+    StringTypes = str #XXX
+    TupleType = tuple
+    TypeType = type
+    UnicodeType = str
+    XRangeType = range
+    DictProxyType = type(object.__dict__)
+else:
+    import __builtin__
+    from pickle import Pickler as StockPickler, Unpickler as StockUnpickler
+    from thread import LockType
+    from types import CodeType, FunctionType, ClassType, MethodType, \
+         GeneratorType, DictProxyType, XRangeType, SliceType, TracebackType, \
+         NotImplementedType, EllipsisType, FileType, FrameType, ModuleType, \
+         BuiltinMethodType, TypeType
+from pickle import HIGHEST_PROTOCOL, PicklingError, UnpicklingError
+import __main__ as _main_module
 import marshal
 import gc
 # import zlib
-from pickle import HIGHEST_PROTOCOL, PicklingError, UnpicklingError
-from pickle import Pickler as StockPickler
-from pickle import Unpickler as StockUnpickler
-from types import CodeType, FunctionType, ClassType, MethodType, \
-     GeneratorType, DictProxyType, XRangeType, SliceType, TracebackType, \
-     NotImplementedType, EllipsisType, FileType, FrameType, ModuleType, \
-     BuiltinMethodType, TypeType
 from weakref import ReferenceType, ProxyType, CallableProxyType
-from thread import LockType
 from functools import partial
 from operator import itemgetter, attrgetter
 # new in python2.5
@@ -49,8 +84,11 @@ try:
 except ImportError:
     NumpyUfuncType = None
 
-# make sure to add these 'hand-built' types to _typedict
-CellType = type((lambda x: lambda y: x)(0).func_closure[0])
+# make sure to add these 'hand-built' types to _typemap
+if PYTHON3:
+    CellType = type((lambda x: lambda y: x)(0).__closure__[0])
+else:
+    CellType = type((lambda x: lambda y: x)(0).func_closure[0])
 WrapperDescriptorType = type(type.__repr__)
 MethodDescriptorType = type(type.__dict__['mro'])
 MethodWrapperType = type([].__repr__)
@@ -58,6 +96,14 @@ PartialType = type(partial(int,base=2))
 SuperType = type(super(Exception, TypeError()))
 ItemGetterType = type(itemgetter(0))
 AttrGetterType = type(attrgetter('__repr__'))
+try:
+    from cStringIO import StringIO, InputType, OutputType
+except ImportError:
+    if PYTHON3:
+        from io import BytesIO as StringIO
+    else:
+        from StringIO import StringIO
+    InputType = OutputType = None
 try:
     __IPYTHON__ is True # is ipython
     ExitType = None     # IPython.core.autocall.ExitAutocall
@@ -67,12 +113,6 @@ except NameError:
     singletontypes = []
 
 ### Shorthands (modified from python2.5/lib/pickle.py)
-try:
-    from cStringIO import StringIO, InputType, OutputType
-except ImportError:
-    from StringIO import StringIO
-    InputType = OutputType = None
-
 def copy(obj):
     """use pickling to 'copy' an object"""
     return loads(dumps(obj))
@@ -181,12 +221,20 @@ def register(t):
 
 def _create_typemap():
     import types
-    for key, value in types.__dict__.iteritems():
-        if getattr(value, '__module__', None) == '__builtin__' and \
-           type(value) is type:
+    if PYTHON3:
+        d = dict(list(__builtin__.__dict__.items()) + \
+                 list(types.__dict__.items())).items()
+        builtin = 'builtins'
+    else:
+        d = types.__dict__.iteritems()
+        builtin = '__builtin__'
+    for key, value in d:
+        if getattr(value, '__module__', None) == builtin \
+        and type(value) is type:
             yield value, key
     return
-_typedict = {
+_typemap = dict(_create_typemap())
+_typemap.update({
     CellType: 'CellType',
     WrapperDescriptorType: 'WrapperDescriptorType',
     MethodDescriptorType: 'MethodDescriptorType',
@@ -195,14 +243,16 @@ _typedict = {
     SuperType: 'SuperType',
     ItemGetterType: 'ItemGetterType',
     AttrGetterType: 'AttrGetterType',
-}
+})
 if ExitType:
-    _typedict[ExitType] = 'ExitType'
+    _typemap[ExitType] = 'ExitType'
 if InputType:
-    _typedict[InputType] = 'InputType'
-    _typedict[OutputType] = 'OutputType'
-_typemap = dict(_create_typemap(), **_typedict)
-_reverse_typemap = dict((v, k) for k, v in _typemap.iteritems())
+    _typemap[InputType] = 'InputType'
+    _typemap[OutputType] = 'OutputType'
+if PYTHON3:
+    _reverse_typemap = dict((v, k) for k, v in _typemap.items())
+else:
+    _reverse_typemap = dict((v, k) for k, v in _typemap.iteritems())
 
 def _unmarshal(string):
     return marshal.loads(string)
@@ -221,7 +271,7 @@ def _create_lock(locked, *args):
     lock = Lock()
     if locked:
         if not lock.acquire(False):
-            raise UnpicklingError, "Cannot acquire lock"
+            raise UnpicklingError("Cannot acquire lock")
     return lock
 
 def _create_filehandle(name, mode, position, closed):
@@ -230,17 +280,18 @@ def _create_filehandle(name, mode, position, closed):
     # NOTE: handle special cases first (are there more special cases?)
     names = {'<stdin>':sys.__stdin__, '<stdout>':sys.__stdout__,
              '<stderr>':sys.__stderr__} #XXX: better fileno=(0,1,2) ?
-    if name in names.keys(): f = names[name] #XXX: safer "f=sys.stdin"
+    if name in list(names.keys()): f = names[name] #XXX: safer "f=sys.stdin"
     elif name == '<tmpfile>': import os; f = os.tmpfile()
     elif name == '<fdopen>': import tempfile; f = tempfile.TemporaryFile(mode)
     else:
         try: # try to open the file by name   # NOTE: has different fileno
             f = open(name, mode) #XXX: missing: encoding, softspace
-        except IOError, err:
+        except IOError: 
+            err = sys.exc_info()[1]
             try: # failing, then use /dev/null #XXX: better to just fail here?
                 import os; f = open(os.devnull, mode)
-            except IOError, err2:
-                raise UnpicklingError, err
+            except IOError:
+                raise UnpicklingError(err)
                 #XXX: python default is closed '<uninitialized file>' file/mode
     if closed: f.close()
     else: f.seek(position)
@@ -281,14 +332,6 @@ class _attrgetter_helper(object):
             attrs[index] = ".".join([attrs[index], attr])
         return type(self)(attrs, index)
 
-def _create_lock(locked, *args):
-    from threading import Lock
-    lock = Lock()
-    if locked:
-        if not lock.acquire(False):
-            raise UnpicklingError, "Cannot acquire lock"
-    return lock
-
 if HAS_CTYPES:
     ctypes.pythonapi.PyCell_New.restype = ctypes.py_object
     ctypes.pythonapi.PyCell_New.argtypes = [ctypes.py_object]
@@ -296,28 +339,25 @@ if HAS_CTYPES:
     def _create_cell(contents):
         return ctypes.pythonapi.PyCell_New(contents)
 
-#   ctypes.pythonapi.PyDictProxy_New.restype = ctypes.py_object
-#   ctypes.pythonapi.PyDictProxy_New.argtypes = [ctypes.py_object]
-#   def _create_dictproxy(dictobj, *args):
-#       dprox = ctypes.pythonapi.PyDictProxy_New(dictobj)
-#       #XXX: hack to take care of pickle 'nesting' the correct dictproxy
-#       if 'nested' in args and type(dprox['__dict__']) == DictProxyType:
-#           return dprox['__dict__']
-#       return dprox
-
 def _create_weakref(obj, *args):
     from weakref import ref
     if obj is None: # it's dead
-        import UserDict
-        return ref(UserDict.UserDict(), *args)
+        if PYTHON3:
+            from collections import UserDict
+        else:
+            from UserDict import UserDict
+        return ref(UserDict(), *args)
     return ref(obj, *args)
 
 def _create_weakproxy(obj, callable=False, *args):
     from weakref import proxy
     if obj is None: # it's dead
         if callable: return proxy(lambda x:x, *args)
-        import UserDict
-        return proxy(UserDict.UserDict(), *args)
+        if PYTHON3:
+            from collections import UserDict
+        else:
+            from UserDict import UserDict
+        return proxy(UserDict(), *args)
     return proxy(obj, *args)
 
 def _eval_repr(repr_str):
@@ -371,9 +411,14 @@ def save_code(pickler, obj):
 def save_function(pickler, obj):
     if not _locate_function(obj): #, pickler._session):
         log.info("F1: %s" % obj)
-        pickler.save_reduce(FunctionType, (obj.func_code, obj.func_globals,
-                                           obj.func_name, obj.func_defaults,
-                                           obj.func_closure), obj=obj)
+        if PYTHON3:
+            pickler.save_reduce(FunctionType, (obj.__code__, obj.__globals__,
+                                               obj.__name__, obj.__defaults__,
+                                               obj.__closure__), obj=obj)
+        else:
+            pickler.save_reduce(FunctionType, (obj.func_code, obj.func_globals,
+                                               obj.func_name, obj.func_defaults,
+                                               obj.func_closure), obj=obj)
     else:
         log.info("F2: %s" % obj)
         StockPickler.save_global(pickler, obj)
@@ -383,10 +428,16 @@ def save_function(pickler, obj):
 def save_module_dict(pickler, obj):
     if is_dill(pickler) and obj is pickler._main_module.__dict__:
         log.info("D1: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
-        pickler.write('c__builtin__\n__main__\n')
+        if PYTHON3:
+            pickler.write(bytes('c__builtin__\n__main__\n', 'UTF-8'))
+        else:
+            pickler.write('c__builtin__\n__main__\n')
     elif not is_dill(pickler) and obj is _main_module.__dict__:
         log.info("D3: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
-        pickler.write('c__main__\n__dict__\n')   #XXX: works in general?
+        if _IS_PY3:
+            pickler.write(bytes('c__main__\n__dict__\n', 'UTF-8'))
+        else:
+            pickler.write('c__main__\n__dict__\n')   #XXX: works in general?
     else:
         log.info("D2: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         StockPickler.save_dict(pickler, obj)
@@ -488,32 +539,15 @@ def save_builtin_method(pickler, obj):
         StockPickler.save_global(pickler, obj)
     return
 
-if hex(sys.hexversion) >= '0x20600f0':
-    @register(MethodWrapperType)
-    @register(MethodType)
-    def save_instancemethod(pickler, obj):
-        log.info("Me: %s" % obj)
-        pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
-        return
-if hex(sys.hexversion) >= '0x20500f0':
-    @register(MethodWrapperType)
-    def save_instancemethod(pickler, obj):
-        log.info("Me: %s" % obj)
-        pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
-        return
-    @register(MethodType) #FIXME: fails for 'hidden' or 'name-mangled' classes
-    def save_instancemethod0(pickler, obj):# example: cStringIO.StringI
-        log.info("Me: %s" % obj)
+@register(MethodType) #FIXME: fails for 'hidden' or 'name-mangled' classes
+def save_instancemethod0(pickler, obj):# example: cStringIO.StringI
+    log.info("Me: %s" % obj)
+    if PYTHON3:
+        pickler.save_reduce(MethodType, (obj.__func__, obj.__self__), obj=obj)
+    else:
         pickler.save_reduce(MethodType, (obj.im_func, obj.im_self,
                                          obj.im_class), obj=obj)
-        return
-else:
-    @register(MethodType) #FIXME: fails for 'hidden' or 'name-mangled' classes
-    def save_instancemethod0(pickler, obj):# example: cStringIO.StringI
-        log.info("Me: %s" % obj)
-        pickler.save_reduce(MethodType, (obj.im_func, obj.im_self,
-                                         obj.im_class), obj=obj)
-        return
+    return
 
 if hex(sys.hexversion) >= '0x20500f0':
     @register(MemberDescriptorType)
@@ -524,6 +558,12 @@ if hex(sys.hexversion) >= '0x20500f0':
         log.info("Wr: %s" % obj)
         pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
                                        obj.__repr__()), obj=obj)
+        return
+
+    @register(MethodWrapperType)
+    def save_instancemethod(pickler, obj):
+        log.info("Mw: %s" % obj)
+        pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
         return
 else:
     @register(MethodDescriptorType)
@@ -555,7 +595,7 @@ def save_dictproxy(pickler, obj):
         return
     # all bad below... so throw ReferenceError or TypeError
     from weakref import ReferenceError
-    raise ReferenceError, "%s does not reference a class __dict__" % obj
+    raise ReferenceError("%s does not reference a class __dict__" % obj)
 
 @register(SliceType)
 def save_slice(pickler, obj):
@@ -591,17 +631,23 @@ def _proxy_helper(obj): # a dead proxy returns a reference to None
 
 def _locate_object(address, module=None):
     # get the object located at the given memory address
-    if module: objects = module.__dict__.itervalues()
-    else: objects = gc.get_objects()
     special = [None, True, False] #XXX: more...?
-    for obj in objects+special:
+    for obj in special:
+        if address == id(obj): return obj
+    if module:
+        if PYTHON3:
+            objects = iter(module.__dict__.values())
+        else:
+            objects = module.__dict__.itervalues()
+    else: objects = iter(gc.get_objects())
+    for obj in objects:
         if address == id(obj): return obj
     # all bad below... nothing found so throw ReferenceError or TypeError
     from weakref import ReferenceError
     try: address = hex(address)
-    except TypeError, err:
-        raise TypeError, "'%s' is not a valid memory address" % str(address)
-    raise ReferenceError, "Cannot reference object at '%s'" % address
+    except TypeError:
+        raise TypeError("'%s' is not a valid memory address" % str(address))
+    raise ReferenceError("Cannot reference object at '%s'" % address)
 
 @register(ReferenceType)
 def save_weakref(pickler, obj):
@@ -616,7 +662,7 @@ def save_weakref(pickler, obj):
 def save_weakproxy(pickler, obj):
     refobj = _locate_object(_proxy_helper(obj))
     try: log.info("Rf: %s" % obj)
-    except ReferenceError, err: log.info("Rf: %s" % err)
+    except ReferenceError: log.info("Rf: %s" % sys.exc_info()[1])
    #callable = bool(getattr(refobj, '__call__', None))
     if type(obj) is CallableProxyType: callable = True
     else: callable = False
@@ -654,16 +700,16 @@ def save_type(pickler, obj):
         else:
             log.info("T3: %s" % obj)
             _dict = obj.__dict__
-       #print _dict
-       #print "%s\n%s" % (type(obj), obj.__name__)
-       #print "%s\n%s" % (obj.__bases__, obj.__dict__)
+       #print (_dict)
+       #print ("%s\n%s" % (type(obj), obj.__name__))
+       #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
         pickler.save_reduce(_create_type, (type(obj), obj.__name__,
                                            obj.__bases__, _dict), obj=obj)
     else:
         log.info("T4: %s" % obj)
-       #print obj.__dict__
-       #print "%s\n%s" % (type(obj), obj.__name__)
-       #print "%s\n%s" % (obj.__bases__, obj.__dict__)
+       #print (obj.__dict__)
+       #print ("%s\n%s" % (type(obj), obj.__name__))
+       #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
         StockPickler.save_global(pickler, obj)
     return
 
@@ -675,7 +721,7 @@ def pickles(obj,exact=False):
         if exact:
             return pik == obj
         return type(pik) == type(obj)
-    except (TypeError, AssertionError, PicklingError, UnpicklingError), err:
+    except (TypeError, AssertionError, PicklingError, UnpicklingError):
         return False
 
 # use to protect against missing attributes
