@@ -10,8 +10,8 @@ import dill as pickle
 
 # get all objects for testing
 from dill.detect import load_types
-#load_types(pickleable=True,unpickleable=False)
-load_types(pickleable=True,unpickleable=True)
+load_types(pickleable=True,unpickleable=False)
+#load_types(pickleable=True,unpickleable=True)
 from dill.detect import objects
 
 # helper objects

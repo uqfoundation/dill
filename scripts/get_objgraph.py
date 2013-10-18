@@ -2,6 +2,7 @@
 """
 use objgraph to plot the reference paths for types found in dill.detect.types
 """
+#XXX: useful if could read .pkl file and generate the graph... ?
 
 import dill as pickle
 #pickle.debug.trace(True)

@@ -4,17 +4,24 @@
 Methods for detecting objects leading to pickling failures.
 """
 
-from dill import _trace as trace
+from __future__ import absolute_import
+from .pointers import parent, reference, refobject
 
 objects = {}
-import objects as _objects # local import of dill.objects
+# local import of dill.objects
+from .dill import _trace as trace
+from . import objects as _objects
+
 objects.update(_objects.succeeds)
 del _objects
-import objtypes as types # local import of dill.objtypes
+
+# local import of dill.objtypes
+from . import objtypes as types
 
 def load_types(pickleable=True, unpickleable=True):
     """load pickleable and/or unpickleable types to dill.detect.types"""
-    import objects as _objects # local import of dill.objects
+    # local import of dill.objects
+    from . import objects as _objects
     if pickleable:
         objects.update(_objects.succeeds)
     else:
@@ -62,10 +69,13 @@ def errors(obj, depth=0, exact=False):
             assert type(pik) == type(obj), \
                 "Unpickling produces %s instead of %s" % (type(pik),type(obj))
             return None
-        except Exception, err:
-            return err
+        except Exception:
+            import sys
+            return sys.exc_info()[1]
     return dict(((attr, errors(getattr(obj,attr),depth-1,exact=exact)) \
            for attr in dir(obj) if not pickles(getattr(obj,attr),exact)))
+
+del absolute_import
 
 
 # EOF

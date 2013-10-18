@@ -8,21 +8,33 @@ __all__ = ['registered','failures','succeeds']
 
 # helper imports
 import warnings; warnings.filterwarnings("ignore", category=DeprecationWarning)
-import sets # Deprecated
+import sys
+PYTHON3 = (hex(sys.hexversion) >= '0x30000f0')
+if PYTHON3:
+    import queue as Queue
+    import dbm as anydbm
+    import dbm.ndbm as dbm
+else:
+    import Queue
+    import anydbm
+    import dbm
+    import sets # deprecated/removed
+    import mutex # removed
+try:
+    from cStringIO import StringIO # has StringI and StringO types
+except ImportError: # only has StringIO type
+    if PYTHON3:
+        from io import BytesIO as StringIO
+    else:
+        from StringIO import StringIO
 import re
 import array
 import collections
-try:
-    import cStringIO # has StringI and StringO types
-except ImportError:
-    import StringIO as cStringIO # has StringIO type
 import codecs
 import struct
 import datetime
 import calendar
-import mutex
 import weakref
-import Queue
 import pprint
 import decimal
 import functools
@@ -30,8 +42,6 @@ import itertools
 import operator
 import tempfile
 import shelve
-import dbm
-import anydbm
 import sqlite3
 import zlib
 import bz2
@@ -89,7 +99,6 @@ succeeds = a = {}
 
 # types module (part of CH 8)
 a['BooleanType'] = bool(1)
-a['BufferType'] = buffer
 a['BuiltinFunctionType'] = len
 a['BuiltinMethodType'] = a['BuiltinFunctionType']
 a['ClassType'] = _class
@@ -99,15 +108,21 @@ a['DictionaryType'] = a['DictType']
 a['FloatType'] = float(1)
 a['FunctionType'] = _function
 a['InstanceType'] = _instance = _class()
-a['IntType'] = int(1)
+a['IntType'] = _int = int(1)
 a['ListType'] = _list = []
-a['LongType'] = long(1)
 a['NoneType'] = None
 a['ObjectType'] = object()
-a['StringType'] = str(1)
+a['StringType'] = _str = str(1)
 a['TupleType'] = _tuple = ()
 a['TypeType'] = type
-a['UnicodeType'] = unicode(1)
+if PYTHON3:
+    a['BytesType'] = _bytes = bytes(1)
+    a['LongType'] = _int
+    a['UnicodeType'] = _str
+else:
+    a['BufferType'] = buffer
+    a['LongType'] = long(1)
+    a['UnicodeType'] = unicode(1)
 # built-in constants (CH 4)
 a['CopyrightType'] = copyright
 # built-in types (CH 5)
@@ -120,15 +135,16 @@ a['ExceptionType'] = _exception = _function2()[0]
 # string services (CH 7)
 a['SREPatternType'] = _srepattern = re.compile('')
 # data types (CH 8)
-a['SetsType'] = sets.Set()
-a['ImmutableSetType'] = sets.ImmutableSet()
 a['ArrayType'] = array.array("f")
 a['DequeType'] = collections.deque([0])
 a['DefaultDictType'] = collections.defaultdict(_function, _dict)
 a['TZInfoType'] = datetime.tzinfo()
 a['DateTimeType'] = datetime.datetime.today()
 a['CalendarType'] = calendar.Calendar()
-a['MutexType'] = mutex.mutex()
+if not PYTHON3:
+    a['SetsType'] = sets.Set()
+    a['ImmutableSetType'] = sets.ImmutableSet()
+    a['MutexType'] = mutex.mutex()
 # numeric and mathematical types (CH 9)
 a['DecimalType'] = decimal.Decimal(1)
 a['CountType'] = itertools.count(0)
@@ -171,21 +187,29 @@ a['ModuleType'] = datetime
 a['NotImplementedType'] = NotImplemented
 a['SliceType'] = slice(1)
 a['UnboundMethodType'] = _class._method #XXX: works when not imported!
-a['XRangeType'] = _xrange = xrange(1)
 # other (concrete) object types
-d['CellType'] = (_lambda)(0).func_closure[0]
+if PYTHON3:
+    d['CellType'] = (_lambda)(0).__closure__[0]
+    a['XRangeType'] = _xrange = range(1)
+else:
+    d['CellType'] = (_lambda)(0).func_closure[0]
+    a['XRangeType'] = _xrange = xrange(1)
 d['MethodDescriptorType'] = type.__dict__['mro']
 d['WrapperDescriptorType'] = type.__repr__
 a['WrapperDescriptorType2'] = type.__dict__['__module__']
 # built-in functions (CH 2)
-d['MethodWrapperType'] = [].__repr__
+if PYTHON3: _methodwrap = (1).__lt__
+else: _methodwrap = (1).__cmp__
+d['MethodWrapperType'] = _methodwrap
 a['StaticMethodType'] = staticmethod(_method)
 a['ClassMethodType'] = classmethod(_method)
 a['PropertyType'] = property()
 d['SuperType'] = super(Exception, _exception)
 # string services (CH 7)
-a['InputType'] = _cstrI = cStringIO.StringIO('')
-a['OutputType'] = _cstrO = cStringIO.StringIO()
+if PYTHON3: _in = _bytes
+else: _in = _str
+a['InputType'] = _cstrI = StringIO(_in)
+a['OutputType'] = _cstrO = StringIO()
 # data types (CH 8)
 a['ReferenceType'] = weakref.ref(_instance)
 a['DeadReferenceType'] = weakref.ref(_class())
@@ -197,12 +221,17 @@ a['QueueType'] = Queue.Queue()
 a['PrettyPrinterType'] = pprint.PrettyPrinter()
 # numeric and mathematical types (CH 9)
 d['PartialType'] = functools.partial(int,base=2)
-a['IzipType'] = itertools.izip('0','1')
+if PYTHON3:
+    a['IzipType'] = zip('0','1')
+else:
+    a['IzipType'] = itertools.izip('0','1')
 a['ChainType'] = itertools.chain('0','1')
 d['ItemGetterType'] = operator.itemgetter(0)
 d['AttrGetterType'] = operator.attrgetter('__repr__')
 # file and directory access (CH 10)
-a['TemporaryFileType'] = _fileW = tempfile.TemporaryFile('w')
+a['TemporaryFileType'] = _tempf = tempfile.TemporaryFile('w')
+if PYTHON3: _fileW = _cstrO
+else: _fileW = _tempf
 # data persistence (CH 11)
 a['ConnectionType'] = _conn = sqlite3.connect(':memory:')
 a['CursorType'] = _conn.cursor()
@@ -224,10 +253,17 @@ a['RLockType'] = threading.RLock()
 # generic operating system services (CH 15) # also closed/open and r/w/etc...
 a['NamedLoggerType'] = logging.getLogger(__name__)
 # interprocess communication (CH 17)
-a['SocketType'] = _socket = socket.socket()
-a['SocketPairType'] = _socket._sock
+if PYTHON3:
+    a['SocketType'] = _socket = socket.socket()
+    a['SocketPairType'] = socket.socketpair()[0]
+else:
+    a['SocketType'] = _socket = socket.socket()
+    a['SocketPairType'] = _socket._sock
 # python runtime services (CH 27)
-a['GeneratorContextManagerType'] = contextlib.GeneratorContextManager(max)
+if PYTHON3:
+    a['GeneratorContextManagerType'] = contextlib.contextmanager(max)([1])
+else:
+    a['GeneratorContextManagerType'] = contextlib.GeneratorContextManager(max)
 
 try: # ipython
     __IPYTHON__ is True # is ipython
@@ -265,9 +301,14 @@ x['TupleIteratorType']= iter(_tuple) #XXX: empty vs non-empty
 x['XRangeIteratorType'] = iter(_xrange) #XXX: empty vs non-empty
 x['SetIteratorType'] = iter(_set) #XXX: empty vs non-empty
 # built-in types (CH 5)
-x['DictionaryItemIteratorType'] = type.__dict__.iteritems()
-x['DictionaryKeyIteratorType'] = type.__dict__.iterkeys()
-x['DictionaryValueIteratorType'] = type.__dict__.itervalues()
+if PYTHON3:
+    x['DictionaryItemIteratorType'] = iter(type.__dict__.items())
+    x['DictionaryKeyIteratorType'] = iter(type.__dict__.keys())
+    x['DictionaryValueIteratorType'] = iter(type.__dict__.values())
+else:
+    x['DictionaryItemIteratorType'] = type.__dict__.iteritems()
+    x['DictionaryKeyIteratorType'] = type.__dict__.iterkeys()
+    x['DictionaryValueIteratorType'] = type.__dict__.itervalues()
 # string services (CH 7)
 x['StructType'] = struct.Struct('c')
 x['CallableIteratorType'] = _srepattern.finditer('')
@@ -294,7 +335,7 @@ x['CSVDictReaderType'] = csv.DictReader(_cstrI)
 x['CSVDictWriterType'] = csv.DictWriter(_cstrO,{})
 # cryptographic services (CH 14)
 x['HashType'] = hashlib.md5()
-x['HMACType'] = hmac.new('')
+x['HMACType'] = hmac.new(_in)
 
 try: # python 2.6
     # numeric and mathematical types (CH 9)
@@ -305,18 +346,26 @@ except AttributeError:
     pass
 try: # python 2.7
     # built-in types (CH 5)
-    x['DictItemsType'] = _dict.viewitems() # 2.7
-    x['DictKeysType'] = _dict.viewkeys() # 2.7
-    x['DictValuesType'] = _dict.viewvalues() # 2.7
-    x['MemoryType'] = memoryview('0') # 2.7
-    x['MemoryType2'] = memoryview(bytearray('0')) # 2.7
+    x['MemoryType'] = memoryview(_in) # 2.7
+    x['MemoryType2'] = memoryview(bytearray(_in)) # 2.7
+    if PYTHON3:
+        x['DictItemsType'] = _dict.items() # 2.7
+        x['DictKeysType'] = _dict.keys() # 2.7
+        x['DictValuesType'] = _dict.values() # 2.7
+    else:
+        x['DictItemsType'] = _dict.viewitems() # 2.7
+        x['DictKeysType'] = _dict.viewkeys() # 2.7
+        x['DictValuesType'] = _dict.viewvalues() # 2.7
     # data types (CH 8)
     x['WeakSetType'] = weakref.WeakSet() # 2.7
     # numeric and mathematical types (CH 9)
     x['RepeatType'] = itertools.repeat(0) # 2.7
     x['CompressType'] = itertools.compress('0',[1]) #XXX: ...and etc
-    x['CmpKeyType'] = _cmpkey = functools.cmp_to_key((1).__cmp__) # 2.7
-    x['CmpKeyObjType'] = _cmpkey('0') #2.7
+except NameError:
+    pass
+try: # python 2.7 (and not 3.1)
+    x['CmpKeyType'] = _cmpkey = functools.cmp_to_key(_methodwrap) # 2.7,3.2,3.3
+    x['CmpKeyObjType'] = _cmpkey('0') #2.7,3.2,3.3
 except AttributeError:
     pass
 

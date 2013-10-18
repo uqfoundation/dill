@@ -1,31 +1,21 @@
+from __future__ import absolute_import
+__all__ = ['parent', 'reference', 'refobject']
+
 import gc
 import sys
 
-def reference(proxy): # a dead proxy returns a reference to None
-    "get memory address of proxy's reference object"
-    address = int(repr(proxy).rstrip('>').split(' at ')[-1], base=16)
-    return address
-
-def refobject(address, module=None):
-    "get the object located at the given memory address"
-    if module: objects = module.__dict__.itervalues()
-    else: objects = gc.get_objects()
-    special = [None, True, False] #XXX: more...?
-    for obj in objects+special:
-        if address == id(obj): return obj
-    # all bad below... nothing found so throw ReferenceError or TypeError
-    from weakref import ReferenceError
-    try: address = hex(address)
-    except TypeError, err:
-        raise TypeError, "'%s' is not a valid memory address" % str(address)
-    raise ReferenceError, "Cannot reference object at '%s'" % address
+from .dill import _proxy_helper as reference
+from .dill import _locate_object as refobject
 
 def parent(obj, objtype, *args, **kwds):
     """
 >>> listiter = iter([4,5,6,7])
->>> obj = parent(listiter, types.ListType)
+>>> obj = parent(listiter, list)
 >>> obj == [4,5,6,7]  # actually 'is', but don't have handle any longer
 True
+
+WARNING: if obj is a sequence (e.g. list), may produce unexpected results.
+Parent finds *one* parent (e.g. the last member of the sequence).
     """
     edge_func = gc.get_referents #MMM: looking for refs, not back_refs
     predicate = lambda x: isinstance(x, objtype) #MMM: looking for parent type

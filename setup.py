@@ -145,6 +145,7 @@ Dill requires::
 Optional requirements::
 
     - setuptools, version >= 0.6
+    - objgraph, version >= 1.7.2
 
 
 Usage Notes
@@ -235,6 +236,7 @@ setup(name='dill',
 
 # add dependencies
 ctypes_version = '>=1.0.1'
+objgraph = '>=1.7.2'
 import sys
 if has_setuptools and hex(sys.hexversion) < '0x20500f0':
     setup_code += """
@@ -244,7 +246,7 @@ if has_setuptools and hex(sys.hexversion) < '0x20500f0':
 # add the scripts, and close 'setup' call
 setup_code += """    
       zip_safe=False,
-      scripts=['scripts/unpickle.py'])
+      scripts=['scripts/unpickle.py','scripts/get_objgraph.py'])
 """
 
 # exec the 'setup' code
