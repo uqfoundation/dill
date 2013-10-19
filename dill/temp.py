@@ -67,7 +67,7 @@ def dump(object, **kwds):
 Loads with "dill.load".  Returns the filehandle.
 
     >>> dumpfile = dill.temp.dump([1, 2, 3, 4, 5])
-    >>> dill.load(open(dumpfile.name))
+    >>> dill.load(open(dumpfile.name, 'rb'))
     [1, 2, 3, 4, 5]
 
 Optional kwds:

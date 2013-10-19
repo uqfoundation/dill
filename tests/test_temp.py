@@ -24,7 +24,7 @@ exec(pyfile.getvalue())
 assert _f(4) == f(4)
 
 dumpfile = dump(x)
-_x = load(open(dumpfile.name))
+_x = load(open(dumpfile.name, 'rb'))
 assert _x == x
 
 dumpfile = dumpIO(x)

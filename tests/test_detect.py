@@ -10,7 +10,7 @@ d = badtypes(f, 1)
 assert isinstance(d, dict)
 assert list(badobjects(f, 1).keys()) == list(d.keys())
 assert list(errors(f, 1).keys()) == list(d.keys())
-assert len(set([err.message for err in errors(f, 1).values()])) is 1
+assert len(set([err.args[0] for err in list(errors(f, 1).values())])) is 1
 
 x = [4,5,6,7]
 listiter = iter(x)
