@@ -51,7 +51,7 @@ if __name__ == '__main__':
   la = pickle.loads(pa)
   lmath = pickle.loads(pmath)
   lmap = pickle.loads(pmap)
-  assert map(math.sin,a) == lmap(lmath.sin,la)
+  assert list(map(math.sin,a)) == list(lmap(lmath.sin,la))
 
   # pickled basic class stuff
   pbasic2 = pickle.dumps(basic2)

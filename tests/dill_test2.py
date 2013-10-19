@@ -32,20 +32,20 @@ def pickles(obj,exact=False):
         if exact:
             try:
                 assert pik == obj
-            except AssertionError, err:
+            except AssertionError:
                 assert type(obj) == type(pik)
-                print "weak: %s" % type(obj)
+                print ("weak: %s" % type(obj))
         else:
             assert type(obj) == type(pik)
-    except Exception, err:
-        print "COPY failure: %s" % type(obj)
+    except Exception:
+        print ("COPY failure: %s" % type(obj))
     return
 
 
 if __name__ == '__main__':
 
     for member in objects.values():
-       #print "%s ==> %s" % (member, type(member)) # DEBUG
+       #print ("%s ==> %s" % (member, type(member))) # DEBUG
        #pickles(member, exact=True)
         pickles(member, exact=False)
 

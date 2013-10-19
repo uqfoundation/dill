@@ -8,8 +8,8 @@ assert badtypes(f) == type(f)
 assert isinstance(errors(f), TypeError)
 d = badtypes(f, 1)
 assert isinstance(d, dict)
-assert badobjects(f, 1).keys() == d.keys()
-assert errors(f, 1).keys() == d.keys()
+assert list(badobjects(f, 1).keys()) == list(d.keys())
+assert list(errors(f, 1).keys()) == list(d.keys())
 assert len(set([err.message for err in errors(f, 1).values()])) is 1
 
 x = [4,5,6,7]

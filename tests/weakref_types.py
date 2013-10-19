@@ -54,4 +54,4 @@ objlist = [r,dr,m,dm,fr,xr, p,dp,t,dt, c,dc,d,dd, fp,xp]
 for obj in objlist:
   res = dill.detect.errors(obj)
   if res:
-    print "%s:\n  %s" % (obj, res)
+    print ("%s:\n  %s" % (obj, res))

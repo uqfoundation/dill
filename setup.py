@@ -3,7 +3,7 @@
 # Michael McKerns
 # mmckerns@caltech.edu
 
-from __future__ import with_statement
+from __future__ import with_statement, absolute_import
 import os
 
 # set version numbers
@@ -23,7 +23,7 @@ except ImportError:
 # generate version number
 if os.path.exists('dill/info.py'):
     # is a source distribution, so use existing version
-    from dill.info import this_version
+    from .dill.info import this_version
 elif stable_version == target_version:
     # we are building a stable release
     this_version = target_version
@@ -31,9 +31,9 @@ else:
     # we are building a distribution
     this_version = target_version + '.dev'
     if is_release:
-      from datetime import date
-      today = "".join(date.isoformat(date.today()).split('-'))
-      this_version += "-" + today
+        from datetime import date
+        today = "".join(date.isoformat(date.today()).split('-'))
+        this_version += "-" + today
 
 # get the license info
 with open('LICENSE') as file:
@@ -69,39 +69,50 @@ a trustworthy source.
 
 Dill is part of pathos, a python framework for heterogeneous computing.
 Dill is in the early development stages, and any user feedback is
-highly appreciated. Contact Mike McKerns [mmckerns at caltech dot edu]
-with comments, suggestions, and any bugs you may find.  A list of known
-issues is maintained at http://dev.danse.us/trac/pathos/query.
+highly appreciated. Contact Mike McKerns [mmckerns at caltech dot edu] with
+comments, suggestions, and any bugs you may find.  A list of known issues
+is maintained at http://trac.mystic.cacr.caltech.edu/project/pathos/query.
 
 
 Major Features
 ==============
 
-Dill is capable of pickling the following standard types::
+Dill can pickle the following standard types::
 
     - none, type, bool, int, long, float, complex, str, unicode,
     - tuple, list, dict, file, buffer, builtin,
     - both old and new style classes,
     - instances of old and new style classes,
-    - set, frozenset, array, lambda,
-    - standard functions, functions with yields, nested functions
-    - cell, method, unboundmethod, module, code,
+    - set, frozenset, array, functions, exceptions
+
+Dill can also pickle more 'exotic' standard types::
+
+    - functions with yields, nested functions, lambdas,
+    - cell, method, unboundmethod, module, code, methodwrapper,
     - dictproxy, methoddescriptor, getsetdescriptor, memberdescriptor,
     - wrapperdescriptor, xrange, slice,
     - notimplemented, ellipsis, quit
 
+Dill cannot yet pickle these standard types::
+
+    - frame, generator, traceback
+
 Dill also provides the capability to::
 
     - save and load python interpreter sessions
+    - save and extract the source code from functions and classes
+    - interactively diagnose pickling errors
 
 
 Current Release
 ===============
 
-The latest stable release version is dill-%(relver)s. You can download it here.
-The latest stable version of dill is always available at:
+This release version is dill-%(relver)s. You can download it here.
+The latest released version of dill is always available from::
 
     http://dev.danse.us/trac/pathos
+
+Dill is distributed under a 3-clause BSD license.
 
 
 Development Release
@@ -109,9 +120,13 @@ Development Release
 
 If you like living on the edge, and don't mind the promise
 of a little instability, you can get the latest development
-release with all the shiny new features at:
+release with all the shiny new features at::
 
     http://dev.danse.us/packages.
+
+or even better, fork us on our github mirror of the svn trunk::
+
+    https://github.com/uqfoundation
 
 
 Installation
@@ -129,7 +144,7 @@ download the tarball, unzip, and run the installer::
 You will be warned of any missing dependencies and/or settings
 after you run the "build" step above. 
 
-Alternately, dill can be installed with easy_install::
+Alternately, dill can be installed with easy_install or pip::
 
     [download]
     $ easy_install -f . dill
@@ -165,7 +180,7 @@ License
 Dill is distributed under a modified BSD license.
 
     >>> import dill
-    >>> print dill.license()
+    >>> print (dill.license())
 
 
 Citation
@@ -250,16 +265,16 @@ setup_code += """
 """
 
 # exec the 'setup' code
-exec setup_code
+exec(setup_code)
 
 # if dependencies are missing, print a warning
 try:
     import ctypes
 except ImportError:
-    print "\n***********************************************************"
-    print "WARNING: One of the following dependencies is unresolved:"
-    print "    ctypes %s" % ctypes_version
-    print "***********************************************************\n"
+    print ("\n***********************************************************")
+    print ("WARNING: One of the following dependencies is unresolved:")
+    print ("    ctypes %s" % ctypes_version)
+    print ("***********************************************************\n")
 
 
 if __name__=='__main__':
