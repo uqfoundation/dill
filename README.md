@@ -28,9 +28,9 @@ a trustworthy source.
 
 Dill is part of pathos, a python framework for heterogenous computing.
 Dill is in the early development stages, and any user feedback is
-highly appreciated. Contact Mike McKerns [mmckerns at caltech dot edu]
-with comments, suggestions, and any bugs you may find. A list of known
-issues is maintained at http://trac.mystic.cacr.caltech.edu/project/pathos/query.
+highly appreciated. Contact Mike McKerns [mmckerns at caltech dot edu] with
+comments, suggestions, and any bugs you may find. A list of known issues
+is maintained at http://trac.mystic.cacr.caltech.edu/project/pathos/query.
 
 
 Major Features
@@ -46,7 +46,7 @@ Dill can pickle the following standard types::
 Dill can also pickle more 'exotic' standard types::
 
 * functions with yields, nested functions, lambdas
-* cell, method, unboundmethod, module, code,
+* cell, method, unboundmethod, module, code, methodwrapper,
 * dictproxy, methoddescriptor, getsetdescriptor, memberdescriptor,
 * wrapperdescriptor, xrange, slice,
 * notimplemented, ellipsis, quit
@@ -58,11 +58,13 @@ Dill cannot yet pickle these standard types::
 Dill also provides the capability to::
 
 * save and load python interpreter sessions
+* save and extract the source code from functions and classes
+* interactively diagnose pickling errors
 
 Current Release
 ---------------
 The latest released version of dill is available from::
-    http://trac.mystic.cacr.caltech.edu/project/pathos
+    http://dev.danse.us/trac/pathos
 
 Dill is distributed under a modified BSD license.
 
@@ -86,7 +88,7 @@ acknowledge use of dill by citing the following in your publication::
 
     Michael McKerns and Michael Aivazis,
     "pathos: a framework for heterogeneous computing", 2010- ;
-    http://trac.mystic.cacr.caltech.edu/project/pathos
+    http://dev.danse.us/trac/pathos
 
 More Information
 ----------------
@@ -98,8 +100,7 @@ documentation at http://docs.python.org/library/pickle.html also
 apply to dill if one will `import dill as pickle`. Dill's source code is also generally well documented,
 so further questions may be resolved by inspecting the code itself, or through 
 browsing the reference manual. For those who like to leap before
-they look, you can jump right to the installation instructions. If the aforementioned documents
-do not adequately address your needs, please send us feedback.
+they look, you can jump right to the installation instructions. If the aforementioned documents do not adequately address your needs, please send us feedback.
 
 Dill is an active research tool. There are a growing number of publications and presentations that
 discuss real-world examples and new features of dill in greater detail than presented in the user's guide. 

@@ -118,9 +118,7 @@ Dill is distributed under a 3-clause BSD license.
 Development Release
 ===================
 
-If you like living on the edge, and don't mind the promise
-of a little instability, you can get the latest development
-release with all the shiny new features at::
+You can get the latest development release with all the shiny new features at::
 
     http://dev.danse.us/packages.
 

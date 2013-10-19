@@ -374,6 +374,10 @@ def _getattr(objclass, name, repr_str):
             attr = attr[name]
         return attr
 
+def _get_attr(self, name):
+    # stop recursive pickling
+    return getattr(self, name)
+
 def _dict_from_dictproxy(dictproxy):
     _dict = dictproxy.copy() # convert dictproxy to dict
     _dict.pop('__dict__')
@@ -533,7 +537,7 @@ def save_functor(pickler, obj):
 def save_builtin_method(pickler, obj):
     if obj.__self__ is not None:
         log.info("B1: %s" % obj)
-        pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
+        pickler.save_reduce(_get_attr, (obj.__self__, obj.__name__), obj=obj)
     else:
         log.info("B2: %s" % obj)
         StockPickler.save_global(pickler, obj)
