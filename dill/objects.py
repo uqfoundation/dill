@@ -90,12 +90,20 @@ def _function2():
         return er, tb
 _filedescrip, _tempfile = tempfile.mkstemp('r') # deleted in cleanup
 
+# put the objects in order, if possible
+try:
+    from collections import OrderedDict as odict
+except ImportError:
+    try:
+        from ordereddict import OrderedDict as odict
+    except ImportError:
+        odict = dict
 # objects used by dill for type declaration
-registered = d = {}
+registered = d = odict()
 # objects dill fails to pickle
-failures = x = {}
+failures = x = odict()
 # all other type objects
-succeeds = a = {}
+succeeds = a = odict()
 
 # types module (part of CH 8)
 a['BooleanType'] = bool(1)

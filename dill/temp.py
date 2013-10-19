@@ -12,6 +12,13 @@ __all__ = ['dump_source', 'dump', 'dumpIO_source', 'dumpIO']
 
 import sys
 PYTHON3 = (hex(sys.hexversion) >= '0x30000f0')
+if PYTHON3: # deal with b'foo' versus 'foo'
+    def b(x):
+        import codecs
+        return codecs.latin_1_encode(x)[0]
+else:
+    def b(x):
+        return x
 
 def dump_source(object, **kwds):
     """write object source to a NamedTemporaryFile (instead of dill.dump)
@@ -19,7 +26,7 @@ Loads with "import" or "open".  Returns the filehandle.
 
     >>> f = lambda x: x**2
     >>> pyfile = dill.temp.dump_source(f, alias='_f')
-    >>> exec(open(pyfile.name))
+    >>> exec(open(pyfile.name).read())
     >>> _f(4)
     16
 
@@ -51,7 +58,7 @@ NOTE: Keep the return value for as long as you want your file to exist !
     alias = kwds.pop('alias', '') #XXX: include an alias so a name is known
     #XXX: assumes kwds['dir'] is writable and on $PYTHONPATH
     file = tempfile.NamedTemporaryFile(suffix='.py', **kwds)
-    file.write(''.join(getsource(object, alias=alias)))
+    file.write(b(''.join(getsource(object, alias=alias))))
     file.flush()
     return file
 
@@ -125,7 +132,7 @@ Optional kwds:
     alias = kwds.pop('alias', '') #XXX: include an alias so a name is known
     #XXX: assumes kwds['dir'] is writable and on $PYTHONPATH
     file = StringIO()
-    file.write(''.join(getsource(object, alias=alias)))
+    file.write(b(''.join(getsource(object, alias=alias))))
     file.flush()
     return file
 

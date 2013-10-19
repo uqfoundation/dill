@@ -7,7 +7,20 @@ Methods for detecting objects leading to pickling failures.
 from __future__ import absolute_import
 from .pointers import parent, reference, refobject
 
-objects = {}
+try:
+    from imp import reload
+except ImportError:
+    pass
+
+# put the objects in order, if possible
+try:
+    from collections import OrderedDict as odict
+except ImportError:
+    try:
+        from ordereddict import OrderedDict as odict
+    except ImportError:
+        odict = dict
+objects = odict()
 # local import of dill.objects
 from .dill import _trace as trace
 from . import objects as _objects
@@ -33,7 +46,7 @@ def load_types(pickleable=True, unpickleable=True):
     objects.update(_objects.registered)
     del _objects
     # reset contents of types to 'empty'
-    [types.__dict__.pop(obj) for obj in types.__dict__.keys() \
+    [types.__dict__.pop(obj) for obj in list(types.__dict__.keys()) \
                              if obj.find('Type') != -1]
     # add corresponding types from objects to types
     reload(types)
@@ -76,6 +89,7 @@ def errors(obj, depth=0, exact=False):
            for attr in dir(obj) if not pickles(getattr(obj,attr),exact)))
 
 del absolute_import
+del odict
 
 
 # EOF

@@ -14,8 +14,10 @@ f = lambda x: x**2
 x = [1,2,3,4,5]
 
 pyfile = dump_source(f, alias='_f')
-exec(open(pyfile.name))
+exec(open(pyfile.name).read())
 assert _f(4) == f(4)
+
+f = lambda x: x**2 #XXX: needs a refresh...?
 
 pyfile = dumpIO_source(f, alias='_f')
 exec(pyfile.getvalue())

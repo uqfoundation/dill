@@ -124,9 +124,9 @@ def _wrap(f):
     return func
 ''' % ('__globals__', '__locals__')
 if PYTHON3:
-    exec wrap3
+    exec(wrap3)
 else:
-    exec wrap2
+    exec(wrap2)
 del wrap2, wrap3
 
 def _get_name(obj):

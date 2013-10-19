@@ -155,7 +155,8 @@ Requirements
 
 Dill requires::
 
-    - python, version >= 2.5, version < 3.0
+    - python2, version >= 2.5  *or*
+    - python3, version >= 3.1
 
 Optional requirements::
 
