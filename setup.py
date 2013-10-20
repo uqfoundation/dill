@@ -8,8 +8,8 @@ import os
 
 # set version numbers
 stable_version = '0.2a1'
-target_version = '0.2a1'
-is_release = True
+target_version = '0.2a2'
+is_release = False
 
 # check if easy_install is available
 try:
@@ -24,10 +24,9 @@ except ImportError:
 if os.path.exists('dill/info.py'):
     # is a source distribution, so use existing version
     os.chdir('dill')
-    f = open('info.py','r')
-    f.readline() # header
-    this_version = f.readline().split()[-1].strip("'")
-    f.close()
+    with open('info.py','r') as f:
+        f.readline() # header
+        this_version = f.readline().split()[-1].strip("'")
     os.chdir('..')
 elif stable_version == target_version:
     # we are building a stable release
