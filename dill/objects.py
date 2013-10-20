@@ -13,11 +13,9 @@ PYTHON3 = (hex(sys.hexversion) >= '0x30000f0')
 if PYTHON3:
     import queue as Queue
     import dbm as anydbm
-    import dbm.ndbm as dbm
 else:
     import Queue
     import anydbm
-    import dbm
     import sets # deprecated/removed
     import mutex # removed
 try:
@@ -42,9 +40,7 @@ import itertools
 import operator
 import tempfile
 import shelve
-import sqlite3
 import zlib
-import bz2
 import gzip
 import zipfile
 import tarfile
@@ -57,6 +53,14 @@ import logging
 import threading
 import socket
 import contextlib
+try:
+    import bz2
+    import sqlite3
+    if PYTHON3: import dbm.ndbm as dbm
+    else: import dbm
+    HAS_ALL = True
+except ImportError: # Ubuntu
+    HAS_ALL = False
 
 # helper objects
 class _class:
@@ -241,13 +245,15 @@ a['TemporaryFileType'] = _tmpf = tempfile.TemporaryFile('w')#FIXME: fail >= 3.2
 if PYTHON3: _fileW = _cstrO
 else: _fileW = _tmpf
 # data persistence (CH 11)
-a['ConnectionType'] = _conn = sqlite3.connect(':memory:')
-a['CursorType'] = _conn.cursor()
+if HAS_ALL:
+    a['ConnectionType'] = _conn = sqlite3.connect(':memory:')
+    a['CursorType'] = _conn.cursor()
 a['ShelveType'] = shelve.Shelf({})
 # data compression and archiving (CH 12)
-a['BZ2FileType'] = bz2.BZ2File(os.devnull) #FIXME: fail >= 3.3
-a['BZ2CompressorType'] = bz2.BZ2Compressor()
-a['BZ2DecompressorType'] = bz2.BZ2Decompressor()
+if HAS_ALL:
+    a['BZ2FileType'] = bz2.BZ2File(os.devnull) #FIXME: fail >= 3.3
+    a['BZ2CompressorType'] = bz2.BZ2Compressor()
+    a['BZ2DecompressorType'] = bz2.BZ2Decompressor()
 #a['ZipFileType'] = _zip = zipfile.ZipFile(os.devnull,'w') #FIXME: fail >= 3.2
 #_zip.write(_tempfile,'x')
 #a['ZipInfoType'] = _zip.getinfo('x')
@@ -330,7 +336,8 @@ x['WeakValueDictionaryType'] = weakref.WeakValueDictionary()
 x['CycleType'] = itertools.cycle('0')
 # python object persistence (CH 11)
 # x['DbShelveType'] = shelve.open('foo','n')#,protocol=2) #XXX: delete foo
-x['DbmType'] = dbm.open(_tempfile,'n')
+if HAS_ALL:
+    x['DbmType'] = dbm.open(_tempfile,'n')
 # x['DbCursorType'] = _dbcursor = anydbm.open('foo','n') #XXX: delete foo
 # x['DbType'] = _dbcursor.db
 # data compression and archiving (CH 12)
