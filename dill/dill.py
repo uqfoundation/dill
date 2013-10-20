@@ -22,13 +22,14 @@ def _trace(boolean):
     else: log.setLevel(logging.WARN)
     return
 
+import os
 import sys
 PYTHON3 = (hex(sys.hexversion) >= '0x30000f0')
 if PYTHON3: #FIXME: get types from dill.objtypes
     import builtins as __builtin__
     from pickle import _Pickler as StockPickler, _Unpickler as StockUnpickler
     from _thread import LockType
-    from io import IOBase
+   #from io import IOBase
     from types import CodeType, FunctionType, MethodType, GeneratorType, \
         TracebackType, FrameType, ModuleType, BuiltinMethodType
     BooleanType = bool
@@ -39,7 +40,7 @@ if PYTHON3: #FIXME: get types from dill.objtypes
     DictType = dict
     DictionaryType = dict
     EllipsisType = type(Ellipsis)
-    FileType = IOBase
+   #FileType = IOBase
     FloatType = float
     IntType = int
     ListType = list
@@ -61,7 +62,7 @@ else:
     from thread import LockType
     from types import CodeType, FunctionType, ClassType, MethodType, \
          GeneratorType, DictProxyType, XRangeType, SliceType, TracebackType, \
-         NotImplementedType, EllipsisType, FileType, FrameType, ModuleType, \
+         NotImplementedType, EllipsisType, FrameType, ModuleType, \
          BuiltinMethodType, TypeType
 from pickle import HIGHEST_PROTOCOL, PicklingError, UnpicklingError
 import __main__ as _main_module
@@ -96,6 +97,8 @@ PartialType = type(partial(int,base=2))
 SuperType = type(super(Exception, TypeError()))
 ItemGetterType = type(itemgetter(0))
 AttrGetterType = type(attrgetter('__repr__'))
+FileType = open(os.devnull, 'r')
+BufferFileType = open(os.devnull, 'rb')
 try:
     from cStringIO import StringIO, InputType, OutputType
 except ImportError:
@@ -243,6 +246,8 @@ _typemap.update({
     SuperType: 'SuperType',
     ItemGetterType: 'ItemGetterType',
     AttrGetterType: 'AttrGetterType',
+    FileType: 'FileType',
+    BufferFileType: 'BufferFileType',
 })
 if ExitType:
     _typemap[ExitType] = 'ExitType'
@@ -482,6 +487,7 @@ def save_attrgetter(pickler, obj):
     pickler.save_reduce(type(obj), tuple(attrs), obj=obj)
     return
 
+@register(BufferFileType)
 @register(FileType)
 def save_file(pickler, obj):
     log.info("Fi: %s" % obj)

@@ -188,7 +188,8 @@ a['CodeType'] = compile('','','exec')
 a['DictProxyType'] = type.__dict__
 a['DictProxyType2'] = _newclass.__dict__
 a['EllipsisType'] = Ellipsis
-a['FileType'] = _fileR = open(os.devnull,'r') #FIXME: fails >= 3.2
+a['FileType'] = open(os.devnull,'r') #FIXME: fails >= 3.2
+a['BufferFileType'] = open(os.devnull,'rb') #FIXME: fails >= 3.2
 a['ClosedFileType'] = open(os.devnull, 'w').close()
 a['GetSetDescriptorType'] = array.array.typecode
 a['LambdaType'] = _lambda = lambda x: lambda y: x #XXX: works when not imported!
