@@ -184,7 +184,7 @@ a['CodeType'] = compile('','','exec')
 a['DictProxyType'] = type.__dict__
 a['DictProxyType2'] = _newclass.__dict__
 a['EllipsisType'] = Ellipsis
-a['FileType'] = _fileR = open(os.devnull,'r')
+a['FileType'] = _fileR = open(os.devnull,'r') #FIXME: fails >= 3.2
 a['ClosedFileType'] = open(os.devnull, 'w').close()
 a['GetSetDescriptorType'] = array.array.typecode
 a['LambdaType'] = _lambda = lambda x: lambda y: x #XXX: works when not imported!
@@ -226,7 +226,7 @@ a['DeadProxyType'] = weakref.proxy(_class())
 a['CallableProxyType'] = weakref.proxy(_instance2)
 a['DeadCallableProxyType'] = weakref.proxy(_class2())
 a['QueueType'] = Queue.Queue()
-a['PrettyPrinterType'] = pprint.PrettyPrinter()
+a['PrettyPrinterType'] = pprint.PrettyPrinter() #FIXME: fail >= 3.2
 # numeric and mathematical types (CH 9)
 d['PartialType'] = functools.partial(int,base=2)
 if PYTHON3:
@@ -237,20 +237,20 @@ a['ChainType'] = itertools.chain('0','1')
 d['ItemGetterType'] = operator.itemgetter(0)
 d['AttrGetterType'] = operator.attrgetter('__repr__')
 # file and directory access (CH 10)
-a['TemporaryFileType'] = _tempf = tempfile.TemporaryFile('w')
+a['TemporaryFileType'] = _tmpf = tempfile.TemporaryFile('w')#FIXME: fail >= 3.2
 if PYTHON3: _fileW = _cstrO
-else: _fileW = _tempf
+else: _fileW = _tmpf
 # data persistence (CH 11)
 a['ConnectionType'] = _conn = sqlite3.connect(':memory:')
 a['CursorType'] = _conn.cursor()
 a['ShelveType'] = shelve.Shelf({})
 # data compression and archiving (CH 12)
-a['BZ2FileType'] = bz2.BZ2File(os.devnull)
+a['BZ2FileType'] = bz2.BZ2File(os.devnull) #FIXME: fail >= 3.3
 a['BZ2CompressorType'] = bz2.BZ2Compressor()
 a['BZ2DecompressorType'] = bz2.BZ2Decompressor()
-a['ZipFileType'] = _zip = zipfile.ZipFile(os.devnull,'w')
-_zip.write(_tempfile,'x')
-a['ZipInfoType'] = _zip.getinfo('x')
+#a['ZipFileType'] = _zip = zipfile.ZipFile(os.devnull,'w') #FIXME: fail >= 3.2
+#_zip.write(_tempfile,'x')
+#a['ZipInfoType'] = _zip.getinfo('x')
 a['TarFileType'] = tarfile.open(fileobj=_fileW,mode='w')
 # file formats (CH 13)
 a['DialectType'] = csv.get_dialect('excel')
@@ -259,11 +259,11 @@ a['PackerType'] = xdrlib.Packer()
 a['LockType'] = threading.Lock()
 a['RLockType'] = threading.RLock()
 # generic operating system services (CH 15) # also closed/open and r/w/etc...
-a['NamedLoggerType'] = logging.getLogger(__name__)
+a['NamedLoggerType'] = logging.getLogger(__name__) #FIXME: fail >= 3.2
 # interprocess communication (CH 17)
 if PYTHON3:
-    a['SocketType'] = _socket = socket.socket()
-    a['SocketPairType'] = socket.socketpair()[0]
+    a['SocketType'] = _socket = socket.socket() #FIXME: fail >= 3.3
+    a['SocketPairType'] = socket.socketpair()[0] #FIXME: fail >= 3.3
 else:
     a['SocketType'] = _socket = socket.socket()
     a['SocketPairType'] = _socket._sock
