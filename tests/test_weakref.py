@@ -55,3 +55,4 @@ for obj in objlist:
   res = dill.detect.errors(obj)
   if res:
     print ("%s:\n  %s" % (obj, res))
+  assert not res

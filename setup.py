@@ -23,7 +23,12 @@ except ImportError:
 # generate version number
 if os.path.exists('dill/info.py'):
     # is a source distribution, so use existing version
-    from .dill.info import this_version
+    os.chdir('dill')
+    f = open('info.py','r')
+    f.readline() # header
+    this_version = f.readline().split()[-1].strip("'")
+    f.close()
+    os.chdir('..')
 elif stable_version == target_version:
     # we are building a stable release
     this_version = target_version
