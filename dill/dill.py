@@ -25,35 +25,20 @@ def _trace(boolean):
 import os
 import sys
 PYTHON3 = (hex(sys.hexversion) >= '0x30000f0')
-if PYTHON3: #FIXME: get types from dill.objtypes
+if PYTHON3: #XXX: get types from dill.objtypes ?
     import builtins as __builtin__
     from pickle import _Pickler as StockPickler, _Unpickler as StockUnpickler
     from _thread import LockType
    #from io import IOBase
     from types import CodeType, FunctionType, MethodType, GeneratorType, \
         TracebackType, FrameType, ModuleType, BuiltinMethodType
-    BooleanType = bool
-    BufferType = memoryview #XXX
-    BuiltinFunctionType = BuiltinMethodType
-    ClassType = type #XXX
-    ComplexType = complex
-    DictType = dict
-    DictionaryType = dict
+    BufferType = memoryview #XXX: unregistered
+    ClassType = type # no 'old-style' classes
     EllipsisType = type(Ellipsis)
    #FileType = IOBase
-    FloatType = float
-    IntType = int
-    ListType = list
-    LongType = int
-    ObjectType = object
-    NoneType = type(None)
     NotImplementedType = type(NotImplemented)
     SliceType = slice
-    StringType = bytes #XXX
-    StringTypes = str #XXX
-    TupleType = tuple
-    TypeType = type
-    UnicodeType = str
+    TypeType = type # 'new-style' classes #XXX: unregistered
     XRangeType = range
     DictProxyType = type(object.__dict__)
 else:
@@ -63,7 +48,7 @@ else:
     from types import CodeType, FunctionType, ClassType, MethodType, \
          GeneratorType, DictProxyType, XRangeType, SliceType, TracebackType, \
          NotImplementedType, EllipsisType, FrameType, ModuleType, \
-         BuiltinMethodType, TypeType
+         BufferType, BuiltinMethodType, TypeType
 from pickle import HIGHEST_PROTOCOL, PicklingError, UnpicklingError
 import __main__ as _main_module
 import marshal
@@ -97,8 +82,11 @@ PartialType = type(partial(int,base=2))
 SuperType = type(super(Exception, TypeError()))
 ItemGetterType = type(itemgetter(0))
 AttrGetterType = type(attrgetter('__repr__'))
-FileType = open(os.devnull, 'r')
-BufferFileType = open(os.devnull, 'rb')
+FileType = open(os.devnull, 'rb', buffering=0)
+TextWrapperType = open(os.devnull, 'r', buffering=-1)
+BufferedRandomType = open(os.devnull, 'r+b', buffering=-1)
+BufferedReaderType = open(os.devnull, 'rb', buffering=-1)
+BufferedWriterType = open(os.devnull, 'wb', buffering=-1)
 try:
     from cStringIO import StringIO, InputType, OutputType
 except ImportError:
@@ -247,7 +235,10 @@ _typemap.update({
     ItemGetterType: 'ItemGetterType',
     AttrGetterType: 'AttrGetterType',
     FileType: 'FileType',
-    BufferFileType: 'BufferFileType',
+    BufferedRandomType: 'BufferedRandomType',
+    BufferedReaderType: 'BufferedReaderType',
+    BufferedWriterType: 'BufferedWriterType',
+    TextWrapperType: 'TextWrapperType',
 })
 if ExitType:
     _typemap[ExitType] = 'ExitType'
@@ -279,7 +270,7 @@ def _create_lock(locked, *args):
             raise UnpicklingError("Cannot acquire lock")
     return lock
 
-def _create_filehandle(name, mode, position, closed):
+def _create_filehandle(name, mode, position, closed): # buffering=0
     # only pickles the handle, not the file contents... good? or StringIO(data)?
     # (for file contents see: http://effbot.org/librarybook/copy-reg.htm)
     # NOTE: handle special cases first (are there more special cases?)
@@ -290,7 +281,7 @@ def _create_filehandle(name, mode, position, closed):
     elif name == '<fdopen>': import tempfile; f = tempfile.TemporaryFile(mode)
     else:
         try: # try to open the file by name   # NOTE: has different fileno
-            f = open(name, mode) #XXX: missing: encoding, softspace
+            f = open(name, mode)#FIXME: missing: *buffering*, encoding,softspace
         except IOError: 
             err = sys.exc_info()[1]
             try: # failing, then use /dev/null #XXX: better to just fail here?
@@ -487,8 +478,11 @@ def save_attrgetter(pickler, obj):
     pickler.save_reduce(type(obj), tuple(attrs), obj=obj)
     return
 
-@register(BufferFileType)
-@register(FileType)
+@register(FileType) #XXX: in 3.x has buffer=0, needs different _create?
+@register(BufferedRandomType)
+@register(BufferedReaderType)
+@register(BufferedWriterType)
+@register(TextWrapperType)
 def save_file(pickler, obj):
     log.info("Fi: %s" % obj)
     if obj.closed:

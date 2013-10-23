@@ -12,13 +12,9 @@ __all__ = ['dump_source', 'dump', 'dumpIO_source', 'dumpIO']
 
 import sys
 PYTHON3 = (hex(sys.hexversion) >= '0x30000f0')
-if PYTHON3: # deal with b'foo' versus 'foo'
-    def b(x):
-        import codecs
-        return codecs.latin_1_encode(x)[0]
-else:
-    def b(x):
-        return x
+def b(x): # deal with b'foo' versus 'foo'
+    import codecs
+    return codecs.latin_1_encode(x)[0]
 
 def dump_source(object, **kwds):
     """write object source to a NamedTemporaryFile (instead of dill.dump)

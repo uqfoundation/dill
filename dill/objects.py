@@ -113,6 +113,7 @@ succeeds = a = odict()
 a['BooleanType'] = bool(1)
 a['BuiltinFunctionType'] = len
 a['BuiltinMethodType'] = a['BuiltinFunctionType']
+a['BytesType'] = _bytes = codecs.latin_1_encode('\x00')[0] # bytes(1)
 a['ClassType'] = _class
 a['ComplexType'] = complex(1)
 a['DictType'] = _dict = {}
@@ -128,11 +129,9 @@ a['StringType'] = _str = str(1)
 a['TupleType'] = _tuple = ()
 a['TypeType'] = type
 if PYTHON3:
-    a['BytesType'] = _bytes = bytes(1)
     a['LongType'] = _int
     a['UnicodeType'] = _str
 else:
-    a['BufferType'] = buffer
     a['LongType'] = long(1)
     a['UnicodeType'] = unicode(1)
 # built-in constants (CH 4)
@@ -188,9 +187,13 @@ a['CodeType'] = compile('','','exec')
 a['DictProxyType'] = type.__dict__
 a['DictProxyType2'] = _newclass.__dict__
 a['EllipsisType'] = Ellipsis
-a['FileType'] = open(os.devnull,'r') #FIXME: fails >= 3.2
-a['BufferFileType'] = open(os.devnull,'rb') #FIXME: fails >= 3.2
-a['ClosedFileType'] = open(os.devnull, 'w').close()
+a['TextWrapperType'] = open(os.devnull, 'r') # same as mode='w','w+','r+'
+a['BufferedRandomType'] = open(os.devnull, 'r+b') # same as mode='w+b'
+a['BufferedReaderType'] = open(os.devnull, 'rb') # (default: buffering=-1)
+a['BufferedWriterType'] = open(os.devnull, 'wb')
+a['FileType'] = open(os.devnull, 'rb', buffering=0) # same 'wb','wb+','rb+'
+a['ClosedFileType'] = open(os.devnull, 'wb', buffering=0).close()
+# FIXME: FileType, TextWrapperType, Buffered*Type fails >= 3.2
 a['GetSetDescriptorType'] = array.array.typecode
 a['LambdaType'] = _lambda = lambda x: lambda y: x #XXX: works when not imported!
 a['MemberDescriptorType'] = type.__dict__['__weakrefoffset__']
@@ -384,6 +387,10 @@ try: # python 2.7 (and not 3.1)
     x['CmpKeyObjType'] = _cmpkey('0') #2.7,3.2,3.3
 except AttributeError:
     pass
+if PYTHON3: # oddities: removed, etc
+    x['BufferType'] = x['MemoryType']
+else:
+    x['BufferType'] = buffer('')
 
 # -- cleanup ----------------------------------------------------------------
 a.update(d) # registered also succeed
