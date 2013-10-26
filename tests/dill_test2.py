@@ -25,8 +25,9 @@ special['MethodType'] = _method = _class()._method
 special['UnboundMethodType'] = _class._method
 objects.update(special)
 
-def pickles(obj,exact=False):
+def pickles(name, exact=False):
     """quick check if object pickles with dill"""
+    obj = objects[name]
     try:
         pik = pickle.loads(pickle.dumps(obj))
         if exact:
@@ -34,18 +35,17 @@ def pickles(obj,exact=False):
                 assert pik == obj
             except AssertionError:
                 assert type(obj) == type(pik)
-                print ("weak: %s" % type(obj))
+                print ("weak: %s %s" % (name, type(obj)))
         else:
             assert type(obj) == type(pik)
     except Exception:
-        print ("COPY failure: %s" % type(obj))
+        print ("fails: %s %s" % (name, type(obj)))
     return
 
 
 if __name__ == '__main__':
 
-    for member in objects.values():
-       #print ("%s ==> %s" % (member, type(member))) # DEBUG
+    for member in objects.keys():
        #pickles(member, exact=True)
         pickles(member, exact=False)
 

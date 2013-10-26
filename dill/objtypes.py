@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-all Python Standard Library object types (currently: CH 1-14 @ 2.7)
+all Python Standard Library object types (currently: CH 1-15 @ 2.7)
 and some other common object types (i.e. numpy.ndarray)
 """
 

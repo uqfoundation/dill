@@ -6,8 +6,8 @@ Based on code written by Oren Tirosh and Armin Ronacher.
 Extended to a (near) full set of the builtin types (in types module),
 and coded to the pickle interface, by <mmckerns@caltech.edu>.
 Initial port to python3 by Jonathan Dobson, continued by mmckerns.
-Test against "all" python types (Std. Lib. CH 1-14 @ 2.7) by mmckerns.
-Test against CH15+ Std. Lib. ... TBD.
+Test against "all" python types (Std. Lib. CH 1-15 @ 2.7) by mmckerns.
+Test against CH16+ Std. Lib. ... TBD.
 """
 __all__ = ['dump','dumps','load','loads','dump_session','load_session',\
            'Pickler','Unpickler','register','copy','pickle','pickles',\
@@ -434,7 +434,7 @@ def save_module_dict(pickler, obj):
             pickler.write('c__builtin__\n__main__\n')
     elif not is_dill(pickler) and obj is _main_module.__dict__:
         log.info("D3: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
-        if _IS_PY3:
+        if PYTHON3:
             pickler.write(bytes('c__main__\n__dict__\n', 'UTF-8'))
         else:
             pickler.write('c__main__\n__dict__\n')   #XXX: works in general?
@@ -478,6 +478,8 @@ def save_attrgetter(pickler, obj):
     pickler.save_reduce(type(obj), tuple(attrs), obj=obj)
     return
 
+# __getstate__ explicitly added to raise TypeError when pickling:
+# http://www.gossamer-threads.com/lists/python/bugs/871199
 @register(FileType) #XXX: in 3.x has buffer=0, needs different _create?
 @register(BufferedRandomType)
 @register(BufferedReaderType)
