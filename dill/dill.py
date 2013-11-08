@@ -696,7 +696,8 @@ def save_type(pickler, obj):
     elif obj.__module__ == '__main__':
         if type(obj) == type:
             # we are pickling the interpreter
-            if is_dill(pickler) and pickler._session:
+            if is_dill(pickler): # and pickler._session:
+                # thanks to Tom Stepleton pointing out pickler._session unneeded
                 log.info("T2: %s" % obj)
                 _dict = _dict_from_dictproxy(obj.__dict__)
             else: # otherwise punt to StockPickler
