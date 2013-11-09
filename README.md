@@ -66,7 +66,7 @@ Current Release
 The latest released version of dill is available from::
     http://dev.danse.us/trac/pathos
 
-Dill is distributed under a modified BSD license.
+Dill is distributed under a 3-clause BSD license.
 
 Development Release
 -------------------

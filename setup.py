@@ -124,7 +124,7 @@ Development Release
 
 You can get the latest development release with all the shiny new features at::
 
-    http://dev.danse.us/packages.
+    http://dev.danse.us/packages
 
 or even better, fork us on our github mirror of the svn trunk::
 
@@ -157,8 +157,7 @@ Requirements
 
 Dill requires::
 
-    - python2, version >= 2.5  *or*
-    - python3, version >= 3.1
+    - python2, version >= 2.5  *or*  python3, version >= 3.1
 
 Optional requirements::
 
@@ -180,7 +179,7 @@ apply to dill if one will `import dill as pickle`.
 License
 =======
 
-Dill is distributed under a modified BSD license.
+Dill is distributed under a 3-clause BSD license.
 
     >>> import dill
     >>> print (dill.license())
@@ -256,14 +255,17 @@ setup(name='dill',
 ctypes_version = '>=1.0.1'
 objgraph = '>=1.7.2'
 import sys
-if has_setuptools and hex(sys.hexversion) < '0x20500f0':
+if has_setuptools:
     setup_code += """
-        install_requires = ['ctypes%s'],
+      zip_safe=False,
+"""
+    if hex(sys.hexversion) < '0x20500f0':
+        setup_code += """
+      install_requires = ['ctypes%s'],
 """ % (ctypes_version)
 
 # add the scripts, and close 'setup' call
 setup_code += """    
-      zip_safe=False,
       scripts=['scripts/unpickle.py','scripts/get_objgraph.py'])
 """
 
