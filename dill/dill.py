@@ -376,11 +376,8 @@ def _get_attr(self, name):
 
 def _dict_from_dictproxy(dictproxy):
     _dict = dictproxy.copy() # convert dictproxy to dict
-    _dict.pop('__dict__')
-    try: # new classes have weakref (while not all others do)
-        _dict.pop('__weakref__')
-    except KeyError:
-        pass
+    _dict.pop('__dict__', None)
+    _dict.pop('__weakref__', None)
     return _dict
 
 def _import_module(import_name):
