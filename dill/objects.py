@@ -303,7 +303,7 @@ if HAS_ALL:
     a['BZ2CompressorType'] = bz2.BZ2Compressor()
     a['BZ2DecompressorType'] = bz2.BZ2Decompressor()
 #a['ZipFileType'] = _zip = zipfile.ZipFile(os.devnull,'w') #FIXME: fail >= 3.2
-#_zip.write(_tempfile,'x')
+#_zip.write(_tempfile,'x') [causes annoying warning/error printed on import]
 #a['ZipInfoType'] = _zip.getinfo('x')
 a['TarFileType'] = tarfile.open(fileobj=_fileW,mode='w')
 # file formats (CH 13)
@@ -348,15 +348,15 @@ try: # python 2.6
     a['ProductType'] = itertools.product('0','1')
 except AttributeError:
     pass
-try: # python 2.7
-    # generic operating system services (CH 15)
-    a['ArgumentParserType'] = _parser = argparse.ArgumentParser('PROG')
-    a['NamespaceType'] = _parser.parse_args() # pickle ok
-    a['SubParsersActionType'] = _parser.add_subparsers()
-    a['MutuallyExclusiveGroupType'] = _parser.add_mutually_exclusive_group()
-    a['ArgumentGroupType'] = _parser.add_argument_group()
-except NameError:
-    pass
+#try: # python 2.7  [causes errors when dill is imported]
+#    # generic operating system services (CH 15)
+#    a['ArgumentParserType'] = _parser = argparse.ArgumentParser('PROG')
+#    a['NamespaceType'] = _parser.parse_args() # pickle ok
+#    a['SubParsersActionType'] = _parser.add_subparsers()
+#    a['MutuallyExclusiveGroupType'] = _parser.add_mutually_exclusive_group()
+#    a['ArgumentGroupType'] = _parser.add_argument_group()
+#except NameError:
+#    pass
 
 # -- dill fails in 2.5/2.6 below here ---------------------------------------
 x['GzipFileType'] = gzip.GzipFile(fileobj=_fileW)
