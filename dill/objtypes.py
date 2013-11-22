@@ -2,12 +2,14 @@
 """
 all Python Standard Library object types (currently: CH 1-15 @ 2.7)
 and some other common object types (i.e. numpy.ndarray)
+
+to load more objects and types, use dill.load_types()
 """
 
 from __future__ import absolute_import
 
-# local import of dill.detect
-from .detect import objects
+# non-local import of dill.objects
+from dill import objects
 for _type in objects.keys():
     exec("%s = type(objects['%s'])" % (_type,_type))
     

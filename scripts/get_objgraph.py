@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-use objgraph to plot the reference paths for types found in dill.detect.types
+use objgraph to plot the reference paths for types found in dill.types
 """
 #XXX: useful if could read .pkl file and generate the graph... ?
 
@@ -9,9 +9,9 @@ import dill as pickle
 #import pickle
 
 # get all objects for testing
-from dill.detect import load_types
+from dill import load_types
 load_types(pickleable=True,unpickleable=True)
-from dill.detect import objects
+from dill import objects
 
 if __name__ == "__main__":
     import sys

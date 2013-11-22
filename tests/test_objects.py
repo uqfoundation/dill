@@ -9,10 +9,10 @@ import dill as pickle
 #import pickle
 
 # get all objects for testing
-from dill.detect import load_types
+from dill import load_types
 load_types(pickleable=True,unpickleable=False)
 #load_types(pickleable=True,unpickleable=True)
-from dill.detect import objects
+from dill import objects
 
 # helper objects
 class _class:

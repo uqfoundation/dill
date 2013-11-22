@@ -3,10 +3,10 @@ README
 setup.cfg
 setup.py
 dill/__init__.py
+dill/_objects.py
 dill/detect.py
 dill/dill.py
 dill/info.py
-dill/objects.py
 dill/objtypes.py
 dill/pointers.py
 dill/source.py
@@ -14,9 +14,10 @@ dill/temp.py
 scripts/get_objgraph.py
 scripts/unpickle.py
 tests/dill_bugs.py
-tests/dill_test.py
-tests/dill_test2.py
+tests/test_classdef.py
 tests/test_detect.py
+tests/test_nested.py
+tests/test_objects.py
 tests/test_source.py
 tests/test_temp.py
 tests/test_weakref.py

@@ -24,8 +24,8 @@ class _d(object):
   def _method(self):
     pass
 
-from dill.detect import objects
-from dill.detect import load_types
+from dill import objects
+from dill import load_types
 load_types(pickleable=True,unpickleable=False)
 _newclass = objects['ClassObjectType']
 del objects
