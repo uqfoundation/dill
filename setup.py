@@ -7,9 +7,9 @@ from __future__ import with_statement, absolute_import
 import os
 
 # set version numbers
-stable_version = '0.2a1'
-target_version = '0.2a2'
-is_release = False
+stable_version = '0.2b1'
+target_version = '0.2b1'
+is_release = True
 
 # check if easy_install is available
 try:
