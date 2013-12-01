@@ -108,17 +108,20 @@ def copy(obj):
     """use pickling to 'copy' an object"""
     return loads(dumps(obj))
 
-def dump(obj, file, protocol=HIGHEST_PROTOCOL):
+def dump(obj, file, protocol=HIGHEST_PROTOCOL, byref=False):
     """pickle an object to a file"""
     pik = Pickler(file, protocol)
     pik._main_module = _main_module
+    _byref = pik._byref
+    pik._byref = bool(byref)
     pik.dump(obj)
+    pik._byref = _byref
     return
 
-def dumps(obj, protocol=HIGHEST_PROTOCOL):
+def dumps(obj, protocol=HIGHEST_PROTOCOL, byref=False):
     """pickle an object to a string"""
     file = StringIO()
-    dump(obj, file, protocol)
+    dump(obj, file, protocol, byref)
     return file.getvalue()
 
 def load(file):
@@ -151,9 +154,12 @@ def dump_session(filename='/tmp/session.pkl', main_module=_main_module):
     try:
         pickler = Pickler(f, 2)
         pickler._main_module = main_module
+        _byref = pickler._byref
+        pickler._byref = False  # disable pickling by name reference
         pickler._session = True # is best indicator of when pickling a session
         pickler.dump(main_module)
         pickler._session = False
+        pickler._byref = _byref
     finally:
         f.close()
     return
@@ -180,6 +186,7 @@ class Pickler(StockPickler):
     dispatch = StockPickler.dispatch.copy()
     _main_module = None
     _session = False
+    _byref = False
     pass
 
 class Unpickler(StockUnpickler):
@@ -691,13 +698,21 @@ def save_type(pickler, obj):
         log.info("T1: %s" % obj)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
     elif obj.__module__ == '__main__':
+        try: # use StockPickler for special cases [namedtuple,]
+            [getattr(obj, attr) for attr in ('_fields','_asdict',
+                                             '_make','_replace')]
+            log.info("T6: %s" % obj)
+            StockPickler.save_global(pickler, obj)
+            return
+        except AttributeError: pass
         if type(obj) == type:
-            # we are pickling the interpreter
-            if is_dill(pickler): # and pickler._session:
+        #   try: # used when pickling the class as code (or the interpreter)
+            if is_dill(pickler) and not pickler._byref:
                 # thanks to Tom Stepleton pointing out pickler._session unneeded
                 log.info("T2: %s" % obj)
                 _dict = _dict_from_dictproxy(obj.__dict__)
-            else: # otherwise punt to StockPickler
+        #   except: # punt to StockPickler (pickle by class reference)
+            else:
                 log.info("T5: %s" % obj)
                 StockPickler.save_global(pickler, obj)
                 return

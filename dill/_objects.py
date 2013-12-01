@@ -201,6 +201,8 @@ if HAS_CTYPES:
     a['CSizeTType'] = ctypes.c_size_t()
     a['CLibraryLoaderType'] = ctypes.cdll
     a['StructureType'] = _Struct
+    a['BigEndianStructureType'] = ctypes.BigEndianStructure()
+#NOTE: also LittleEndianStructureType and UnionType... abstract classes
 #NOTE: remember for ctypesobj.contents creates a new python object
 #NOTE: ctypes.c_int._objects is memberdescriptor for object's __dict__
 #NOTE: base class of all ctypes data types is non-public _CData
@@ -321,7 +323,7 @@ a['PackerType'] = xdrlib.Packer()
 a['LockType'] = threading.Lock()
 a['RLockType'] = threading.RLock()
 # generic operating system services (CH 15) # also closed/open and r/w/etc...
-a['NamedLoggerType'] = _logger = logging.getLogger(__name__) #FIXME: fail >= 3.2 and >= 2.6
+a['NamedLoggerType'] = _logger = logging.getLogger(__name__) #FIXME: fail >= 3.2 and <= 2.6
 #a['FrozenModuleType'] = __hello__ #FIXME: prints "Hello world..."
 # interprocess communication (CH 17)
 if PYTHON3:
@@ -354,6 +356,11 @@ except ImportError:
 try: # python 2.6
     # numeric and mathematical types (CH 9)
     a['ProductType'] = itertools.product('0','1')
+    # generic operating system services (CH 15)
+    a['FileHandlerType'] = logging.FileHandler(os.devnull) #FIXME: fail >= 3.2 and <= 2.6
+    a['RotatingFileHandlerType'] = logging.handlers.RotatingFileHandler(os.devnull)
+    a['SocketHandlerType'] = logging.handlers.SocketHandler('localhost',514)
+    a['MemoryHandlerType'] = logging.handlers.MemoryHandler(1)
 except AttributeError:
     pass
 #try: # python 2.7  [causes errors when dill is imported]
@@ -366,19 +373,28 @@ except AttributeError:
 #except NameError:
 #    pass
 
-# -- dill fails in 2.5/2.6 below here ---------------------------------------
-x['GzipFileType'] = gzip.GzipFile(fileobj=_fileW)
+# -- dill fails in some versions below here ---------------------------------
+# types module (part of CH 8)
+a['TextWrapperType'] = open(os.devnull, 'r') # same as mode='w','w+','r+'
+a['BufferedRandomType'] = open(os.devnull, 'r+b') # same as mode='w+b'
+a['BufferedReaderType'] = open(os.devnull, 'rb') # (default: buffering=-1)
+a['BufferedWriterType'] = open(os.devnull, 'wb')
+a['FileType'] = open(os.devnull, 'rb', buffering=0) # same 'wb','wb+','rb+'
+# FIXME: FileType, TextWrapperType, Buffered*Type  fail >= 3.2 and == 2.5
+# data types (CH 8)
+a['PrettyPrinterType'] = pprint.PrettyPrinter() #FIXME: fail >= 3.2 and == 2.5
+# file and directory access (CH 10)
+a['TemporaryFileType'] = _tmpf #FIXME: fail >= 3.2 and == 2.5
+# data compression and archiving (CH 12)
+a['GzipFileType'] = gzip.GzipFile(fileobj=_fileW) #FIXME: fail > 3.2 and <= 2.6
+# generic operating system services (CH 15)
+a['StreamHandlerType'] = logging.StreamHandler() #FIXME: fail >= 3.2 and == 2.5
+
 # -- dill fails on all below here -------------------------------------------
 # types module (part of CH 8)
 x['GeneratorType'] = _generator = _function(1) #XXX: priority
 x['FrameType'] = _generator.gi_frame #XXX: inspect.currentframe()
 x['TracebackType'] = _function2()[1] #(see: inspect.getouterframes,getframeinfo)
-x['TextWrapperType'] = open(os.devnull, 'r') # same as mode='w','w+','r+'
-x['BufferedRandomType'] = open(os.devnull, 'r+b') # same as mode='w+b'
-x['BufferedReaderType'] = open(os.devnull, 'rb') # (default: buffering=-1)
-x['BufferedWriterType'] = open(os.devnull, 'wb')
-x['FileType'] = open(os.devnull, 'rb', buffering=0) # same 'wb','wb+','rb+'
-# FIXME: FileType, TextWrapperType, Buffered*Type  fail >= 3.2 and >= 2.6
 # other (concrete) object types
 # (also: Capsule / CObject ?)
 # built-in functions (CH 2)
@@ -404,11 +420,8 @@ x['StreamReader'] = codecs.StreamReader(_cstrI) #XXX: ... and etc
 # data types (CH 8)
 x['WeakKeyDictionaryType'] = weakref.WeakKeyDictionary()
 x['WeakValueDictionaryType'] = weakref.WeakValueDictionary()
-x['PrettyPrinterType'] = pprint.PrettyPrinter() #FIXME: fail >= 3.2 and >= 2.6
 # numeric and mathematical types (CH 9)
 x['CycleType'] = itertools.cycle('0')
-# file and directory access (CH 10)
-x['TemporaryFileType'] = _tmpf #FIXME: fail >= 3.2 and >= 2.6
 # python object persistence (CH 11)
 # x['DbShelveType'] = shelve.open('foo','n')#,protocol=2) #XXX: delete foo
 if HAS_ALL:
@@ -427,7 +440,6 @@ x['CSVDictWriterType'] = csv.DictWriter(_cstrO,{})
 x['HashType'] = hashlib.md5()
 x['HMACType'] = hmac.new(_in)
 # generic operating system services (CH 15)
-x['StreamHandlerType'] = logging.StreamHandler()
 #x['CursesWindowType'] = _curwin = curses.initscr() #FIXME: messes up tty
 #x['CursesTextPadType'] = textpad.Textbox(_curwin)
 #x['CursesPanelType'] = panel.new_panel(_curwin)
@@ -449,19 +461,11 @@ if HAS_CTYPES:
     x['FieldType'] = _field = _Struct._field
     x['CFUNCTYPEType'] = _cfunc = ctypes.CFUNCTYPE(ctypes.c_char)
     x['CFunctionType'] = _cfunc(str)
-    x['BigEndianStructureType'] = ctypes.BigEndianStructure() #XXX: python bug?
-#NOTE: also LittleEndianStructureType and UnionType... abstract classes
-
 try: # python 2.6
     # numeric and mathematical types (CH 9)
     x['PermutationsType'] = itertools.permutations('0')
     x['CombinationsType'] = itertools.combinations('0',1)
     x['MethodCallerType'] = operator.methodcaller('mro') # 2.6
-    # generic operating system services (CH 15)
-    x['FileHandlerType'] = logging.FileHandler(os.devnull) # new 2.6
-    x['RotatingFileHandlerType'] = logging.handlers.RotatingFileHandler(os.devnull)
-    x['SocketHandlerType'] = logging.handlers.SocketHandler('localhost',514)
-    x['MemoryHandlerType'] = logging.handlers.MemoryHandler(1)
 except AttributeError:
     pass
 try: # python 2.7
