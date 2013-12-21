@@ -229,33 +229,33 @@ def _create_typemap():
     for key, value in d:
         if getattr(value, '__module__', None) == builtin \
         and type(value) is type:
-            yield value, key
+            yield key, value
     return
-_typemap = dict(_create_typemap())
-_typemap.update({
-    CellType: 'CellType',
-    WrapperDescriptorType: 'WrapperDescriptorType',
-    MethodDescriptorType: 'MethodDescriptorType',
-    MethodWrapperType: 'MethodWrapperType',
-    PartialType: 'PartialType',
-    SuperType: 'SuperType',
-    ItemGetterType: 'ItemGetterType',
-    AttrGetterType: 'AttrGetterType',
-    FileType: 'FileType',
-    BufferedRandomType: 'BufferedRandomType',
-    BufferedReaderType: 'BufferedReaderType',
-    BufferedWriterType: 'BufferedWriterType',
-    TextWrapperType: 'TextWrapperType',
+_reverse_typemap = dict(_create_typemap())
+_reverse_typemap.update({
+    'CellType': CellType,
+    'WrapperDescriptorType': WrapperDescriptorType,
+    'MethodDescriptorType': MethodDescriptorType,
+    'MethodWrapperType': MethodWrapperType,
+    'PartialType': PartialType,
+    'SuperType': SuperType,
+    'ItemGetterType': ItemGetterType,
+    'AttrGetterType': AttrGetterType,
+    'FileType': FileType,
+    'BufferedRandomType': BufferedRandomType,
+    'BufferedReaderType': BufferedReaderType,
+    'BufferedWriterType': BufferedWriterType,
+    'TextWrapperType': TextWrapperType,
 })
 if ExitType:
-    _typemap[ExitType] = 'ExitType'
+    _reverse_typemap['ExitType'] = ExitType
 if InputType:
-    _typemap[InputType] = 'InputType'
-    _typemap[OutputType] = 'OutputType'
+    _reverse_typemap['InputType'] = InputType
+    _reverse_typemap['OutputType'] = OutputType
 if PYTHON3:
-    _reverse_typemap = dict((v, k) for k, v in _typemap.items())
+    _typemap = dict((v, k) for k, v in _reverse_typemap.items())
 else:
-    _reverse_typemap = dict((v, k) for k, v in _typemap.iteritems())
+    _typemap = dict((v, k) for k, v in _reverse_typemap.iteritems())
 
 def _unmarshal(string):
     return marshal.loads(string)
