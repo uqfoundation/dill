@@ -1,12 +1,8 @@
 #!/usr/bin/env python
-#
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#
-#                              Mike McKerns, Caltech
-#                        (C) 2008-2013  All Rights Reserved
-#
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#
+ 
+# Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
+# Copyright (c) 2008-2014 Caltech
+# License: 3-clause BSD
 
 from __future__ import absolute_import
 
