@@ -7,7 +7,7 @@ target of 'dill.source' is to facilitate access to the source
 code of interactively defined functions and classes.
 """
 
-__all__ = ['getblocks_from_history', 'getsource', '_wrap', '_getname']
+__all__ = ['getblocks_from_history', 'getsource', '_wrap', 'getname']
 
 import sys
 PYTHON3 = (hex(sys.hexversion) >= '0x30000f0')
@@ -129,11 +129,14 @@ else:
     exec(wrap2)
 del wrap2, wrap3
 
-def _get_name(obj):
+def getname(obj):
     """ get the name of the object. for lambdas, get the name of the pointer """
     if obj.__name__ == '<lambda>':
         return getsource(obj).split('=',1)[0].strip()
     return obj.__name__
+
+# backward compatability
+_get_name = getname
 
 del sys
 

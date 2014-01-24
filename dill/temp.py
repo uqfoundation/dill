@@ -76,11 +76,11 @@ Optional kwds:
 
 NOTE: Keep the return value for as long as you want your file to exist !
     """ #XXX: write a "load_source"?
-    from .source import getsource
+    from .source import getsource, getname
     import tempfile
     kwds.pop('suffix', '') # this is *always* '.py'
     alias = kwds.pop('alias', '') #XXX: include an alias so a name is known
-    name = str(alias) or _get_name(object)
+    name = str(alias) or getname(object)
     name = "\n#NAME: %s\n" % name
     #XXX: assumes kwds['dir'] is writable and on $PYTHONPATH
     file = tempfile.NamedTemporaryFile(suffix='.py', **kwds)
@@ -208,13 +208,13 @@ Loads by with dill.temp.loadIO_source.  Returns the buffer object.
 Optional kwds:
     If 'alias' is specified, the object will be renamed to the given string.
     """
-    from .source import getsource
+    from .source import getsource, getname
     if PYTHON3:
         from io import BytesIO as StringIO
     else:
         from StringIO import StringIO
     alias = kwds.pop('alias', '') #XXX: include an alias so a name is known
-    name = str(alias) or _get_name(object)
+    name = str(alias) or getname(object)
     name = "\n#NAME: %s\n" % name
     #XXX: assumes kwds['dir'] is writable and on $PYTHONPATH
     file = StringIO()
