@@ -8,48 +8,68 @@ code of interactively defined functions and classes.
 """
 
 __all__ = ['getblocks_from_history', 'getsource', '_wrap', 'getname',\
-           'getimportable, likely_import, _namespace']
+           'getimportable', 'likely_import', '_namespace']
 
 import sys
 PYTHON3 = (hex(sys.hexversion) >= '0x30000f0')
 
 def getblocks_from_history(object, lstrip=False):# gettype=False):
     """extract code blocks from a code object using stored history"""
-    import readline, inspect, types
+    import readline, inspect #, types
     lbuf = readline.get_current_history_length()
     code = [readline.get_history_item(i)+'\n' for i in range(1,lbuf)]
     lnum = 0
     codeblocks = []
    #objtypes = []
-    if PYTHON3:
-       name = object.__name__
-       ocode = object.__code__
-    else:
-       name = object.func_name
-       ocode = object.func_code
+    try:
+        if PYTHON3:
+            fname = object.__name__
+            ocode = object.__code__
+        else:
+            fname = object.func_name
+            ocode = object.func_code
+        cname = ''
+    except AttributeError:
+        fname = ''
+        ocode = lambda :'__this_is_a_big_dummy_object__'
+        ocode.co_code = '__this_is_a_big_dummy_co_code__'
+       #try: inspect.getmro(object) #XXX: ensure that it's a class
+        if hasattr(object, '__name__'): cname = object.__name__ # class
+        else: cname = object.__class__.__name__ # instance
     while lnum < len(code):#-1:
-       if code[lnum].lstrip().startswith('def '):
-           block = inspect.getblock(code[lnum:])
-           lnum += len(block)
-           if block[0].lstrip().startswith('def %s(' % name):
-               if lstrip: block[0] = block[0].lstrip()
-               codeblocks.append(block)
-   #           obtypes.append(types.FunctionType)
-       elif 'lambda ' in code[lnum]:
-           block = inspect.getblock(code[lnum:])
-           lnum += len(block)
-           lhs,rhs = block[0].split('lambda ',1)[-1].split(":", 1) #FIXME: bad
-           try: #FIXME: unsafe
-               _ = eval("lambda %s : %s" % (lhs, rhs), globals(), locals())
-           except: _ = lambda : "__this_is_a_big_dummy_function__"
-           if PYTHON3: _ = _.__code__
-           else: _ = _.func_code
-           if _.co_code == ocode.co_code:
-               if lstrip: block[0] = block[0].lstrip()
-               codeblocks.append(block)
-   #           obtypes.append('<lambda>')
-       else:
-           lnum +=1
+        if fname and code[lnum].lstrip().startswith('def '):
+            # functions and methods
+            block = inspect.getblock(code[lnum:])
+            lnum += len(block)
+            if block[0].lstrip().startswith('def %s(' % fname):
+                if lstrip: block[0] = block[0].lstrip()
+                codeblocks.append(block)
+   #            obtypes.append(types.FunctionType)
+        elif cname and code[lnum].lstrip().startswith('class '):
+            # classes and instances
+            block = inspect.getblock(code[lnum:])
+            lnum += len(block)
+            _cname = ('class %s(' % cname, 'class %s:' % cname)
+            if block[0].lstrip().startswith(_cname):
+                if lstrip: block[0] = block[0].lstrip()
+                codeblocks.append(block)
+        elif fname and 'lambda ' in code[lnum]:
+            # lambdas
+            block = inspect.getblock(code[lnum:])
+            lnum += len(block)
+            lhs,rhs = block[0].split('lambda ',1)[-1].split(":", 1) #FIXME: bad
+            try: #FIXME: unsafe
+                _ = eval("lambda %s : %s" % (lhs, rhs), globals(), locals())
+            except: _ = lambda : "__this_is_a_big_dummy_function__"
+            if PYTHON3: _ = _.__code__
+            else: _ = _.func_code
+            if _.co_code == ocode.co_code:
+                if lstrip: block[0] = block[0].lstrip()
+                codeblocks.append(block)
+   #            obtypes.append('<lambda>')
+        #XXX: would be nice to grab constructor for instance, but yikes.
+        else:
+            lnum +=1
    #if gettype: return codeblocks, objtypes 
     return codeblocks #XXX: danger... gets methods and closures w/o containers
 
@@ -61,36 +81,64 @@ work on any general callable. However, this function can extract source
 code from functions that are defined interactively.
     """
     import inspect
-    if PYTHON3:
-        ocode = object.__code__
-        attr = '__code__'
-    else:
-        ocode = object.func_code
-        attr = 'func_code'
+    _types = ()
+    try:
+        if PYTHON3:
+            ocode = object.__code__
+            attr = '__code__'
+        else:
+            ocode = object.func_code
+            attr = 'func_code'
+        mname = ocode.co_filename
+    except AttributeError:
+        try:
+            inspect.getmro(object) # ensure it's a class
+            mname = inspect.getfile(object)
+        except TypeError: # fails b/c class defined in __main__, builtin
+            mname = object.__module__
+            if mname == '__main__': mname = '<stdin>'
+        except AttributeError: # fails b/c it's not a class
+            _types = ('<class ',"<type 'instance'>")#,"<type 'module'>")
+            if not repr(type(object)).startswith(_types): raise
+            mname = getattr(object, '__module__', None)
+            if mname == '__main__': mname = '<stdin>'
+        attr = '__module__' #XXX: better?
     # no try/except
-    if hasattr(object,attr) and ocode.co_filename == '<stdin>':
-        # function is typed in at the python shell
+    if hasattr(object,attr) and mname == '<stdin>':
+        # class/function is typed in at the python shell (instance ok)
         lines = getblocks_from_history(object, lstrip=True)[-1]
     else:
-        try:
+        try: # get class/functions from file (instances fail)
             lines = inspect.getsourcelines(object)[0]
             # remove indentation from first line
             lines[0] = lines[0].lstrip()
         except TypeError: # failed to get source, resort to import hooks
-            name = object.__name__
+            if _types: name = object.__class__.__name__
+            else: name = object.__name__
            #module = object.__module__.replace('__builtin__','__builtins__')
             module = object.__module__
             if module in ['__builtin__','__builtins__']:
                 lines = ["%s = %s\n" % (name, name)]
             else:
                 lines = ["%s = __import__('%s', fromlist=['%s']).%s\n" % (name,module,name,name)]
+            if _types: # we now go for the class source
+                obj = eval(lines[0].lstrip(name + ' = '))
+                lines = inspect.getsourcelines(obj)[0]
+                lines[0] = lines[0].lstrip()
+    if _types: # instantiate, if there's a nice repr  #XXX: BAD IDEA???
+        if '(' in repr(object): lines.append('\n_ = %s\n' % repr(object))
+        else: object.__code__ # raise AttributeError
     if alias:
-        if lines[0].startswith('def '): # we have a function
-            lines.append('\n%s = %s\n' % (alias, object.__name__))
-        elif 'lambda ' in lines[0]: # we have a lambda
-            lines[0] = '%s = %s' % (alias, lines[0])
-        else: # ...try to use the object's name
-            lines.append('\n%s = %s\n' % (alias, object.__name__))
+        if attr != '__module__':
+            if lines[0].startswith('def '): # we have a function
+                lines.append('\n%s = %s\n' % (alias, object.__name__))
+            elif 'lambda ' in lines[0]: # we have a lambda
+                lines[0] = '%s = %s' % (alias, lines[0])
+            else: # ...try to use the object's name
+                lines.append('\n%s = %s\n' % (alias, object.__name__))
+        else: # class or class instance
+            if _types: lines.append('%s = _\n' % alias)
+            else: lines.append('\n%s = %s\n' % (alias, object.__name__))
     return ''.join(lines)
 
 #exec_ = lambda s, *a: eval(compile(s, '<string>', 'exec'), *a)

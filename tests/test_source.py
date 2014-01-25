@@ -7,27 +7,36 @@ def h(x):
   def g(x): return x
   return g(x) - x 
 
+class Foo(object):
+  def bar(self, x):
+    return x*x+x
+_foo = Foo()
+
+def add(x,y):
+  return x+y
+
+# yes, same as 'f', but things are tricky when it comes to pointers
+squared = lambda x:x**2
+
+class Bar:
+  pass
+_bar = Bar()
+
 assert getsource(f) == 'f = lambda x: x**2\n'
 assert getsource(g) == 'def g(x): return f(x) - x\n'
 assert getsource(h) == 'def h(x):\n  def g(x): return x\n  return g(x) - x \n'
 assert getname(f) == 'f'
 assert getname(g) == 'g'
 assert getname(h) == 'h'
-
 assert _wrap(f)(4) == 16
 assert _wrap(g)(4) == 12
 assert _wrap(h)(4) == 0
 
-
-def add(x,y):
-  return x+y
-
-squared = lambda x:x**2
-
-class Foo(object):
-  def bar(self, x):
-    return x*x+x
-_foo = Foo()
+assert getname(Foo) == 'Foo'
+assert getname(Bar) == 'Bar'
+assert getsource(Bar) == 'class Bar:\n  pass\n'
+assert getsource(Foo) == 'class Foo(object):\n  def bar(self, x):\n    return x*x+x\n'
+#XXX: add getsource for  _foo, _bar
 
 assert getimportable(add) == 'from %s import add\n' % __name__
 assert getimportable(squared) == 'from %s import squared\n' % __name__
@@ -37,13 +46,16 @@ assert getimportable(_foo.bar) == 'from %s import bar\n' % __name__
 assert getimportable(None) == 'None\n'
 assert getimportable(100) == '100\n'
 
+#FIXME: when __name__ == 'test_source', byname=False still produces the import !
 assert getimportable(add, byname=False) == 'def add(x,y):\n  return x+y\n'
 assert getimportable(squared, byname=False) == 'squared = lambda x:x**2\n'
 assert getimportable(None, byname=False) == 'None\n'
+assert getimportable(Bar, byname=False) == 'class Bar:\n  pass\n'
+assert getimportable(Foo, byname=False) == 'class Foo(object):\n  def bar(self, x):\n    return x*x+x\n'
 assert getimportable(Foo.bar, byname=False) == 'def bar(self, x):\n    return x*x+x\n'
 assert getimportable(Foo.bar, byname=True) == 'from %s import bar\n' % __name__
 assert getimportable(Foo.bar, alias='memo', byname=True) == 'from %s import bar\nmemo = bar\n' % __name__
-#assert getimportable(Foo, byname=False) #FIXME: both f and Foo fail!
+#assert getimportable(_foo, byname=False) #XXX: _foo fails
 assert getimportable(Foo, alias='memo', byname=True) == 'from %s import Foo\nmemo = Foo\n' % __name__
 assert getimportable(squared, alias='memo', byname=True) == 'from %s import squared\nmemo = squared\n' % __name__
 assert getimportable(squared, alias='memo', byname=False) == 'memo = squared = lambda x:x**2\n'
