@@ -7,13 +7,13 @@ target of 'dill.source' is to facilitate access to the source
 code of interactively defined functions and classes.
 """
 
-__all__ = ['getblocks_from_history', 'getsource', '_wrap', 'getname',\
+__all__ = ['getblocks', 'getsource', '_wrap', 'getname',\
            'getimportable', 'likely_import', '_namespace']
 
 import sys
 PYTHON3 = (hex(sys.hexversion) >= '0x30000f0')
 
-def getblocks_from_history(object, lstrip=False):# gettype=False):
+def getblocks(object, lstrip=False):# gettype=False):
     """extract code blocks from a code object using stored history"""
     import readline, inspect #, types
     lbuf = readline.get_current_history_length()
@@ -106,7 +106,7 @@ code from functions that are defined interactively.
     # no try/except
     if hasattr(object,attr) and mname == '<stdin>':
         # class/function is typed in at the python shell (instance ok)
-        lines = getblocks_from_history(object, lstrip=True)[-1]
+        lines = getblocks(object, lstrip=True)[-1]
     else:
         try: # get class/functions from file (instances fail)
             lines = inspect.getsourcelines(object)[0]
@@ -310,6 +310,7 @@ string that can be imported from a python file.
 
 # backward compatability
 _get_name = getname
+getblocks_from_history = getblocks
 
 del sys
 
