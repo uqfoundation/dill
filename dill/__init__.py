@@ -27,6 +27,9 @@ from .dill import dump, dumps, load, loads, dump_session, load_session, \
     PicklingError, UnpicklingError
 from . import source, temp, detect
 
+# make sure "trace" is turned off
+detect.trace(False)
+
 try:
     from imp import reload
 except ImportError:

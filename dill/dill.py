@@ -18,7 +18,7 @@ log = logging.getLogger("dill")
 log.addHandler(logging.StreamHandler())
 def _trace(boolean):
     """print a trace through the stack when pickling; useful for debugging"""
-    if boolean: log.setLevel(logging.DEBUG)
+    if boolean: log.setLevel(logging.INFO)
     else: log.setLevel(logging.WARN)
     return
 
