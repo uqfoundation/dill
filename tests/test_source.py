@@ -73,9 +73,8 @@ try:
     assert getimportable(array, byname=False) == 'from numpy.core.multiarray import array\n'
 except ImportError: pass
 
-
-# itself #FIXME: oddly returns 'from dill import likely_import\n'
-#assert likely_import(likely_import)=='from dill.source import likely_import\n'
+# test itself
+assert likely_import(likely_import)=='from dill.source import likely_import\n'
 
 # builtin functions and objects
 assert likely_import(pow) == ''

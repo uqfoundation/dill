@@ -230,7 +230,7 @@ def _likely_import(first, last, passive=False):
     else: _str = "from %s import %s\n" % (first, last)
     # FIXME: breaks on most decorators, currying, and such...
     #        (could look for magic __wrapped__ or __func__ attr)
-    if not passive:
+    if not passive and not first.startswith('dill.'):# weird behavior for dill
        #print(_str)
         try: exec(_str) #XXX: check if == obj? (name collision)
         except ImportError: #XXX: better top-down or bottom-up recursion?
