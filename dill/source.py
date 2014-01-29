@@ -275,37 +275,30 @@ string that can be imported from a python file.
    #except: module = ''
     try: _import = likely_import(obj)
     except: _import = ""
-    # try to get the name...
-    memo = None
+    # try to get the name (or source)...
     if repr(obj).startswith('<'):
-        try: # get the name (of functions and classes)
-            if byname:
-                _obj = getname(obj)
-            else:
-                _obj = obj.__name__
-                if _obj.startswith('<'): raise # probably a lambda
-                if '__main__' in _import: # we *choose* to use getsource
-                    raise # and don't import from __main__
-            obj = _obj
-        except:
+        if not byname:
             try: # try to get the source for lambdas and such
-                memo = getsource(obj, alias=alias)
-            except AttributeError: pass
+               #print(result)
+                return getsource(obj, alias=alias)
+            except: pass # AttributeError: pass
+        try: # get the name (of functions and classes)
+            obj = getname(obj)
+        except: 
+            obj = repr(obj)
         #FIXME: what to do about class instances and such?
     # hope that it can be built from the __repr__
     else: obj = repr(obj)
-    # if we got the source, just use it
-    if memo: pass
-    # otherwise, try from __repr__ or __name__
-    elif repr(obj).startswith('<'): #XXX: seems weird for class w byname=False
+    # we either have __repr__ or __name__
+    if obj.startswith('<'):
         raise AttributeError("object has no atribute '__name__'")
-    elif alias: memo = _import+'%s = %s\n' % (alias,obj)
-    elif _import.endswith('%s\n' % obj): memo = _import
-    else: memo = _import+'%s\n' % obj
-   #print(memo)
-    return memo
+    elif alias: result = _import+'%s = %s\n' % (alias,obj)
+    elif _import.endswith('%s\n' % obj): result = _import
+    else: result = _import+'%s\n' % obj
+   #print(result)
+    return result
     #XXX: possible failsafe...
-    #     "import dill; memo = dill.loads(<pickled_object>); # repr(<object>)"
+    #     "import dill; result = dill.loads(<pickled_object>); # repr(<object>)"
 
 
 # backward compatability

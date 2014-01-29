@@ -46,7 +46,6 @@ assert getimportable(_foo.bar) == 'from %s import bar\n' % __name__
 assert getimportable(None) == 'None\n'
 assert getimportable(100) == '100\n'
 
-#FIXME: when __name__ == 'test_source', byname=False still produces the import !
 assert getimportable(add, byname=False) == 'def add(x,y):\n  return x+y\n'
 assert getimportable(squared, byname=False) == 'squared = lambda x:x**2\n'
 assert getimportable(None, byname=False) == 'None\n'
