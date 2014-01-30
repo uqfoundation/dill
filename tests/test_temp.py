@@ -1,33 +1,27 @@
 from dill.temp import dump, dump_source, dumpIO, dumpIO_source
-from dill import load
-
-import sys
-PYTHON3 = (hex(sys.hexversion) >= '0x30000f0')
-
-if PYTHON3:
-    from io import BytesIO as StringIO
-else:
-    from StringIO import StringIO
+from dill.temp import load, load_source, loadIO, loadIO_source
 
 
 f = lambda x: x**2
 x = [1,2,3,4,5]
 
+# source code to tempfile
 pyfile = dump_source(f, alias='_f')
-exec(open(pyfile.name).read())
+_f = load_source(pyfile)
 assert _f(4) == f(4)
 
-f = lambda x: x**2 #XXX: needs a refresh...?
-
+# source code to stream
 pyfile = dumpIO_source(f, alias='_f')
-exec(pyfile.getvalue())
+_f = loadIO_source(pyfile)
 assert _f(4) == f(4)
 
+# pickle to tempfile
 dumpfile = dump(x)
-_x = load(open(dumpfile.name, 'rb'))
+_x = load(dumpfile)
 assert _x == x
 
+# pickle to stream
 dumpfile = dumpIO(x)
-_x = load(StringIO(dumpfile.getvalue()))
+_x = loadIO(dumpfile)
 assert _x == x
 

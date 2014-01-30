@@ -35,13 +35,14 @@ def load_source(file, **kwds):
     fname = getattr(file, 'name', file) # fname=file.name or fname=file (if str)
     source = open(fname, mode=mode, **kwds).read()
     if not alias:
-        tag = source.splitlines()[-1].split()
+        tag = source.strip().splitlines()[-1].split()
         if tag[0] != '#NAME:':
-            stub = ''.join([source.splitlines()[0],'\n...\n',tag])
+            stub = source.splitlines()[0]
             raise IOError("unknown name for code: %s" % stub)
         alias = tag[-1]
-    exec(source)
-    exec("_ = %s" % alias)
+    local = {}
+    exec(source, local)
+    _ = eval("%s" % alias, local)
     return _
 
 def dump_source(object, **kwds):
@@ -185,14 +186,16 @@ def loadIO_source(buffer, **kwds):
     alias = kwds.pop('alias', None)
     source = getattr(buffer, 'getvalue', buffer) # source or buffer.getvalue
     if source != buffer: source = source() # buffer.getvalue()
+    if PYTHON3: source = source.decode() # buffer to string
     if not alias:
-        tag = source.splitlines()[-1].split()
+        tag = source.strip().splitlines()[-1].split()
         if tag[0] != '#NAME:':
-            stub = ''.join([source.splitlines()[0],'\n...\n',tag])
+            stub = source.splitlines()[0]
             raise IOError("unknown name for code: %s" % stub)
         alias = tag[-1]
-    exec(source)
-    exec("_ = %s" % alias)
+    local = {}
+    exec(source, local)
+    _ = eval("%s" % alias, local)
     return _
 
 def dumpIO_source(object, **kwds):
