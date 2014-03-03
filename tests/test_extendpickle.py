@@ -1,5 +1,8 @@
 import dill as pickle
-import StringIO
+try:
+    from StringIO import StringIO
+except ImportError:
+    from io import BytesIO as StringIO
 
 def my_fn(x):
     return x * 17
