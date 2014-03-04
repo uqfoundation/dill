@@ -189,6 +189,10 @@ class Pickler(StockPickler):
     _byref = False
     pass
 
+    def __init__(self, *args, **kwargs):
+        StockPickler.__init__(self, *args, **kwargs)
+        self._main_module = _main_module
+
 class Unpickler(StockUnpickler):
     """python's Unpickler extended to interpreter sessions and more types"""
     _main_module = None
@@ -199,6 +203,10 @@ class Unpickler(StockUnpickler):
             return self._main_module.__dict__ #XXX: above set w/save_module_dict
         return StockUnpickler.find_class(self, module, name)
     pass
+
+    def __init__(self, *args, **kwargs):
+        StockUnpickler.__init__(self, *args, **kwargs)
+        self._main_module = _main_module
 
 '''
 def dispatch_table():
