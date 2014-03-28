@@ -647,7 +647,10 @@ if NumpyUfuncType:
 
 def _proxy_helper(obj): # a dead proxy returns a reference to None
     # get memory address of proxy's reference object
-    address = int(repr(obj).rstrip('>').split(' at ')[-1], base=16)
+    try: #FIXME: has to be a smarter way to identify if it's a proxy
+        address = int(repr(obj).rstrip('>').split(' at ')[-1], base=16)
+    except ValueError: # has a repr... is thus probably not a proxy
+        address = id(obj)
     return address
 
 def _locate_object(address, module=None):
@@ -744,14 +747,17 @@ def save_type(pickler, obj):
     return
 
 # quick sanity checking
-def pickles(obj,exact=False):
+def pickles(obj,exact=False,safe=False):
     """quick check if object pickles with dill"""
+    if safe: exceptions = (Exception,)
+    else:
+        exceptions = (TypeError, AssertionError, PicklingError, UnpicklingError)
     try:
         pik = copy(obj)
         if exact:
             return pik == obj
         return type(pik) == type(obj)
-    except (TypeError, AssertionError, PicklingError, UnpicklingError):
+    except exceptions:
         return False
 
 # use to protect against missing attributes

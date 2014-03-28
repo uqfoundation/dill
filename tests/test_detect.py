@@ -1,8 +1,10 @@
-from dill.detect import badobjects, badtypes, errors, parent
+from dill.detect import baditems, badobjects, badtypes, errors, parent
 
 import inspect
 
 f = inspect.currentframe()
+assert baditems(f) == [f]
+assert baditems(globals()) == [f]
 assert badobjects(f) is f
 assert badtypes(f) == type(f)
 assert isinstance(errors(f), TypeError)
