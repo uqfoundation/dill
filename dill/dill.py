@@ -129,6 +129,9 @@ def load(file):
     pik = Unpickler(file)
     pik._main_module = _main_module
     obj = pik.load()
+    if type(obj).__module__ == _main_module.__name__: # point obj class to main
+        try: obj.__class__ == getattr(pik._main_module, type(obj).__name__)
+        except AttributeError: pass # defined in a file
    #_main_module.__dict__.update(obj.__dict__) #XXX: should update globals ?
     return obj
 
@@ -457,7 +460,7 @@ def save_module_dict(pickler, obj):
 
 @register(ClassType)
 def save_classobj(pickler, obj):
-    if obj.__module__ == '__main__':
+    if obj.__module__ == '__main__': #XXX: use _main_module.__name__ everywhere?
         log.info("C1: %s" % obj)
         pickler.save_reduce(ClassType, (obj.__name__, obj.__bases__,
                                         obj.__dict__), obj=obj)
