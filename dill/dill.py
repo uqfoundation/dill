@@ -11,7 +11,8 @@ Test against CH16+ Std. Lib. ... TBD.
 """
 __all__ = ['dump','dumps','load','loads','dump_session','load_session',\
            'Pickler','Unpickler','register','copy','pickle','pickles',\
-           'HIGHEST_PROTOCOL','PicklingError','UnpicklingError']
+           'HIGHEST_PROTOCOL','DEFAULT_PROTOCOL',\
+           'PicklingError','UnpicklingError']
 
 import logging
 log = logging.getLogger("dill")
@@ -50,6 +51,10 @@ else:
          NotImplementedType, EllipsisType, FrameType, ModuleType, \
          BufferType, BuiltinMethodType, TypeType
 from pickle import HIGHEST_PROTOCOL, PicklingError, UnpicklingError
+try:
+    from pickle import DEFAULT_PROTOCOL
+except ImportError:
+    DEFAULT_PROTOCOL = HIGHEST_PROTOCOL
 import __main__ as _main_module
 import marshal
 import gc
@@ -108,8 +113,9 @@ def copy(obj):
     """use pickling to 'copy' an object"""
     return loads(dumps(obj))
 
-def dump(obj, file, protocol=HIGHEST_PROTOCOL, byref=False):
+def dump(obj, file, protocol=None, byref=False):
     """pickle an object to a file"""
+    if protocol is None: protocol = DEFAULT_PROTOCOL
     pik = Pickler(file, protocol)
     pik._main_module = _main_module
     _byref = pik._byref
@@ -118,7 +124,7 @@ def dump(obj, file, protocol=HIGHEST_PROTOCOL, byref=False):
     pik._byref = _byref
     return
 
-def dumps(obj, protocol=HIGHEST_PROTOCOL, byref=False):
+def dumps(obj, protocol=None, byref=False):
     """pickle an object to a string"""
     file = StringIO()
     dump(obj, file, protocol, byref)
@@ -140,7 +146,7 @@ def loads(str):
     file = StringIO(str)
     return load(file)
 
-# def dumpzs(obj, protocol=HIGHEST_PROTOCOL):
+# def dumpzs(obj, protocol=None):
 #     """pickle an object to a compressed string"""
 #     return zlib.compress(dumps(obj, protocol))
 

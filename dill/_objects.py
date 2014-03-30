@@ -492,8 +492,8 @@ try: # python 2.7
 except NameError:
     pass
 try: # python 2.7 (and not 3.1)
-    x['CmpKeyType'] = _cmpkey = functools.cmp_to_key(_methodwrap) # 2.7,3.2,3.3
-    x['CmpKeyObjType'] = _cmpkey('0') #2.7,3.2,3.3
+    x['CmpKeyType'] = _cmpkey = functools.cmp_to_key(_methodwrap) # 2.7, >=3.2
+    x['CmpKeyObjType'] = _cmpkey('0') #2.7, >=3.2
 except AttributeError:
     pass
 if PYTHON3: # oddities: removed, etc
