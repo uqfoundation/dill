@@ -159,7 +159,7 @@ def loads(str):
 ### Pickle the Interpreter Session
 def dump_session(filename='/tmp/session.pkl', main_module=_main_module):
     """pickle the current state of __main__ to a file"""
-    f = file(filename, 'wb')
+    f = open(filename, 'wb')
     try:
         pickler = Pickler(f, 2)
         pickler._main_module = main_module
@@ -175,7 +175,7 @@ def dump_session(filename='/tmp/session.pkl', main_module=_main_module):
 
 def load_session(filename='/tmp/session.pkl', main_module=_main_module):
     """update the __main__ module with the state from the session file"""
-    f = file(filename, 'rb')
+    f = open(filename, 'rb')
     try:
         unpickler = Unpickler(f)
         unpickler._main_module = main_module
