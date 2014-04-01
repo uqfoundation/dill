@@ -464,6 +464,12 @@ def save_module_dict(pickler, obj):
             pickler.write(bytes('c__main__\n__dict__\n', 'UTF-8'))
         else:
             pickler.write('c__main__\n__dict__\n')   #XXX: works in general?
+    elif '__name__' in obj and obj != _main_module.__dict__ \
+         and obj is getattr(_import_module(obj['__name__'], safe=True), '__dict__', None):
+        if PYTHON3:
+            pickler.write(bytes('c%s\n__dict__\n' % obj['__name__'], 'UTF-8'))
+        else:
+            pickler.write('c%s\n__dict__\n' % obj['__name__'])
     else:
         log.info("D2: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         StockPickler.save_dict(pickler, obj)
