@@ -404,7 +404,7 @@ def _dict_from_dictproxy(dictproxy):
     _dict.pop('__weakref__', None)
     return _dict
 
-def _import_module(import_name, safe=False):
+def _import_module(import_name, safe=True):
     try:
         if '.' in import_name:
             items = import_name.split('.')
@@ -413,7 +413,7 @@ def _import_module(import_name, safe=False):
         else:
             return __import__(import_name)
         return getattr(__import__(module, None, None, [obj]), obj)
-    except ImportError:
+    except (ImportError, AttributeError):
         if safe:
             return None
         raise
@@ -421,10 +421,7 @@ def _import_module(import_name, safe=False):
 def _locate_function(obj, session=False):
     if obj.__module__ == '__main__': # and session:
         return False
-    try:
-        found = _import_module(obj.__module__ + '.' + obj.__name__)
-    except:
-        return False
+    found = _import_module(obj.__module__ + '.' + obj.__name__)
     return found is obj
 
 @register(CodeType)
