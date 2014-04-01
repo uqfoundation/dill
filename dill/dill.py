@@ -449,13 +449,13 @@ def save_function(pickler, obj):
 
 @register(dict)
 def save_module_dict(pickler, obj):
-    if is_dill(pickler) and obj is pickler._main_module.__dict__:
+    if is_dill(pickler) and obj == pickler._main_module.__dict__:
         log.info("D1: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if PYTHON3:
             pickler.write(bytes('c__builtin__\n__main__\n', 'UTF-8'))
         else:
             pickler.write('c__builtin__\n__main__\n')
-    elif not is_dill(pickler) and obj is _main_module.__dict__:
+    elif not is_dill(pickler) and obj == _main_module.__dict__:
         log.info("D3: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if PYTHON3:
             pickler.write(bytes('c__main__\n__dict__\n', 'UTF-8'))
