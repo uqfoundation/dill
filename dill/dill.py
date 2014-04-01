@@ -404,14 +404,19 @@ def _dict_from_dictproxy(dictproxy):
     _dict.pop('__weakref__', None)
     return _dict
 
-def _import_module(import_name):
-    if '.' in import_name:
-        items = import_name.split('.')
-        module = '.'.join(items[:-1])
-        obj = items[-1]
-    else:
-        return __import__(import_name)
-    return getattr(__import__(module, None, None, [obj]), obj)
+def _import_module(import_name, safe=False):
+    try:
+        if '.' in import_name:
+            items = import_name.split('.')
+            module = '.'.join(items[:-1])
+            obj = items[-1]
+        else:
+            return __import__(import_name)
+        return getattr(__import__(module, None, None, [obj]), obj)
+    except ImportError:
+        if safe:
+            return None
+        raise
 
 def _locate_function(obj, session=False):
     if obj.__module__ == '__main__': # and session:
