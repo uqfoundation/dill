@@ -83,3 +83,18 @@ if __name__ == '__main__':
   p5add = pickle.loads(pinner)
   assert p5add(y) == x+y
 
+  # testing moduledict where not __main__
+  try:
+      import test_moduledict 
+      error = None
+  except:
+      import sys
+      error = sys.exc_info()[1]
+  assert error is None
+  # clean up
+  import os
+  name = 'test_moduledict.py'
+  if os.path.exists(name) and os.path.exists(name+'c'): os.remove(name+'c')
+
+
+# EOF

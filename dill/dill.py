@@ -404,22 +404,24 @@ def _dict_from_dictproxy(dictproxy):
     _dict.pop('__weakref__', None)
     return _dict
 
-def _import_module(import_name):
-    if '.' in import_name:
-        items = import_name.split('.')
-        module = '.'.join(items[:-1])
-        obj = items[-1]
-    else:
-        return __import__(import_name)
-    return getattr(__import__(module, None, None, [obj]), obj)
+def _import_module(import_name, safe=False):
+    try:
+        if '.' in import_name:
+            items = import_name.split('.')
+            module = '.'.join(items[:-1])
+            obj = items[-1]
+        else:
+            return __import__(import_name)
+        return getattr(__import__(module, None, None, [obj]), obj)
+    except (ImportError, AttributeError):
+        if safe:
+            return None
+        raise
 
 def _locate_function(obj, session=False):
     if obj.__module__ == '__main__': # and session:
         return False
-    try:
-        found = _import_module(obj.__module__ + '.' + obj.__name__)
-    except:
-        return False
+    found = _import_module(obj.__module__ + '.' + obj.__name__, safe=True)
     return found is obj
 
 @register(CodeType)
@@ -447,18 +449,25 @@ def save_function(pickler, obj):
 
 @register(dict)
 def save_module_dict(pickler, obj):
-    if is_dill(pickler) and obj is pickler._main_module.__dict__:
+    if is_dill(pickler) and obj == pickler._main_module.__dict__:
         log.info("D1: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if PYTHON3:
             pickler.write(bytes('c__builtin__\n__main__\n', 'UTF-8'))
         else:
             pickler.write('c__builtin__\n__main__\n')
-    elif not is_dill(pickler) and obj is _main_module.__dict__:
+    elif not is_dill(pickler) and obj == _main_module.__dict__:
         log.info("D3: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if PYTHON3:
             pickler.write(bytes('c__main__\n__dict__\n', 'UTF-8'))
         else:
             pickler.write('c__main__\n__dict__\n')   #XXX: works in general?
+    elif '__name__' in obj and obj != _main_module.__dict__ \
+    and obj is getattr(_import_module(obj['__name__'],True), '__dict__', None):
+        log.info("D4: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
+        if PYTHON3:
+            pickler.write(bytes('c%s\n__dict__\n' % obj['__name__'], 'UTF-8'))
+        else:
+            pickler.write('c%s\n__dict__\n' % obj['__name__'])
     else:
         log.info("D2: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         StockPickler.save_dict(pickler, obj)
