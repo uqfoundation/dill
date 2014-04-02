@@ -109,9 +109,9 @@ except NameError:
     singletontypes = []
 
 ### Shorthands (modified from python2.5/lib/pickle.py)
-def copy(obj):
+def copy(obj, *args, **kwds):
     """use pickling to 'copy' an object"""
-    return loads(dumps(obj))
+    return loads(dumps(obj, *args, **kwds))
 
 def dump(obj, file, protocol=None, byref=False):
     """pickle an object to a file"""
@@ -773,13 +773,13 @@ def save_type(pickler, obj):
     return
 
 # quick sanity checking
-def pickles(obj,exact=False,safe=False):
+def pickles(obj,exact=False,safe=False,**kwds):
     """quick check if object pickles with dill"""
     if safe: exceptions = (Exception,)
     else:
         exceptions = (TypeError, AssertionError, PicklingError, UnpicklingError)
     try:
-        pik = copy(obj)
+        pik = copy(obj, **kwds)
         if exact:
             return pik == obj
         return type(pik) == type(obj)
