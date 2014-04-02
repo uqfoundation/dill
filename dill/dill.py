@@ -455,7 +455,7 @@ def save_function(pickler, obj):
                                 obj.__dict__), obj=obj)
     else:
         log.info("F2: %s" % obj)
-        StockPickler.save_global(pickler, obj)
+        StockPickler.save_global(pickler, obj) #NOTE: also takes name=...
     return
 
 @register(dict)
@@ -775,7 +775,7 @@ def save_type(pickler, obj):
 # quick sanity checking
 def pickles(obj,exact=False,safe=False,**kwds):
     """quick check if object pickles with dill"""
-    if safe: exceptions = (Exception,)
+    if safe: exceptions = (Exception,) # RuntimeError, ValueError
     else:
         exceptions = (TypeError, AssertionError, PicklingError, UnpicklingError)
     try:

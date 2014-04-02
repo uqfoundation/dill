@@ -283,6 +283,8 @@ else: _in = _str
 a['InputType'] = _cstrI = StringIO(_in)
 a['OutputType'] = _cstrO = StringIO()
 # data types (CH 8)
+a['WeakKeyDictionaryType'] = weakref.WeakKeyDictionary()
+a['WeakValueDictionaryType'] = weakref.WeakValueDictionary()
 a['ReferenceType'] = weakref.ref(_instance)
 a['DeadReferenceType'] = weakref.ref(_class())
 a['ProxyType'] = weakref.proxy(_instance)
@@ -363,15 +365,17 @@ try: # python 2.6
     a['MemoryHandlerType'] = logging.handlers.MemoryHandler(1)
 except AttributeError:
     pass
-#try: # python 2.7  [causes errors when dill is imported]
-#    # generic operating system services (CH 15)
-#    a['ArgumentParserType'] = _parser = argparse.ArgumentParser('PROG')
-#    a['NamespaceType'] = _parser.parse_args() # pickle ok
-#    a['SubParsersActionType'] = _parser.add_subparsers()
-#    a['MutuallyExclusiveGroupType'] = _parser.add_mutually_exclusive_group()
-#    a['ArgumentGroupType'] = _parser.add_argument_group()
-#except NameError:
-#    pass
+try: # python 2.7
+    # data types (CH 8)
+    a['WeakSetType'] = weakref.WeakSet() # 2.7
+#   # generic operating system services (CH 15) [errors when dill is imported]
+#   a['ArgumentParserType'] = _parser = argparse.ArgumentParser('PROG')
+#   a['NamespaceType'] = _parser.parse_args() # pickle ok
+#   a['SubParsersActionType'] = _parser.add_subparsers()
+#   a['MutuallyExclusiveGroupType'] = _parser.add_mutually_exclusive_group()
+#   a['ArgumentGroupType'] = _parser.add_argument_group()
+except AttributeError:
+    pass
 
 # -- dill fails in some versions below here ---------------------------------
 # types module (part of CH 8)
@@ -381,14 +385,33 @@ a['BufferedReaderType'] = open(os.devnull, 'rb') # (default: buffering=-1)
 a['BufferedWriterType'] = open(os.devnull, 'wb')
 a['FileType'] = open(os.devnull, 'rb', buffering=0) # same 'wb','wb+','rb+'
 # FIXME: FileType, TextWrapperType, Buffered*Type  fail >= 3.2 and == 2.5
+# built-in functions (CH 2)
+a['ListIteratorType'] = iter(_list) # empty vs non-empty FIXME: fail < 3.2
+a['TupleIteratorType']= iter(_tuple) # empty vs non-empty FIXME: fail < 3.2
+a['XRangeIteratorType'] = iter(_xrange) # empty vs non-empty FIXME: fail < 3.2
 # data types (CH 8)
 a['PrettyPrinterType'] = pprint.PrettyPrinter() #FIXME: fail >= 3.2 and == 2.5
+# numeric and mathematical types (CH 9)
+a['CycleType'] = itertools.cycle('0') #FIXME: fail < 3.2
 # file and directory access (CH 10)
 a['TemporaryFileType'] = _tmpf #FIXME: fail >= 3.2 and == 2.5
 # data compression and archiving (CH 12)
 a['GzipFileType'] = gzip.GzipFile(fileobj=_fileW) #FIXME: fail > 3.2 and <= 2.6
 # generic operating system services (CH 15)
 a['StreamHandlerType'] = logging.StreamHandler() #FIXME: fail >= 3.2 and == 2.5
+try: # python 2.6
+    # numeric and mathematical types (CH 9)
+    a['PermutationsType'] = itertools.permutations('0') #FIXME: fail < 3.2
+    a['CombinationsType'] = itertools.combinations('0',1) #FIXME: fail < 3.2
+except AttributeError:
+    pass
+try: # python 2.7
+    # numeric and mathematical types (CH 9)
+    a['RepeatType'] = itertools.repeat(0) #FIXME: fail < 3.2
+    a['CompressType'] = itertools.compress('0',[1]) #FIXME: fail < 3.2
+    #XXX: ...and etc
+except AttributeError:
+    pass
 
 # -- dill fails on all below here -------------------------------------------
 # types module (part of CH 8)
@@ -398,9 +421,6 @@ x['TracebackType'] = _function2()[1] #(see: inspect.getouterframes,getframeinfo)
 # other (concrete) object types
 # (also: Capsule / CObject ?)
 # built-in functions (CH 2)
-x['ListIteratorType'] = iter(_list) #XXX: empty vs non-empty
-x['TupleIteratorType']= iter(_tuple) #XXX: empty vs non-empty
-x['XRangeIteratorType'] = iter(_xrange) #XXX: empty vs non-empty
 x['SetIteratorType'] = iter(_set) #XXX: empty vs non-empty
 # built-in types (CH 5)
 if PYTHON3:
@@ -417,11 +437,6 @@ x['CallableIteratorType'] = _srepattern.finditer('')
 x['SREMatchType'] = _srepattern.match('')
 x['SREScannerType'] = _srepattern.scanner('')
 x['StreamReader'] = codecs.StreamReader(_cstrI) #XXX: ... and etc
-# data types (CH 8)
-x['WeakKeyDictionaryType'] = weakref.WeakKeyDictionary()
-x['WeakValueDictionaryType'] = weakref.WeakValueDictionary()
-# numeric and mathematical types (CH 9)
-x['CycleType'] = itertools.cycle('0')
 # python object persistence (CH 11)
 # x['DbShelveType'] = shelve.open('foo','n')#,protocol=2) #XXX: delete foo
 if HAS_ALL:
@@ -463,8 +478,6 @@ if HAS_CTYPES:
     x['CFunctionType'] = _cfunc(str)
 try: # python 2.6
     # numeric and mathematical types (CH 9)
-    x['PermutationsType'] = itertools.permutations('0')
-    x['CombinationsType'] = itertools.combinations('0',1)
     x['MethodCallerType'] = operator.methodcaller('mro') # 2.6
 except AttributeError:
     pass
@@ -480,11 +493,6 @@ try: # python 2.7
         x['DictItemsType'] = _dict.viewitems() # 2.7
         x['DictKeysType'] = _dict.viewkeys() # 2.7
         x['DictValuesType'] = _dict.viewvalues() # 2.7
-    # data types (CH 8)
-    x['WeakSetType'] = weakref.WeakSet() # 2.7
-    # numeric and mathematical types (CH 9)
-    x['RepeatType'] = itertools.repeat(0) # 2.7
-    x['CompressType'] = itertools.compress('0',[1]) #XXX: ...and etc
     # generic operating system services (CH 15)
     x['RawTextHelpFormatterType'] = argparse.RawTextHelpFormatter('PROG')
     x['RawDescriptionHelpFormatterType'] = argparse.RawDescriptionHelpFormatter('PROG')
