@@ -283,6 +283,15 @@ def _load_type(name):
 def _create_type(typeobj, *args):
     return typeobj(*args)
 
+def _create_function(fcode, fglobals, fname=None, fdefaults=None, \
+                                      fclosure=None, fdict=None):
+    # same as FunctionType, but enable passing __dict__ to new function,
+    # __dict__ is the storehouse for attributes added after function creation
+    if fdict is None: fdict = dict()
+    func = FunctionType(fcode, fglobals, fname, fdefaults, fclosure)
+    func.__dict__.update(fdict) #XXX: better copy? option to copy?
+    return func
+
 def _create_ftype(ftypeobj, func, args, kwds):
     return ftypeobj(func, *args, **kwds)
 
@@ -435,13 +444,15 @@ def save_function(pickler, obj):
     if not _locate_function(obj): #, pickler._session):
         log.info("F1: %s" % obj)
         if PYTHON3:
-            pickler.save_reduce(FunctionType, (obj.__code__, obj.__globals__,
-                                               obj.__name__, obj.__defaults__,
-                                               obj.__closure__), obj=obj)
+            pickler.save_reduce(_create_function, (obj.__code__, 
+                                obj.__globals__, obj.__name__,
+                                obj.__defaults__, obj.__closure__,
+                                obj.__dict__), obj=obj)
         else:
-            pickler.save_reduce(FunctionType, (obj.func_code, obj.func_globals,
-                                               obj.func_name, obj.func_defaults,
-                                               obj.func_closure), obj=obj)
+            pickler.save_reduce(_create_function, (obj.func_code,
+                                obj.func_globals, obj.func_name,
+                                obj.func_defaults, obj.func_closure,
+                                obj.__dict__), obj=obj)
     else:
         log.info("F2: %s" % obj)
         StockPickler.save_global(pickler, obj)
@@ -577,7 +588,7 @@ def save_builtin_method(pickler, obj):
 
 @register(MethodType) #FIXME: fails for 'hidden' or 'name-mangled' classes
 def save_instancemethod0(pickler, obj):# example: cStringIO.StringI
-    log.info("Me: %s" % obj)
+    log.info("Me: %s" % obj) #XXX: obj.__dict__ handled elsewhere?
     if PYTHON3:
         pickler.save_reduce(MethodType, (obj.__func__, obj.__self__), obj=obj)
     else:
@@ -712,7 +723,7 @@ def save_weakproxy(pickler, obj):
 def save_module(pickler, obj):
     if is_dill(pickler) and obj is pickler._main_module:
         log.info("M1: %s" % obj)
-        _main_dict = obj.__dict__.copy()
+        _main_dict = obj.__dict__.copy() #XXX: better no copy? option to copy?
         [_main_dict.pop(item,None) for item in singletontypes]
         pickler.save_reduce(__import__, (obj.__name__,), obj=obj,
                             state=_main_dict)
@@ -721,7 +732,7 @@ def save_module(pickler, obj):
         pickler.save_reduce(_import_module, (obj.__name__,), obj=obj)
     return
 
-@register(type)
+@register(TypeType)
 def save_type(pickler, obj):
     if obj in _typemap:
         log.info("T1: %s" % obj)
