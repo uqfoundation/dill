@@ -1,5 +1,8 @@
 from dill.source import getsource, getname, _wrap, getimportable, likely_import
 
+import sys
+PY3 = sys.version_info[0] >= 3
+
 f = lambda x: x**2
 def g(x): return f(x) - x
 
@@ -61,6 +64,13 @@ assert getimportable(squared, alias='memo', byname=False) == 'memo = squared = l
 assert getimportable(add, alias='memo', byname=False) == 'def add(x,y):\n  return x+y\n\nmemo = add\n'
 assert getimportable(None, alias='memo', byname=False) == 'memo = None\n'
 assert getimportable(100, alias='memo', byname=False) == 'memo = 100\n'
+assert getimportable(add, explicit=True) == 'from %s import add\n' % __name__
+assert getimportable(squared, explicit=True) == 'from %s import squared\n' % __name__
+assert getimportable(Foo, explicit=True) == 'from %s import Foo\n' % __name__
+assert getimportable(Foo.bar, explicit=True) == 'from %s import bar\n' % __name__
+assert getimportable(_foo.bar, explicit=True) == 'from %s import bar\n' % __name__
+assert getimportable(None, explicit=True) == 'None\n'
+assert getimportable(100, explicit=True) == '100\n'
 
 
 try:
@@ -76,11 +86,17 @@ except ImportError: pass
 assert likely_import(likely_import)=='from dill.source import likely_import\n'
 
 # builtin functions and objects
+if PY3: builtin = 'builtins'
+else: builtin = '__builtin__'
 assert likely_import(pow) == ''
 assert likely_import(100) == ''
 assert likely_import(True) == ''
+assert likely_import(pow, explicit=True) == 'from %s import pow\n' % builtin
+assert likely_import(100, explicit=True) == ''
+assert likely_import(True, explicit=True) == ''
 # this is kinda BS... you can't import a None
 assert likely_import(None) == ''
+assert likely_import(None, explicit=True) == ''
 
 # other imported functions
 from math import sin

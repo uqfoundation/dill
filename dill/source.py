@@ -150,7 +150,7 @@ def _wrap(f):
     def func(*args, **kwds):
         try:
             #_ = eval(getsource(f)) #FIXME: safer, but not as robust
-            exec getsource(f, alias='_') in %s, %s
+            exec getimportable(f, alias='_') in %s, %s
         except:
             raise ImportError('cannot import name ' + f.__name__)
         return _(*args, **kwds)
@@ -164,7 +164,7 @@ def _wrap(f):
     def func(*args, **kwds):
         try:
             #_ = eval(getsource(f)) #FIXME: safer, but not as robust
-            exec(getsource(f, alias='_'), %s, %s)
+            exec(getimportable(f, alias='_'), %s, %s)
         except:
             raise ImportError('cannot import name ' + f.__name__)
         return _(*args, **kwds)
@@ -221,10 +221,11 @@ def _namespace(obj):
         qual = [module] + qual
     return qual
 
-def _likely_import(first, last, passive=False):
+def _likely_import(first, last, passive=False, explicit=False):
     """build a likely import string"""
     # we don't need to import from builtins, so return ''
-    if first in ['builtins','__builtin__']: return ''
+    if last in ['NoneType','int','float','long','complex']: return ''#XXX: more
+    if not explicit and first in ['builtins','__builtin__']: return ''
     # get likely import string
     if not first: _str = "import %s\n" % last
     else: _str = "from %s import %s\n" % (first, last)
@@ -240,11 +241,12 @@ def _likely_import(first, last, passive=False):
                 _str = _likely_import(_first, last, passive)
     return _str
 
-def likely_import(obj, passive=False):
+def likely_import(obj, passive=False, explicit=False):
     """get the likely import string for the given object
 
     obj: the object to inspect
     passive: if True, then don't try to verify with an attempted import
+    explicit: if True, then also include imports for builtins
     """
     # for named things... with a nice repr #XXX: move into _namespace?
     if not repr(obj).startswith('<'): name = repr(obj).split('(')[0]
@@ -257,23 +259,26 @@ def likely_import(obj, passive=False):
         try: return _likely_import(first, name, passive)
         except (ImportError,SyntaxError): pass
     try:
-        return _likely_import(first, last, passive)
+        if type(obj) is type(abs): _explicit = explicit # BuiltinFunctionType
+        else: _explicit = False
+        return _likely_import(first, last, passive, _explicit)
     except (ImportError,SyntaxError):
         raise # could do some checking against obj
 
 
-def getimportable(obj, alias='', byname=True):
+def getimportable(obj, alias='', byname=True, explicit=False):
     """attempt to get an importable string that captures the state of obj
 
 For simple objects, this function will discover the name of the object, or the
-repr of the object, or the source code for the object.  To attempt to force
-discovery of the source code, use byname=False.  The intent is to build a
-string that can be imported from a python file.
+repr of the object, or the source code for the object. To attempt to force
+discovery of the source code, use byname=False. The intent is to build a
+string that can be imported from a python file. Use explicit=True if imports
+from builtins need to be included.
     """
    #try: # get the module name (to see if it's __main__)
    #    module = str(getmodule(obj)).split()[1].strip('"').strip("'")
    #except: module = ''
-    try: _import = likely_import(obj)
+    try: _import = likely_import(obj, explicit=explicit)
     except: _import = ""
     # try to get the name (or source)...
     if repr(obj).startswith('<'):
