@@ -16,6 +16,9 @@ scripts/unpickle.py
 tests/dill_bugs.py
 tests/test_classdef.py
 tests/test_detect.py
+tests/test_extendpickle.py
+tests/test_mixins.py
+tests/test_moduledict.py
 tests/test_nested.py
 tests/test_objects.py
 tests/test_source.py

@@ -1,4 +1,9 @@
 #!/usr/bin/env python
+#
+# Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
+# Copyright (c) 2008-2014 California Institute of Technology.
+# License: 3-clause BSD.  The full license text is available at:
+#  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 """
 demonstrate dill's ability to pickle different python types
 test pickling of all Python Standard Library objects (currently: CH 1-14 @ 2.7)
