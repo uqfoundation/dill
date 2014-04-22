@@ -5,7 +5,9 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
-from dill.source import getsource, getname, _wrap, getimportable, likely_import
+from dill.source import getsource, getname, _wrap, likely_import
+from dill.source import getimportable
+
 
 import sys
 PY3 = sys.version_info[0] >= 3
@@ -32,6 +34,7 @@ class Bar:
   pass
 _bar = Bar()
 
+                       # inspect.getsourcelines # dill.source.getblocks
 assert getsource(f) == 'f = lambda x: x**2\n'
 assert getsource(g) == 'def g(x): return f(x) - x\n'
 assert getsource(h) == 'def h(x):\n  def g(x): return x\n  return g(x) - x \n'
@@ -100,7 +103,7 @@ assert likely_import(100) == ''
 assert likely_import(True) == ''
 assert likely_import(pow, explicit=True) == 'from %s import pow\n' % builtin
 assert likely_import(100, explicit=True) == ''
-assert likely_import(True, explicit=True) == ''
+assert likely_import(True, explicit=True) == '' if PY3 else 'from %s import True\n' % builtin
 # this is kinda BS... you can't import a None
 assert likely_import(None) == ''
 assert likely_import(None, explicit=True) == ''
@@ -131,6 +134,11 @@ assert likely_import(s) == y
 # interactively defined classes and class instances
 assert likely_import(Foo) == 'from %s import Foo\n' % __name__
 assert likely_import(_foo) == 'from %s import Foo\n' % __name__
+
+# from test_mixins import quadish, quadratic, quadruple
+#print(getcode(quadish))
+#print(getcode(quadruple))
+#print(getcode(quadratic))
 
 
 # EOF
