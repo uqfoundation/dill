@@ -28,7 +28,7 @@ def double_add(*args):
 
 fx = sum([1,2,3])
 
-### to make it interesting... and also used in another test ###
+### to make it interesting...
 def quad_factory(a=1,b=1,c=0):
   def dec(f):
     def func(*args,**kwds):
@@ -52,11 +52,11 @@ def doubler(f):
 @doubler
 def quadruple(x):
   return 2*x
-### to make it interesting... and also used in another test ###
 
 
 if __name__ == '__main__':
 
+  # test mixins
   assert double_add(1,2,3) == 2*fx
   double_add.invert()
   assert double_add(1,2,3) == -2*fx
@@ -67,6 +67,12 @@ if __name__ == '__main__':
   assert _d(1,2,3) == 2*fx
 
   assert _d.__wrapped__(1,2,3) == fx
+
+  # test source
+  ds = dill.source
+  assert ds.getsource(ds._getfreevars(quadish)['f']) == '@quad_factory(a=0,b=4,c=0)\ndef quadish(x):\n  return x+1\n'
+  assert ds.getsource(ds._getfreevars(quadruple)['f']) == '@doubler\ndef quadruple(x):\n  return 2*x\n'
+  #XXX: quadratic ?
 
 
 # EOF

@@ -18,7 +18,8 @@ in a file.
 """
 
 __all__ = ['findsource', 'getsourcelines', 'getsource', 'indent', 'outdent', \
-           '_wrap', 'dumpsource', 'getname', '_namespace', 'getimport']
+           '_wrap', 'dumpsource', 'getname', '_namespace', 'getimport', \
+           '_getfreevars', '_getglobalvars', '_getvarnames']
 
 import sys
 PYTHON3 = (hex(sys.hexversion) >= '0x30000f0')
@@ -77,18 +78,19 @@ def findsource(object):
     if ismodule(object):
         return lines, 0
 
-    name = ''
-    pat = ''
+    name = pat1 = ''
+    pat2 = r'^(\s*@)'
+#   pat1b = r'^(\s*%s\W*=)' % name #FIXME: finds 'f = decorate(f)', but not exec
     if ismethod(object):
         name = object.__name__
-        if name == '<lambda>': pat = r'(.*(?<!\w)lambda(:|\s))'
-        else: pat = r'^(\s*def\s)'
+        if name == '<lambda>': pat1 = r'(.*(?<!\w)lambda(:|\s))'
+        else: pat1 = r'^(\s*def\s)'
         if PYTHON3: object = object.__func__
         else: object = object.im_func
     if isfunction(object):
         name = object.__name__
-        if name == '<lambda>': pat = r'(.*(?<!\w)lambda(:|\s))'
-        else: pat = r'^(\s*def\s)'
+        if name == '<lambda>': pat1 = r'(.*(?<!\w)lambda(:|\s))'
+        else: pat1 = r'^(\s*def\s)'
         if PYTHON3: object = object.__code__
         else: object = object.func_code
     if istraceback(object):
@@ -98,17 +100,19 @@ def findsource(object):
     if iscode(object):
         if not hasattr(object, 'co_firstlineno'):
             raise IOError('could not find function definition')
-        if object.co_filename == '<stdin>':
+        stdin = object.co_filename == '<stdin>'
+        if stdin:
             lnum = len(lines) - 1 # can't get lnum easily, so leverage pat
-            if not pat: pat = r'^(\s*def\s)|(.*(?<!\w)lambda(:|\s))|^(\s*@)'
+            if not pat1: pat1 = r'^(\s*def\s)|(.*(?<!\w)lambda(:|\s))|^(\s*@)'
         else:
             lnum = object.co_firstlineno - 1
-            pat = r'^(\s*def\s)|(.*(?<!\w)lambda(:|\s))|^(\s*@)'
-        pat = re.compile(pat)
+            pat1 = r'^(\s*def\s)|(.*(?<!\w)lambda(:|\s))|^(\s*@)'
+        pat1 = re.compile(pat1); pat2 = re.compile(pat2)
         dummy = lambda : '__this_is_a_big_dummy_function__'
         while lnum > 0: #XXX: won't find decorators in <stdin> ?
             line = lines[lnum]
-            if pat.match(line):
+            if pat1.match(line):
+                if not stdin: break # co_firstlineno does the job
                 if name == '<lambda>': # hackery needed to confirm a match
                     lhs,rhs = line.split('lambda ',1)[-1].split(":", 1)
                     try: #FIXME: unsafe
@@ -119,7 +123,13 @@ def findsource(object):
                     else: _ = _.func_code
                     if _.co_code == object.co_code: break
                 else: # not a lambda, just look for the name
-                    if name in line: break
+                    if name in line: # need to check for decorator...
+                        hats = 0
+                        for _lnum in xrange(lnum-1,-1,-1):
+                            if pat2.match(lines[_lnum]): hats += 1
+                            else: break
+                        lnum = lnum - hats
+                        break
             lnum = lnum - 1
         return lines, lnum
 
@@ -661,6 +671,52 @@ file. Use builtin=True if imports from builtins need to be included.
     return result
     #XXX: possible failsafe... (for example, for instances when source=False)
     #     "import dill; result = dill.loads(<pickled_object>); # repr(<object>)"
+
+def _getfreevars(func):
+    """get objects defined in enclosing code that are reffered to by func
+
+    returns a dict of {name:object}"""
+    try: #XXX: handles methods correctly? classes? etc?
+        if PYTHON3:
+            freevars = func.__code__.co_freevars
+            closures = func.__closure__
+        else:
+            freevars = func.func_code.co_freevars
+            closures = func.func_closure or ()
+    except AttributeError: # then not a function
+        return {}
+    return dict((name,c.cell_contents) for (name,c) in zip(freevars,closures))
+
+def _getglobalvars(func):
+    """get objects defined in global scope that are referred to by func
+
+    return a dict of {name:object}"""
+    try: #XXX: handles methods correctly? classes? etc?
+        if PYTHON3:
+            names = func.__code__.co_names
+            globs = func.__globals__
+        else:
+            names = func.func_code.co_names
+            globs = func.func_globals
+    except AttributeError: # then not a function
+        return {}
+    #NOTE: if name not in func_globals, then we skip it...
+    return dict((name,globs[name]) for name in names if name in globs)
+
+def _getvarnames(func):
+    """get names of variables defined by func
+
+    returns a tuple (local vars, local vars referrenced by nested functions)"""
+    try: #XXX: handles methods correctly? classes? etc?
+        if PYTHON3:
+            varnames = func.__code__.co_varnames
+            cellvars = func.__code__.co_cellvars
+        else:
+            varnames = func.func_code.co_varnames
+            cellvars = func.func_code.co_cellvars
+    except AttributeError: # then not a function
+        return () #XXX: better ((),())? or None?
+    return varnames, cellvars
 
 
 

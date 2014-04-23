@@ -135,10 +135,5 @@ assert likely_import(s) == y
 assert likely_import(Foo) == 'from %s import Foo\n' % __name__
 assert likely_import(_foo) == 'from %s import Foo\n' % __name__
 
-# from test_mixins import quadish, quadratic, quadruple
-#print(getcode(quadish))
-#print(getcode(quadruple))
-#print(getcode(quadratic))
-
 
 # EOF
