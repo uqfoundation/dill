@@ -7,6 +7,15 @@
 
 import dill
 
+def wtf(x,y,z):
+  def zzz():
+    return x
+  def yyy():
+    return y
+  def xxx():
+    return z
+  return zzz,yyy
+
 def quad(a=1, b=1, c=0):
   inverted = [False]
   def invert():
@@ -68,10 +77,12 @@ if __name__ == '__main__':
 
   assert _d.__wrapped__(1,2,3) == fx
 
-  # test source
+  # test some stuff from source and pointers
   ds = dill.source
-  assert ds.getsource(ds._getfreevars(quadish)['f']) == '@quad_factory(a=0,b=4,c=0)\ndef quadish(x):\n  return x+1\n'
-  assert ds.getsource(ds._getfreevars(quadruple)['f']) == '@doubler\ndef quadruple(x):\n  return 2*x\n'
+  dp = dill.pointers
+  assert dp.at(id(dp)) is dp
+  assert ds.getsource(dp.freevars(quadish)['f']) == '@quad_factory(a=0,b=4,c=0)\ndef quadish(x):\n  return x+1\n'
+  assert ds.getsource(dp.freevars(quadruple)['f']) == '@doubler\ndef quadruple(x):\n  return 2*x\n'
   #XXX: quadratic ?
 
 

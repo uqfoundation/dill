@@ -30,8 +30,8 @@ def _trace(boolean):
 
 import os
 import sys
-PYTHON3 = (hex(sys.hexversion) >= '0x30000f0')
-if PYTHON3: #XXX: get types from dill.objtypes ?
+PY3 = (hex(sys.hexversion) >= '0x30000f0')
+if PY3: #XXX: get types from dill.objtypes ?
     import builtins as __builtin__
     from pickle import _Pickler as StockPickler, _Unpickler as StockUnpickler
     from _thread import LockType
@@ -81,7 +81,7 @@ except ImportError:
     NumpyUfuncType = None
 
 # make sure to add these 'hand-built' types to _typemap
-if PYTHON3:
+if PY3:
     CellType = type((lambda x: lambda y: x)(0).__closure__[0])
 else:
     CellType = type((lambda x: lambda y: x)(0).func_closure[0])
@@ -100,7 +100,7 @@ BufferedWriterType = open(os.devnull, 'wb', buffering=-1)
 try:
     from cStringIO import StringIO, InputType, OutputType
 except ImportError:
-    if PYTHON3:
+    if PY3:
         from io import BytesIO as StringIO
     else:
         from StringIO import StringIO
@@ -241,7 +241,7 @@ def register(t):
 
 def _create_typemap():
     import types
-    if PYTHON3:
+    if PY3:
         d = dict(list(__builtin__.__dict__.items()) + \
                  list(types.__dict__.items())).items()
         builtin = 'builtins'
@@ -274,7 +274,7 @@ if ExitType:
 if InputType:
     _reverse_typemap['InputType'] = InputType
     _reverse_typemap['OutputType'] = OutputType
-if PYTHON3:
+if PY3:
     _typemap = dict((v, k) for k, v in _reverse_typemap.items())
 else:
     _typemap = dict((v, k) for k, v in _reverse_typemap.iteritems())
@@ -376,7 +376,7 @@ if HAS_CTYPES:
 def _create_weakref(obj, *args):
     from weakref import ref
     if obj is None: # it's dead
-        if PYTHON3:
+        if PY3:
             from collections import UserDict
         else:
             from UserDict import UserDict
@@ -387,7 +387,7 @@ def _create_weakproxy(obj, callable=False, *args):
     from weakref import proxy
     if obj is None: # it's dead
         if callable: return proxy(lambda x:x, *args)
-        if PYTHON3:
+        if PY3:
             from collections import UserDict
         else:
             from UserDict import UserDict
@@ -448,7 +448,7 @@ def save_code(pickler, obj):
 def save_function(pickler, obj):
     if not _locate_function(obj): #, pickler._session):
         log.info("F1: %s" % obj)
-        if PYTHON3:
+        if PY3:
             pickler.save_reduce(_create_function, (obj.__code__, 
                                 obj.__globals__, obj.__name__,
                                 obj.__defaults__, obj.__closure__,
@@ -467,20 +467,20 @@ def save_function(pickler, obj):
 def save_module_dict(pickler, obj):
     if is_dill(pickler) and obj == pickler._main_module.__dict__:
         log.info("D1: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
-        if PYTHON3:
+        if PY3:
             pickler.write(bytes('c__builtin__\n__main__\n', 'UTF-8'))
         else:
             pickler.write('c__builtin__\n__main__\n')
     elif not is_dill(pickler) and obj == _main_module.__dict__:
         log.info("D3: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
-        if PYTHON3:
+        if PY3:
             pickler.write(bytes('c__main__\n__dict__\n', 'UTF-8'))
         else:
             pickler.write('c__main__\n__dict__\n')   #XXX: works in general?
     elif '__name__' in obj and obj != _main_module.__dict__ \
     and obj is getattr(_import_module(obj['__name__'],True), '__dict__', None):
         log.info("D4: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
-        if PYTHON3:
+        if PY3:
             pickler.write(bytes('c%s\n__dict__\n' % obj['__name__'], 'UTF-8'))
         else:
             pickler.write('c%s\n__dict__\n' % obj['__name__'])
@@ -594,7 +594,7 @@ def save_builtin_method(pickler, obj):
 @register(MethodType) #FIXME: fails for 'hidden' or 'name-mangled' classes
 def save_instancemethod0(pickler, obj):# example: cStringIO.StringI
     log.info("Me: %s" % obj) #XXX: obj.__dict__ handled elsewhere?
-    if PYTHON3:
+    if PY3:
         pickler.save_reduce(MethodType, (obj.__func__, obj.__self__), obj=obj)
     else:
         pickler.save_reduce(MethodType, (obj.im_func, obj.im_self,
@@ -677,7 +677,7 @@ if NumpyUfuncType:
 #   copy_reg.pickle(NumpyUfuncType, udump, uload)
 
 def _proxy_helper(obj): # a dead proxy returns a reference to None
-    # get memory address of proxy's reference object
+    """get memory address of proxy's reference object"""
     try: #FIXME: has to be a smarter way to identify if it's a proxy
         address = int(repr(obj).rstrip('>').split(' at ')[-1], base=16)
     except ValueError: # has a repr... is thus probably not a proxy
@@ -685,12 +685,12 @@ def _proxy_helper(obj): # a dead proxy returns a reference to None
     return address
 
 def _locate_object(address, module=None):
-    # get the object located at the given memory address
+    """get object located at the given memory address (inverse of id(obj))"""
     special = [None, True, False] #XXX: more...?
     for obj in special:
         if address == id(obj): return obj
     if module:
-        if PYTHON3:
+        if PY3:
             objects = iter(module.__dict__.values())
         else:
             objects = module.__dict__.itervalues()

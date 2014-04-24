@@ -14,8 +14,8 @@ __all__ = ['registered','failures','succeeds']
 # helper imports
 import warnings; warnings.filterwarnings("ignore", category=DeprecationWarning)
 import sys
-PYTHON3 = (hex(sys.hexversion) >= '0x30000f0')
-if PYTHON3:
+PY3 = (hex(sys.hexversion) >= '0x30000f0')
+if PY3:
     import queue as Queue
     import dbm as anydbm
 else:
@@ -26,7 +26,7 @@ else:
 try:
     from cStringIO import StringIO # has StringI and StringO types
 except ImportError: # only has StringIO type
-    if PYTHON3:
+    if PY3:
         from io import BytesIO as StringIO
     else:
         from StringIO import StringIO
@@ -64,7 +64,7 @@ import contextlib
 try:
     import bz2
     import sqlite3
-    if PYTHON3: import dbm.ndbm as dbm
+    if PY3: import dbm.ndbm as dbm
     else: import dbm
     HAS_ALL = True
 except ImportError: # Ubuntu
@@ -147,7 +147,7 @@ a['ObjectType'] = object()
 a['StringType'] = _str = str(1)
 a['TupleType'] = _tuple = ()
 a['TypeType'] = type
-if PYTHON3:
+if PY3:
     a['LongType'] = _int
     a['UnicodeType'] = _str
 else:
@@ -171,7 +171,7 @@ a['DefaultDictType'] = collections.defaultdict(_function, _dict)
 a['TZInfoType'] = datetime.tzinfo()
 a['DateTimeType'] = datetime.datetime.today()
 a['CalendarType'] = calendar.Calendar()
-if not PYTHON3:
+if not PY3:
     a['SetsType'] = sets.Set()
     a['ImmutableSetType'] = sets.ImmutableSet()
     a['MutexType'] = mutex.mutex()
@@ -265,7 +265,7 @@ a['NotImplementedType'] = NotImplemented
 a['SliceType'] = slice(1)
 a['UnboundMethodType'] = _class._method #XXX: works when not imported!
 # other (concrete) object types
-if PYTHON3:
+if PY3:
     d['CellType'] = (_lambda)(0).__closure__[0]
     a['XRangeType'] = _xrange = range(1)
 else:
@@ -275,7 +275,7 @@ d['MethodDescriptorType'] = type.__dict__['mro']
 d['WrapperDescriptorType'] = type.__repr__
 a['WrapperDescriptorType2'] = type.__dict__['__module__']
 # built-in functions (CH 2)
-if PYTHON3: _methodwrap = (1).__lt__
+if PY3: _methodwrap = (1).__lt__
 else: _methodwrap = (1).__cmp__
 d['MethodWrapperType'] = _methodwrap
 a['StaticMethodType'] = staticmethod(_method)
@@ -283,7 +283,7 @@ a['ClassMethodType'] = classmethod(_method)
 a['PropertyType'] = property()
 d['SuperType'] = super(Exception, _exception)
 # string services (CH 7)
-if PYTHON3: _in = _bytes
+if PY3: _in = _bytes
 else: _in = _str
 a['InputType'] = _cstrI = StringIO(_in)
 a['OutputType'] = _cstrO = StringIO()
@@ -299,7 +299,7 @@ a['DeadCallableProxyType'] = weakref.proxy(_class2())
 a['QueueType'] = Queue.Queue()
 # numeric and mathematical types (CH 9)
 d['PartialType'] = functools.partial(int,base=2)
-if PYTHON3:
+if PY3:
     a['IzipType'] = zip('0','1')
 else:
     a['IzipType'] = itertools.izip('0','1')
@@ -307,7 +307,7 @@ a['ChainType'] = itertools.chain('0','1')
 d['ItemGetterType'] = operator.itemgetter(0)
 d['AttrGetterType'] = operator.attrgetter('__repr__')
 # file and directory access (CH 10)
-if PYTHON3: _fileW = _cstrO
+if PY3: _fileW = _cstrO
 else: _fileW = _tmpf
 # data persistence (CH 11)
 if HAS_ALL:
@@ -333,14 +333,14 @@ a['RLockType'] = threading.RLock()
 a['NamedLoggerType'] = _logger = logging.getLogger(__name__) #FIXME: fail >= 3.2 and <= 2.6
 #a['FrozenModuleType'] = __hello__ #FIXME: prints "Hello world..."
 # interprocess communication (CH 17)
-if PYTHON3:
+if PY3:
     a['SocketType'] = _socket = socket.socket() #FIXME: fail >= 3.3
     a['SocketPairType'] = socket.socketpair()[0] #FIXME: fail >= 3.3
 else:
     a['SocketType'] = _socket = socket.socket()
     a['SocketPairType'] = _socket._sock
 # python runtime services (CH 27)
-if PYTHON3:
+if PY3:
     a['GeneratorContextManagerType'] = contextlib.contextmanager(max)([1])
 else:
     a['GeneratorContextManagerType'] = contextlib.GeneratorContextManager(max)
@@ -428,7 +428,7 @@ x['TracebackType'] = _function2()[1] #(see: inspect.getouterframes,getframeinfo)
 # built-in functions (CH 2)
 x['SetIteratorType'] = iter(_set) #XXX: empty vs non-empty
 # built-in types (CH 5)
-if PYTHON3:
+if PY3:
     x['DictionaryItemIteratorType'] = iter(type.__dict__.items())
     x['DictionaryKeyIteratorType'] = iter(type.__dict__.keys())
     x['DictionaryValueIteratorType'] = iter(type.__dict__.values())
@@ -490,7 +490,7 @@ try: # python 2.7
     # built-in types (CH 5)
     x['MemoryType'] = memoryview(_in) # 2.7
     x['MemoryType2'] = memoryview(bytearray(_in)) # 2.7
-    if PYTHON3:
+    if PY3:
         x['DictItemsType'] = _dict.items() # 2.7
         x['DictKeysType'] = _dict.keys() # 2.7
         x['DictValuesType'] = _dict.values() # 2.7
@@ -509,7 +509,7 @@ try: # python 2.7 (and not 3.1)
     x['CmpKeyObjType'] = _cmpkey('0') #2.7, >=3.2
 except AttributeError:
     pass
-if PYTHON3: # oddities: removed, etc
+if PY3: # oddities: removed, etc
     x['BufferType'] = x['MemoryType']
 else:
     x['BufferType'] = buffer('')

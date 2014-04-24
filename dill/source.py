@@ -18,11 +18,7 @@ in a file.
 """
 
 __all__ = ['findsource', 'getsourcelines', 'getsource', 'indent', 'outdent', \
-           '_wrap', 'dumpsource', 'getname', '_namespace', 'getimport', \
-           '_getfreevars', '_getglobalvars', '_getvarnames']
-
-import sys
-PYTHON3 = (hex(sys.hexversion) >= '0x30000f0')
+           '_wrap', 'dumpsource', 'getname', '_namespace', 'getimport']
 
 import re
 import linecache
@@ -30,6 +26,7 @@ from tokenize import TokenError
 from inspect import ismodule, isclass, ismethod, isfunction, istraceback
 from inspect import isframe, iscode, getfile, getmodule, getsourcefile
 from inspect import getblock, indentsize, isbuiltin
+from .dill import PY3
 
 
 def findsource(object):
@@ -85,13 +82,13 @@ def findsource(object):
         name = object.__name__
         if name == '<lambda>': pat1 = r'(.*(?<!\w)lambda(:|\s))'
         else: pat1 = r'^(\s*def\s)'
-        if PYTHON3: object = object.__func__
+        if PY3: object = object.__func__
         else: object = object.im_func
     if isfunction(object):
         name = object.__name__
         if name == '<lambda>': pat1 = r'(.*(?<!\w)lambda(:|\s))'
         else: pat1 = r'^(\s*def\s)'
-        if PYTHON3: object = object.__code__
+        if PY3: object = object.__code__
         else: object = object.func_code
     if istraceback(object):
         object = object.tb_frame
@@ -119,7 +116,7 @@ def findsource(object):
                         _ = eval("lambda %s : %s" % (lhs,rhs), globals(),\
                                                                locals())
                     except: _ = dummy 
-                    if PYTHON3: _ = _.__code__
+                    if PY3: _ = _.__code__
                     else: _ = _.func_code
                     if _.co_code == object.co_code: break
                 else: # not a lambda, just look for the name
@@ -365,7 +362,7 @@ def _intypes(object):
 
 def _isstring(object): #XXX: isstringlike better?
     '''check if object is a string-like type'''
-    if PYTHON3: return isinstance(object, (str, bytes))
+    if PY3: return isinstance(object, (str, bytes))
     return isinstance(object, basestring)
 
 
@@ -452,7 +449,7 @@ def _wrap(f):
     func.__doc__ = f.__doc__
     return func
 ''' % ('__globals__', '__locals__')
-if PYTHON3:
+if PY3:
     exec(wrap3)
 else:
     exec(wrap2)
@@ -498,7 +495,7 @@ def dumpsource(object, alias='', new=False, enclose=True):
     else: #XXX: other cases where source code is needed???
         code += getsource(object.__class__, alias='', lstrip=True, force=True)
         mod = repr(object.__module__) # should have a module (no builtins here)
-        if PYTHON3:
+        if PY3:
             code += pre + 'dill.loads(%s.replace(b%s,bytes(__name__,"UTF-8")))\n' % (pik,mod)
         else:
             code += pre + 'dill.loads(%s.replace(%s,__name__))\n' % (pik,mod)
@@ -672,52 +669,6 @@ file. Use builtin=True if imports from builtins need to be included.
     #XXX: possible failsafe... (for example, for instances when source=False)
     #     "import dill; result = dill.loads(<pickled_object>); # repr(<object>)"
 
-def _getfreevars(func):
-    """get objects defined in enclosing code that are reffered to by func
-
-    returns a dict of {name:object}"""
-    try: #XXX: handles methods correctly? classes? etc?
-        if PYTHON3:
-            freevars = func.__code__.co_freevars
-            closures = func.__closure__
-        else:
-            freevars = func.func_code.co_freevars
-            closures = func.func_closure or ()
-    except AttributeError: # then not a function
-        return {}
-    return dict((name,c.cell_contents) for (name,c) in zip(freevars,closures))
-
-def _getglobalvars(func):
-    """get objects defined in global scope that are referred to by func
-
-    return a dict of {name:object}"""
-    try: #XXX: handles methods correctly? classes? etc?
-        if PYTHON3:
-            names = func.__code__.co_names
-            globs = func.__globals__
-        else:
-            names = func.func_code.co_names
-            globs = func.func_globals
-    except AttributeError: # then not a function
-        return {}
-    #NOTE: if name not in func_globals, then we skip it...
-    return dict((name,globs[name]) for name in names if name in globs)
-
-def _getvarnames(func):
-    """get names of variables defined by func
-
-    returns a tuple (local vars, local vars referrenced by nested functions)"""
-    try: #XXX: handles methods correctly? classes? etc?
-        if PYTHON3:
-            varnames = func.__code__.co_varnames
-            cellvars = func.__code__.co_cellvars
-        else:
-            varnames = func.func_code.co_varnames
-            cellvars = func.func_code.co_cellvars
-    except AttributeError: # then not a function
-        return () #XXX: better ((),())? or None?
-    return varnames, cellvars
-
 
 
 #XXX: temporary, for compatability
@@ -732,7 +683,6 @@ def _likely_import(first, last, passive=False, explicit=True):
 _get_name = getname
 getblocks_from_history = getblocks
 
-del sys
 
 
 # EOF

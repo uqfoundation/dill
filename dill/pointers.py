@@ -6,32 +6,120 @@
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
 from __future__ import absolute_import
-__all__ = ['parent', 'reference', 'refobject']
+__all__ = ['parent', 'reference', 'at', 'freevars', 'globalvars', 'varnames']
 
 import gc
 import sys
 
 from .dill import _proxy_helper as reference
-from .dill import _locate_object as refobject
+from .dill import _locate_object as at
+from .dill import PY3
 
-def parent(obj, objtype, *args, **kwds):
+def freevars(func):
+    """get objects defined in enclosing code that are reffered to by func
+
+    returns a dict of {name:object}"""
+    try: #XXX: handles methods correctly? classes? etc?
+        if PY3:
+            freevars = func.__code__.co_freevars
+            closures = func.__closure__
+        else:
+            freevars = func.func_code.co_freevars
+            closures = func.func_closure or ()
+    except AttributeError: # then not a function
+        return {}
+    return dict((name,c.cell_contents) for (name,c) in zip(freevars,closures))
+
+def globalvars(func):
+    """get objects defined in global scope that are referred to by func
+
+    return a dict of {name:object}"""
+    try: #XXX: handles methods correctly? classes? etc?
+        if PY3:
+            names = func.__code__.co_names
+            globs = func.__globals__
+        else:
+            names = func.func_code.co_names
+            globs = func.func_globals
+    except AttributeError: # then not a function
+        return {}
+    #NOTE: if name not in func_globals, then we skip it...
+    return dict((name,globs[name]) for name in names if name in globs)
+
+def varnames(func):
+    """get names of variables defined by func
+
+    returns a tuple (local vars, local vars referrenced by nested functions)"""
+    try: #XXX: handles methods correctly? classes? etc?
+        if PY3:
+            varnames = func.__code__.co_varnames
+            cellvars = func.__code__.co_cellvars
+        else:
+            varnames = func.func_code.co_varnames
+            cellvars = func.func_code.co_cellvars
+    except AttributeError: # then not a function
+        return () #XXX: better ((),())? or None?
+    return varnames, cellvars
+
+
+def parent(obj, objtype, ignore=()):
     """
 >>> listiter = iter([4,5,6,7])
 >>> obj = parent(listiter, list)
 >>> obj == [4,5,6,7]  # actually 'is', but don't have handle any longer
 True
 
+NOTE: objtype can be a single type (e.g. int or list) or a tuple of types.
+
 WARNING: if obj is a sequence (e.g. list), may produce unexpected results.
 Parent finds *one* parent (e.g. the last member of the sequence).
     """
-    edge_func = gc.get_referents #MMM: looking for refs, not back_refs
-    predicate = lambda x: isinstance(x, objtype) #MMM: looking for parent type
-    depth = 1 #MMM: always looking for the parent (only, right?)
-    chain = find_chain(obj, predicate, edge_func, depth, *args, **kwds)[::-1]
+    depth = 1 #XXX: always looking for the parent (only, right?)
+    chain = parents(obj, objtype, depth, ignore)
     parent = chain.pop()
     if parent is obj:
         return None
     return parent
+
+
+def parents(obj, objtype, depth=1, ignore=()): #XXX: objtype=object ?
+    """Find the chain of referents for obj. Chain will end with obj.
+
+    objtype: an object type or tuple of types to search for
+    depth: search depth (e.g. depth=2 is 'grandparents')
+    ignore: an object or tuple of objects to ignore in the search
+    """
+    edge_func = gc.get_referents # looking for refs, not back_refs
+    predicate = lambda x: isinstance(x, objtype) # looking for parent type
+   #if objtype is None: predicate = lambda x: True #XXX: in obj.mro() ?
+    ignore = (ignore,) if not hasattr(ignore, '__len__') else ignore
+    ignore = (id(obj) for obj in ignore)
+    chain = find_chain(obj, predicate, edge_func, depth)[::-1]
+    #XXX: should pop off obj... ?
+    return chain
+
+
+def children(obj, objtype, depth=1, ignore=()): #XXX: objtype=object ?
+    """Find the chain of referrers for obj. Chain will start with obj.
+
+    objtype: an object type or tuple of types to search for
+    depth: search depth (e.g. depth=2 is 'grandparents')
+    ignore: an object or tuple of objects to ignore in the search
+
+    NOTE: a common thing to ignore is all globals, 'ignore=globals()'
+
+    NOTE: repeated calls may yield different results, as python stores
+    the last value in the special variable '_'; thus, it is often good
+    to execute something to replace '_' (e.g. >>> 1+1).
+    """
+    edge_func = gc.get_referrers # looking for back_refs, not refs
+    predicate = lambda x: isinstance(x, objtype) # looking for child type
+   #if objtype is None: predicate = lambda x: True #XXX: in obj.mro() ?
+    ignore = (ignore,) if not hasattr(ignore, '__len__') else ignore
+    ignore = (id(obj) for obj in ignore)
+    chain = find_chain(obj, predicate, edge_func, depth, ignore)
+    #XXX: should pop off obj... ?
+    return chain
 
 
 # more generic helper function (cut-n-paste from objgraph)
@@ -74,3 +162,9 @@ def find_chain(obj, predicate, edge_func, max_depth=20, extra_ignore=()):
                     queue.append(source)
     return [obj] # not found
 
+
+# backward compatability
+refobject = at
+
+
+# EOF

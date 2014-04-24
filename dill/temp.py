@@ -15,8 +15,8 @@ from __future__ import absolute_import
 __all__ = ['dump_source', 'dump', 'dumpIO_source', 'dumpIO',\
            'load_source', 'load', 'loadIO_source', 'loadIO']
 
-import sys
-PYTHON3 = (hex(sys.hexversion) >= '0x30000f0')
+from .dill import PY3
+
 def b(x): # deal with b'foo' versus 'foo'
     import codecs
     return codecs.latin_1_encode(x)[0]
@@ -149,7 +149,7 @@ def loadIO(buffer, **kwds):
     [1, 2, 3, 4, 5]
     """
     import dill as pickle
-    if PYTHON3:
+    if PY3:
         from io import BytesIO as StringIO
     else:
         from StringIO import StringIO
@@ -166,7 +166,7 @@ Loads with "dill.temp.loadIO".  Returns the buffer object.
     [1, 2, 3, 4, 5]
     """
     import dill as pickle
-    if PYTHON3:
+    if PY3:
         from io import BytesIO as StringIO
     else:
         from StringIO import StringIO
@@ -190,7 +190,7 @@ def loadIO_source(buffer, **kwds):
     alias = kwds.pop('alias', None)
     source = getattr(buffer, 'getvalue', buffer) # source or buffer.getvalue
     if source != buffer: source = source() # buffer.getvalue()
-    if PYTHON3: source = source.decode() # buffer to string
+    if PY3: source = source.decode() # buffer to string
     if not alias:
         tag = source.strip().splitlines()[-1].split()
         if tag[0] != '#NAME:':
@@ -216,7 +216,7 @@ Optional kwds:
     If 'alias' is specified, the object will be renamed to the given string.
     """
     from .source import getsource, getname
-    if PYTHON3:
+    if PY3:
         from io import BytesIO as StringIO
     else:
         from StringIO import StringIO
@@ -230,7 +230,7 @@ Optional kwds:
     return file
 
 
-del absolute_import, sys
+del absolute_import
 
 
 # EOF
