@@ -64,7 +64,7 @@ assert getimportable(squared, byname=False) == 'squared = lambda x:x**2\n'
 assert getimportable(None, byname=False) == 'None\n'
 assert getimportable(Bar, byname=False) == 'class Bar:\n  pass\n'
 assert getimportable(Foo, byname=False) == 'class Foo(object):\n  def bar(self, x):\n    return x*x+x\n'
-assert getimportable(Foo.bar, byname=False) == 'def bar(self, x):\n    return x*x+x\n'
+assert getimportable(Foo.bar, byname=False) == 'def bar(self, x):\n  return x*x+x\n'
 assert getimportable(Foo.bar, byname=True) == 'from %s import bar\n' % __name__
 assert getimportable(Foo.bar, alias='memo', byname=True) == 'from %s import bar\nmemo = bar\n' % __name__
 #assert getimportable(_foo, byname=False) #XXX: _foo fails

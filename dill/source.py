@@ -674,8 +674,7 @@ file. Use builtin=True if imports from builtins need to be included.
 
 #XXX: temporary, for compatability
 def getimportable(obj, alias='', byname=True, explicit=False):
-    return outdent(_getcode(obj, alias, source=(not byname), builtin=explicit),\
-                   all=False)
+    return outdent(_getcode(obj, alias, source=(not byname), builtin=explicit))
 # backward compatability
 def likely_import(obj, passive=False, explicit=False):
     return getimport(obj, verify=(not passive), builtin=explicit)
