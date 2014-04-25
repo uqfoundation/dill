@@ -5,7 +5,7 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
-from dill.detect import baditems, badobjects, badtypes, errors, parent
+from dill.detect import baditems, badobjects, badtypes, errors, parent, at
 
 import inspect
 
@@ -27,4 +27,5 @@ obj = parent(listiter, list)
 assert obj is x
 
 assert parent(obj, int) is x[-1]
+assert at(id(at)) is at
 

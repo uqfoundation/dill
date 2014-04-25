@@ -79,10 +79,9 @@ if __name__ == '__main__':
 
   # test some stuff from source and pointers
   ds = dill.source
-  dp = dill.pointers
-  assert dp.at(id(dp)) is dp
-  assert ds.getsource(dp.freevars(quadish)['f']) == '@quad_factory(a=0,b=4,c=0)\ndef quadish(x):\n  return x+1\n'
-  assert ds.getsource(dp.freevars(quadruple)['f']) == '@doubler\ndef quadruple(x):\n  return 2*x\n'
+  dd = dill.detect
+  assert ds.getsource(dd.freevars(quadish)['f']) == '@quad_factory(a=0,b=4,c=0)\ndef quadish(x):\n  return x+1\n'
+  assert ds.getsource(dd.freevars(quadruple)['f']) == '@doubler\ndef quadruple(x):\n  return 2*x\n'
   #XXX: quadratic ?
 
 

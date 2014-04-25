@@ -17,6 +17,7 @@ as well as provide access to source code for objects defined
 in a file.
 """
 
+from __future__ import absolute_import
 __all__ = ['findsource', 'getsourcelines', 'getsource', 'indent', 'outdent', \
            '_wrap', 'dumpsource', 'getname', '_namespace', 'getimport']
 

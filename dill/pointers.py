@@ -6,61 +6,13 @@
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
 from __future__ import absolute_import
-__all__ = ['parent', 'reference', 'at', 'freevars', 'globalvars', 'varnames']
+__all__ = ['parent', 'reference', 'at', 'parents', 'children']
 
 import gc
 import sys
 
 from .dill import _proxy_helper as reference
 from .dill import _locate_object as at
-from .dill import PY3
-
-def freevars(func):
-    """get objects defined in enclosing code that are reffered to by func
-
-    returns a dict of {name:object}"""
-    try: #XXX: handles methods correctly? classes? etc?
-        if PY3:
-            freevars = func.__code__.co_freevars
-            closures = func.__closure__
-        else:
-            freevars = func.func_code.co_freevars
-            closures = func.func_closure or ()
-    except AttributeError: # then not a function
-        return {}
-    return dict((name,c.cell_contents) for (name,c) in zip(freevars,closures))
-
-def globalvars(func):
-    """get objects defined in global scope that are referred to by func
-
-    return a dict of {name:object}"""
-    try: #XXX: handles methods correctly? classes? etc?
-        if PY3:
-            names = func.__code__.co_names
-            globs = func.__globals__
-        else:
-            names = func.func_code.co_names
-            globs = func.func_globals
-    except AttributeError: # then not a function
-        return {}
-    #NOTE: if name not in func_globals, then we skip it...
-    return dict((name,globs[name]) for name in names if name in globs)
-
-def varnames(func):
-    """get names of variables defined by func
-
-    returns a tuple (local vars, local vars referrenced by nested functions)"""
-    try: #XXX: handles methods correctly? classes? etc?
-        if PY3:
-            varnames = func.__code__.co_varnames
-            cellvars = func.__code__.co_cellvars
-        else:
-            varnames = func.func_code.co_varnames
-            cellvars = func.func_code.co_cellvars
-    except AttributeError: # then not a function
-        return () #XXX: better ((),())? or None?
-    return varnames, cellvars
-
 
 def parent(obj, objtype, ignore=()):
     """
