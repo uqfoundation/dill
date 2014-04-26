@@ -92,11 +92,11 @@ PartialType = type(partial(int,base=2))
 SuperType = type(super(Exception, TypeError()))
 ItemGetterType = type(itemgetter(0))
 AttrGetterType = type(attrgetter('__repr__'))
-FileType = open(os.devnull, 'rb', buffering=0)
-TextWrapperType = open(os.devnull, 'r', buffering=-1)
-BufferedRandomType = open(os.devnull, 'r+b', buffering=-1)
-BufferedReaderType = open(os.devnull, 'rb', buffering=-1)
-BufferedWriterType = open(os.devnull, 'wb', buffering=-1)
+FileType = type(open(os.devnull, 'rb', buffering=0))
+TextWrapperType = type(open(os.devnull, 'r', buffering=-1))
+BufferedRandomType = type(open(os.devnull, 'r+b', buffering=-1))
+BufferedReaderType = type(open(os.devnull, 'rb', buffering=-1))
+BufferedWriterType = type(open(os.devnull, 'wb', buffering=-1))
 try:
     from cStringIO import StringIO, InputType, OutputType
 except ImportError:
