@@ -50,7 +50,7 @@ def findsource(object):
         lines = [readline.get_history_item(i)+'\n' for i in range(1,lbuf)]
     else:
         try: # special handling for class instances
-            if not isclass(object) and isclass(object.__class__):
+            if not isclass(object) and isclass(type(object)): # __class__
                 file = getfile(module)        
                 sourcefile = getsourcefile(module)
             else: # builtins fail with a TypeError
@@ -132,8 +132,8 @@ def findsource(object):
         return lines, lnum
 
     try: # turn instances into classes
-        if not isclass(object) and isclass(object.__class__):
-            object = object.__class__
+        if not isclass(object) and isclass(type(object)): # __class__
+            object = object.__class__ #XXX: sometimes type(class) is better?
             #XXX: we don't find how the instance was built
     except AttributeError: pass
     if isclass(object):
@@ -272,28 +272,45 @@ def getsource(object, alias='', lstrip=False, enclosing=False, force=False):
         if not force: # don't try to get types that findsource can't get
             raise
         if not getmodule(object): # get things like 'None' and '1'
-            name = repr(object)
-            lines, lnum = ["%s\n" % name], 0
-        else:
-            if instance: name = object.__class__.__name__
-            else: name = object.__name__
+            if not instance: return getimport(object, alias)
+            # special handling (numpy arrays, ...)
+            _import = getimport(object)
+            name = getname(object, force=True)
+            _alias = "%s = " % alias if alias else ""
+            return _import+_alias+"%s\n" % name
+        else: #FIXME: could use a good bit of cleanup, since using getimport...
+            if not instance: return getimport(object, alias)
+            # now we are dealing with an instance...
+            name = object.__class__.__name__
+            module = object.__module__
+            if module in ['builtins','__builtin__']:
+                return getimport(object, alias)
+            else: #FIXME: leverage getimport? use 'from module import name'?
+                lines, lnum = ["%s = __import__('%s', fromlist=['%s']).%s\n" % (name,module,name,name)], 0
+                obj = eval(lines[0].lstrip(name + ' = '))
+                lines, lnum = getsourcelines(obj, enclosing=enclosing)
 
-            if ismodule(object):
-                lines, lnum = ["%s = __import__('%s')\n" % (name,name)], 0
-            else:
-                module = object.__module__
-                if module in ['builtins','__builtin__']:
-                    # handle 'special cases' (types.NoneType)
-                    if _intypes(name): #XXX: BuiltinFunctionType
-                        if name == 'ellipsis': name = 'EllipsisType'
-                        lines, lnum = ["%s = __import__('%s', fromlist=['%s']).%s\n" % (name,'types',name,name)], 0
-                    else:
-                        lines, lnum = ["%s = %s\n" % (name, name)], 0
-                else:
-                    lines, lnum = ["%s = __import__('%s', fromlist=['%s']).%s\n" % (name,module,name,name)], 0
-        if instance: # we now go for the class source
-            obj = eval(lines[0].lstrip(name + ' = '))
-            lines, lnum = getsourcelines(obj, enclosing=enclosing)
+           #if instance: name = object.__class__.__name__
+           #else: name = object.__name__
+
+           #if ismodule(object):
+           #    return getimport(object, alias)
+               #lines, lnum = ["%s = __import__('%s')\n" % (name,name)], 0
+           #else:
+           #    module = object.__module__
+           #    if module in ['builtins','__builtin__']:
+           #        return getimport(object, alias)
+               #    # handle 'special cases' (types.NoneType)
+               #    if _intypes(name): #XXX: BuiltinFunctionType
+               #        if name == 'ellipsis': name = 'EllipsisType'
+               #        lines, lnum = ["%s = __import__('%s', fromlist=['%s']).%s\n" % (name,'types',name,name)], 0
+               #    else:
+               #        lines, lnum = ["%s = %s\n" % (name, name)], 0
+           #    else: #FIXME: leverage getimport? use 'from module import name'?
+           #        lines, lnum = ["%s = __import__('%s', fromlist=['%s']).%s\n" % (name,module,name,name)], 0
+       #if instance: # we now go for the class source
+       #    obj = eval(lines[0].lstrip(name + ' = '))
+       #    lines, lnum = getsourcelines(obj, enclosing=enclosing)
 
     # strip leading indent (helps ensure can be imported)
     if lstrip or alias:
@@ -327,9 +344,9 @@ def getsource(object, alias='', lstrip=False, enclosing=False, force=False):
                 lines.append('\n%s = %s\n' % (alias, object.__name__))
         else: # class or class instance
             if instance: lines[-1] = ('%s = ' % alias) + lines[-1]
-            elif not getmodule(object): # things like 'None' and '1'
-                lines.append('\n%s = %s\n' % (alias, repr(object)))
-            else: lines.append('\n%s = %s\n' % (alias, object.__name__))
+            else:
+                name = getname(object, force=True) or object.__name__
+                lines.append('\n%s = %s\n' % (alias, name))
     return ''.join(lines)
 
 
@@ -343,10 +360,13 @@ def _isinstance(object):
         return False
     if istraceback(object) or isframe(object) or iscode(object):
         return False
+    # special handling (numpy arrays, ...)
+    if not getmodule(object) and getmodule(type(object)).__name__ in ['numpy']:
+        return True
     _types = ('<class ',"<type 'instance'>")
-    if not repr(type(object)).startswith(_types):
+    if not repr(type(object)).startswith(_types): #FIXME: weak hack
         return False
-    if not getmodule(object) or object.__module__ in ['builtins','__builtin__']:
+    if not getmodule(object) or object.__module__ in ['builtins','__builtin__'] or getname(object, force=True) in ['array']:
         return False
     return True # by process of elimination... it's what we want
 
@@ -515,15 +535,20 @@ def dumpsource(object, alias='', new=False, enclose=True):
 
 def getname(obj, force=False): #XXX: allow 'throw'(?) to raise error on fail?
     """get the name of the object. for lambdas, get the name of the pointer """
-    if not getmodule(obj): # things like "None" and "1"
+    module = getmodule(obj)
+    if not module: # things like "None" and "1"
         if not force: return None
         return repr(obj)
     try:
-        if obj.__name__ == '<lambda>':
-            return getsource(obj).split('=',1)[0].strip()
         #XXX: 'wrong' for decorators and curried functions ?
         #       if obj.func_closure: ...use logic from getimportable, etc ?
-        return obj.__name__
+        name = obj.__name__
+        if name == '<lambda>':
+            return getsource(obj).split('=',1)[0].strip()
+        # handle some special cases
+        if module.__name__ in ['builtins','__builtin__']:
+            if name == 'ellipsis': name = 'EllipsisType'
+        return name
     except AttributeError: #XXX: better to just throw AttributeError ?
         if not force: return None
         name = repr(obj)
@@ -552,9 +577,8 @@ def _namespace(obj):
             return qual
         # get name of a lambda, function, etc
         name = getname(obj) or obj.__name__ # failing, raise AttributeError
-        # check special cases (NoneType, Ellipsis, ...)
-        if module in ['builtins', '__builtin__']: #XXX: BuiltinFunctionType
-            if name == 'ellipsis': name = 'EllipsisType'
+        # check special cases (NoneType, ...)
+        if module in ['builtins','__builtin__']: # BuiltinFunctionType
             if _intypes(name): return ['types'] + [name]
         return qual + [name] #XXX: can be wrong for some aliased objects
     except: pass
@@ -567,7 +591,7 @@ def _namespace(obj):
     try: qual = qual[qual.index("'")+1:-2]
     except ValueError: pass # str(obj.__class__) made the 'try' unnecessary
     qual = qual.split(".")
-    if module in ['builtins', '__builtin__']:
+    if module in ['builtins','__builtin__']:
         # check special cases (NoneType, Ellipsis, ...)
         if qual[-1] == 'ellipsis': qual[-1] = 'EllipsisType'
         if _intypes(qual[-1]): module = 'types' #XXX: BuiltinFunctionType
@@ -575,23 +599,30 @@ def _namespace(obj):
     return qual
 
 
-def _getimport(head, tail, verify=True, builtin=False):
+#NOTE: 05/25/14 broke backward compatability: added 'alias' as 3rd argument
+def _getimport(head, tail, alias='', verify=True, builtin=False):
     """helper to build a likely import string from head and tail of namespace"""
     # special handling for a few common types
     if tail in ['Ellipsis', 'NotImplemented'] and head in ['types']:
         head = len.__module__
-    elif tail in ['None'] and head in ['types']: return '' # can't import None
+    elif tail in ['None'] and head in ['types']:
+        _alias = '%s = ' % alias if alias else ''
+        return _alias+'%s\n' % tail
     # we don't need to import from builtins, so return ''
 #   elif tail in ['NoneType','int','float','long','complex']: return '' #XXX: ?
     if head in ['builtins','__builtin__']:
         # special cases (NoneType, Ellipsis, ...) #XXX: BuiltinFunctionType
         if tail == 'ellipsis': tail = 'EllipsisType'
         if _intypes(tail): head = 'types'
-        elif not builtin: return ''
+        elif not builtin:
+            _alias = '%s = ' % alias if alias else ''
+            return _alias+'%s\n' % tail
         else: pass # handle builtins below
     # get likely import string
-    if not head: _str = "import %s\n" % tail
-    else: _str = "from %s import %s\n" % (head, tail)
+    if not head: _str = "import %s" % tail
+    else: _str = "from %s import %s" % (head, tail)
+    _alias = " as %s\n" % alias if alias else "\n"
+    _str += _alias
     # FIXME: fails on most decorators, currying, and such...
     #        (could look for magic __wrapped__ or __func__ attr)
     #        (could fix in 'namespace' to check obj for closure)
@@ -602,17 +633,25 @@ def _getimport(head, tail, verify=True, builtin=False):
             _head = head.rsplit(".",1)[0] #(or get all, then compare == obj?)
             if not _head: raise
             if _head != head:
-                _str = _getimport(_head, tail, verify)
+                _str = _getimport(_head, tail, alias, verify)
     return _str
 
 
-def getimport(obj, verify=True, builtin=False):
+#XXX: rename builtin to force? vice versa? verify to force? (as in getsource)
+#NOTE: 05/25/14 broke backward compatability: added 'alias' as 2nd argument
+def getimport(obj, alias='', verify=True, builtin=False, enclosing=False):
     """get the likely import string for the given object
 
     obj: the object to inspect
+    alias: import the object with the given alias
     verify: if True, then try to verify with an attempted import
     builtin: if True, then also include imports for builtins
+    enclosing: if True, get the import for the outermost enclosing callable
     """
+    if enclosing:
+        from dill.detect import outermost
+        _obj = outermost(obj)
+        obj = _obj if _obj else obj
     # for named things... with a nice repr #XXX: move into _namespace?
     if not repr(obj).startswith('<'): name = repr(obj).split('(')[0]
     else: name = None
@@ -621,52 +660,69 @@ def getimport(obj, verify=True, builtin=False):
     head = '.'.join(qual[:-1])
     tail = qual[-1]
     if name: # try using name instead of tail
-        try: return _getimport(head, name, verify, builtin)
+        try: return _getimport(head, name, alias, verify, builtin)
         except ImportError: pass
         except SyntaxError:
-            if head in ['__builtin__','builtins']: return ''
+            if head in ['builtins','__builtin__']:
+                _alias = '%s = ' % alias if alias else ''
+                return _alias+'%s\n' % name
             else: pass
     try:
        #if type(obj) is type(abs): _builtin = builtin # BuiltinFunctionType
        #else: _builtin = False
-        return _getimport(head, tail, verify, builtin)
+        return _getimport(head, tail, alias, verify, builtin)
     except ImportError:
         raise # could do some checking against obj
     except SyntaxError:
-        if head in ['__builtin__','builtins']: return ''
+        if head in ['builtins','__builtin__']:
+            _alias = '%s = ' % alias if alias else ''
+            return _alias+'%s\n' % tail
         raise # could do some checking against obj
 
 
-# def _getimportable(obj, alias='', source=False, builtin=False):
-def _getcode(obj, alias='', source=True, builtin=True):
+def _importable(obj, alias='', source=True, enclosing=False, force=True, \
+                                              builtin=True, lstrip=True):
     """get source code for an importable obj, if possible; otherwise get import
 
 For simple objects, this function will discover the name of the object, or the
 repr of the object, or the source code for the object. To attempt to force
 discovery of the source code, use source=True, otherwise an import will be
 sought. The intent is to build a string that can be imported from a python
-file. Use builtin=True if imports from builtins need to be included.
+file. See 'getsource' and 'getimport' for description of relevant kwds.
     """
-   #FIXME: fails for decorated functions
-   #try: # get the module name (to see if it's __main__)
-   #    module = str(getmodule(obj)).split()[1].strip('"').strip("'")
-   #except: module = ''
-    try: _import = getimport(obj, builtin=builtin)
-    except: _import = ""
-    if source: # get the source
-        try: return getsource(obj, alias=alias)
+    if source: # first try to get the source
+        try:
+            return getsource(obj, alias, enclosing=enclosing, \
+                                         force=force, lstrip=lstrip)
+        except: pass
+    try:
+        if not _isinstance(obj):
+            return getimport(obj, alias, enclosing=enclosing, \
+                                         verify=force, builtin=builtin)
+        # first 'get the import', then 'get the instance'
+        _import = getimport(obj, enclosing=enclosing, \
+                                 verify=force, builtin=builtin)
+        name = getname(obj, force=True)
+        if not name:
+            raise AttributeError("object has no atribute '__name__'")
+        _alias = "%s = " % alias if alias else ""
+        return _import+_alias+"%s\n" % name
+
+    except: pass
+    if not source: # try getsource, only if it hasn't been tried yet
+        try:
+            return getsource(obj, alias, enclosing=enclosing, \
+                                         force=force, lstrip=lstrip)
         except: pass
     # get the name (of functions, lambdas, and classes)
     # or hope that obj can be built from the __repr__
     #XXX: what to do about class instances and such?
-    obj = getname(obj, force=True)
+    obj = getname(obj, force=force)
     # we either have __repr__ or __name__ (or None)
     if not obj or obj.startswith('<'):
         raise AttributeError("object has no atribute '__name__'")
-    elif alias: result = _import+'%s = %s\n' % (alias,obj)
-    elif _import.endswith('%s\n' % obj): result = _import
-    else: result = _import+'%s\n' % obj
-    return result
+    _alias = '%s = ' % alias if alias else ''
+    return _alias+'%s\n' % obj
     #XXX: possible failsafe... (for example, for instances when source=False)
     #     "import dill; result = dill.loads(<pickled_object>); # repr(<object>)"
 
@@ -674,7 +730,7 @@ file. Use builtin=True if imports from builtins need to be included.
 
 #XXX: temporary, for compatability
 def getimportable(obj, alias='', byname=True, explicit=False):
-    return outdent(_getcode(obj, alias, source=(not byname), builtin=explicit))
+    return outdent(_importable(obj,alias,source=(not byname),builtin=explicit))
 # backward compatability
 def likely_import(obj, passive=False, explicit=False):
     return getimport(obj, verify=(not passive), builtin=explicit)

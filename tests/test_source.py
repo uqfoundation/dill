@@ -66,10 +66,10 @@ assert getimportable(Bar, byname=False) == 'class Bar:\n  pass\n'
 assert getimportable(Foo, byname=False) == 'class Foo(object):\n  def bar(self, x):\n    return x*x+x\n'
 assert getimportable(Foo.bar, byname=False) == 'def bar(self, x):\n  return x*x+x\n'
 assert getimportable(Foo.bar, byname=True) == 'from %s import bar\n' % __name__
-assert getimportable(Foo.bar, alias='memo', byname=True) == 'from %s import bar\nmemo = bar\n' % __name__
-#assert getimportable(_foo, byname=False) #XXX: _foo fails
-assert getimportable(Foo, alias='memo', byname=True) == 'from %s import Foo\nmemo = Foo\n' % __name__
-assert getimportable(squared, alias='memo', byname=True) == 'from %s import squared\nmemo = squared\n' % __name__
+assert getimportable(Foo.bar, alias='memo', byname=True) == 'from %s import bar as memo\n' % __name__
+assert getimportable(_foo, byname=False).startswith("import dill\nclass Foo(object):\n  def bar(self, x):\n    return x*x+x\ndill.loads(")
+assert getimportable(Foo, alias='memo', byname=True) == 'from %s import Foo as memo\n' % __name__
+assert getimportable(squared, alias='memo', byname=True) == 'from %s import squared as memo\n' % __name__
 assert getimportable(squared, alias='memo', byname=False) == 'memo = squared = lambda x:x**2\n'
 assert getimportable(add, alias='memo', byname=False) == 'def add(x,y):\n  return x+y\n\nmemo = add\n'
 assert getimportable(None, alias='memo', byname=False) == 'memo = None\n'
@@ -98,15 +98,15 @@ assert likely_import(likely_import)=='from dill.source import likely_import\n'
 # builtin functions and objects
 if PY3: builtin = 'builtins'
 else: builtin = '__builtin__'
-assert likely_import(pow) == ''
-assert likely_import(100) == ''
-assert likely_import(True) == ''
+assert likely_import(pow) == 'pow\n'
+assert likely_import(100) == '100\n'
+assert likely_import(True) == 'True\n'
 assert likely_import(pow, explicit=True) == 'from %s import pow\n' % builtin
-assert likely_import(100, explicit=True) == ''
-assert likely_import(True, explicit=True) == '' if PY3 else 'from %s import True\n' % builtin
+assert likely_import(100, explicit=True) == '100\n'
+assert likely_import(True, explicit=True) == 'True\n' if PY3 else 'from %s import True\n' % builtin
 # this is kinda BS... you can't import a None
-assert likely_import(None) == ''
-assert likely_import(None, explicit=True) == ''
+assert likely_import(None) == 'None\n'
+assert likely_import(None, explicit=True) == 'None\n'
 
 # other imported functions
 from math import sin
