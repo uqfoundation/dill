@@ -98,6 +98,14 @@ BufferedRandomType = type(open(os.devnull, 'r+b', buffering=-1))
 BufferedReaderType = type(open(os.devnull, 'rb', buffering=-1))
 BufferedWriterType = type(open(os.devnull, 'wb', buffering=-1))
 try:
+    from _pyio import open as _open
+    PyTextWrapperType = type(_open(os.devnull, 'r', buffering=-1))
+    PyBufferedRandomType = type(_open(os.devnull, 'r+b', buffering=-1))
+    PyBufferedReaderType = type(_open(os.devnull, 'rb', buffering=-1))
+    PyBufferedWriterType = type(_open(os.devnull, 'wb', buffering=-1))
+except ImportError:
+    PyTextWrapperType = PyBufferedRandomType = PyBufferedReaderType = PyBufferedWriterType = None
+try:
     from cStringIO import StringIO, InputType, OutputType
 except ImportError:
     if PY3:
@@ -268,6 +276,10 @@ _reverse_typemap.update({
     'BufferedReaderType': BufferedReaderType,
     'BufferedWriterType': BufferedWriterType,
     'TextWrapperType': TextWrapperType,
+    'PyBufferedRandomType': PyBufferedRandomType,
+    'PyBufferedReaderType': PyBufferedReaderType,
+    'PyBufferedWriterType': PyBufferedWriterType,
+    'PyTextWrapperType': PyTextWrapperType,
 })
 if ExitType:
     _reverse_typemap['ExitType'] = ExitType
@@ -308,7 +320,7 @@ def _create_lock(locked, *args):
             raise UnpicklingError("Cannot acquire lock")
     return lock
 
-def _create_filehandle(name, mode, position, closed): # buffering=0
+def _create_filehandle(name, mode, position, closed, open=open): # buffering=0
     # only pickles the handle, not the file contents... good? or StringIO(data)?
     # (for file contents see: http://effbot.org/librarybook/copy-reg.htm)
     # NOTE: handle special cases first (are there more special cases?)
@@ -540,6 +552,21 @@ def save_file(pickler, obj):
     pickler.save_reduce(_create_filehandle, (obj.name, obj.mode, position, \
                                              obj.closed), obj=obj)
     return
+
+if PyTextWrapperType:
+    @register(PyBufferedRandomType)
+    @register(PyBufferedReaderType)
+    @register(PyBufferedWriterType)
+    @register(PyTextWrapperType)
+    def save_file(pickler, obj):
+        log.info("Fi: %s" % obj)
+        if obj.closed:
+            position = None
+        else:
+            position = obj.tell()
+        pickler.save_reduce(_create_filehandle, (obj.name, obj.mode, position, \
+                                                 obj.closed, _open), obj=obj)
+        return
 
 # The following two functions are based on 'saveCStringIoInput'
 # and 'saveCStringIoOutput' from spickle

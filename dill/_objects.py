@@ -264,6 +264,18 @@ a['ModuleType'] = datetime
 a['NotImplementedType'] = NotImplemented
 a['SliceType'] = slice(1)
 a['UnboundMethodType'] = _class._method #XXX: works when not imported!
+a['TextWrapperType'] = open(os.devnull, 'r') # same as mode='w','w+','r+'
+a['BufferedRandomType'] = open(os.devnull, 'r+b') # same as mode='w+b'
+a['BufferedReaderType'] = open(os.devnull, 'rb') # (default: buffering=-1)
+a['BufferedWriterType'] = open(os.devnull, 'wb')
+try: # oddities: deprecated
+    from _pyio import open as _open
+    a['PyTextWrapperType'] = _open(os.devnull, 'r', buffering=-1)
+    a['PyBufferedRandomType'] = _open(os.devnull, 'r+b', buffering=-1)
+    a['PyBufferedReaderType'] = _open(os.devnull, 'rb', buffering=-1)
+    a['PyBufferedWriterType'] = _open(os.devnull, 'wb', buffering=-1)
+except ImportError:
+    pass
 # other (concrete) object types
 if PY3:
     d['CellType'] = (_lambda)(0).__closure__[0]
@@ -384,12 +396,8 @@ except AttributeError:
 
 # -- dill fails in some versions below here ---------------------------------
 # types module (part of CH 8)
-a['TextWrapperType'] = open(os.devnull, 'r') # same as mode='w','w+','r+'
-a['BufferedRandomType'] = open(os.devnull, 'r+b') # same as mode='w+b'
-a['BufferedReaderType'] = open(os.devnull, 'rb') # (default: buffering=-1)
-a['BufferedWriterType'] = open(os.devnull, 'wb')
 a['FileType'] = open(os.devnull, 'rb', buffering=0) # same 'wb','wb+','rb+'
-# FIXME: FileType, TextWrapperType, Buffered*Type  fail >= 3.2 and == 2.5
+# FIXME: FileType fails >= 3.1
 # built-in functions (CH 2)
 a['ListIteratorType'] = iter(_list) # empty vs non-empty FIXME: fail < 3.2
 a['TupleIteratorType']= iter(_tuple) # empty vs non-empty FIXME: fail < 3.2
