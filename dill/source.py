@@ -277,6 +277,7 @@ def getsource(object, alias='', lstrip=False, enclosing=False, force=False):
             _import = getimport(object)
             name = getname(object, force=True)
             _alias = "%s = " % alias if alias else ""
+            if alias == name: _alias = ""
             return _import+_alias+"%s\n" % name
         else: #FIXME: could use a good bit of cleanup, since using getimport...
             if not instance: return getimport(object, alias)
@@ -337,16 +338,22 @@ def getsource(object, alias='', lstrip=False, enclosing=False, force=False):
                 skip += 1
             #XXX: use regex from findsource / getsourcelines ?
             if lines[skip].lstrip().startswith('def '): # we have a function
-                lines.append('\n%s = %s\n' % (alias, object.__name__))
+                if alias != object.__name__:
+                    lines.append('\n%s = %s\n' % (alias, object.__name__))
             elif 'lambda ' in lines[skip]: # we have a lambda
-                lines[skip] = '%s = %s' % (alias, lines[skip])
+                if alias != lines[skip].split('=')[0].strip():
+                    lines[skip] = '%s = %s' % (alias, lines[skip])
             else: # ...try to use the object's name
-                lines.append('\n%s = %s\n' % (alias, object.__name__))
+                if alias != object.__name__:
+                    lines.append('\n%s = %s\n' % (alias, object.__name__))
         else: # class or class instance
-            if instance: lines[-1] = ('%s = ' % alias) + lines[-1]
+            if instance:
+                if alias != lines[-1].split('=')[0].strip():
+                    lines[-1] = ('%s = ' % alias) + lines[-1]
             else:
                 name = getname(object, force=True) or object.__name__
-                lines.append('\n%s = %s\n' % (alias, name))
+                if alias != name:
+                    lines.append('\n%s = %s\n' % (alias, name))
     return ''.join(lines)
 
 
@@ -607,6 +614,7 @@ def _getimport(head, tail, alias='', verify=True, builtin=False):
         head = len.__module__
     elif tail in ['None'] and head in ['types']:
         _alias = '%s = ' % alias if alias else ''
+        if alias == tail: _alias = ''
         return _alias+'%s\n' % tail
     # we don't need to import from builtins, so return ''
 #   elif tail in ['NoneType','int','float','long','complex']: return '' #XXX: ?
@@ -616,12 +624,14 @@ def _getimport(head, tail, alias='', verify=True, builtin=False):
         if _intypes(tail): head = 'types'
         elif not builtin:
             _alias = '%s = ' % alias if alias else ''
+            if alias == tail: _alias = ''
             return _alias+'%s\n' % tail
         else: pass # handle builtins below
     # get likely import string
     if not head: _str = "import %s" % tail
     else: _str = "from %s import %s" % (head, tail)
     _alias = " as %s\n" % alias if alias else "\n"
+    if alias == tail: _alias = "\n"
     _str += _alias
     # FIXME: fails on most decorators, currying, and such...
     #        (could look for magic __wrapped__ or __func__ attr)
@@ -665,6 +675,7 @@ def getimport(obj, alias='', verify=True, builtin=False, enclosing=False):
         except SyntaxError:
             if head in ['builtins','__builtin__']:
                 _alias = '%s = ' % alias if alias else ''
+                if alias == name: _alias = ''
                 return _alias+'%s\n' % name
             else: pass
     try:
@@ -676,6 +687,7 @@ def getimport(obj, alias='', verify=True, builtin=False, enclosing=False):
     except SyntaxError:
         if head in ['builtins','__builtin__']:
             _alias = '%s = ' % alias if alias else ''
+            if alias == tail: _alias = ''
             return _alias+'%s\n' % tail
         raise # could do some checking against obj
 
@@ -706,6 +718,7 @@ file. See 'getsource' and 'getimport' for description of relevant kwds.
         if not name:
             raise AttributeError("object has no atribute '__name__'")
         _alias = "%s = " % alias if alias else ""
+        if alias == name: _alias = ""
         return _import+_alias+"%s\n" % name
 
     except: pass
@@ -722,6 +735,7 @@ file. See 'getsource' and 'getimport' for description of relevant kwds.
     if not obj or obj.startswith('<'):
         raise AttributeError("object has no atribute '__name__'")
     _alias = '%s = ' % alias if alias else ''
+    if alias == obj: _alias = ''
     return _alias+'%s\n' % obj
     #XXX: possible failsafe... (for example, for instances when source=False)
     #     "import dill; result = dill.loads(<pickled_object>); # repr(<object>)"
