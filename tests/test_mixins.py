@@ -82,7 +82,9 @@ if __name__ == '__main__':
   dd = dill.detect
   assert ds.getsource(dd.freevars(quadish)['f']) == '@quad_factory(a=0,b=4,c=0)\ndef quadish(x):\n  return x+1\n'
   assert ds.getsource(dd.freevars(quadruple)['f']) == '@doubler\ndef quadruple(x):\n  return 2*x\n'
-  #XXX: quadratic ?
+  assert ds._getimportable(quadish, source=False) == 'from %s import quadish\n' % __name__
+  assert ds._getimportable(quadruple, source=False) == 'from %s import quadruple\n' % __name__
+  assert ds._getimportable(quadratic, source=False) == 'from %s import quadratic\n' % __name__
 
 
 # EOF
