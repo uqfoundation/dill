@@ -477,7 +477,7 @@ def save_function(pickler, obj):
 
 @register(dict)
 def save_module_dict(pickler, obj):
-    if is_dill(pickler) and obj == pickler._main_module.__dict__:
+    if is_dill(pickler) and obj == pickler._main_module.__dict__ and not pickler._session:
         log.info("D1: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if PY3:
             pickler.write(bytes('c__builtin__\n__main__\n', 'UTF-8'))
