@@ -777,14 +777,18 @@ def _getclosuredimport(func):
     if not func_vars:
         name = outermost(func)
         mod = getname(getmodule(name))
-        lines,_ = findsource(name)
-        # pattern: 'func = enclosing('
-        candidate = [line for line in lines if getname(name) in line and \
-                     re.match('.*[\w\s]=\s*'+getname(name)+'\(', line)]
-        if not len(candidate): raise TypeError('import could not be found')
-        candidate = candidate[-1]
-        name = candidate.split('=',1)[0].split()[-1].strip()
-        src = _getimport(mod, name)
+        if not mod or name is func: # then it can be handled by getimport
+            name = getname(func, force=True) #XXX: better key?
+            src = getimport(func)
+        else:
+            lines,_ = findsource(name)
+            # pattern: 'func = enclosing('
+            candidate = [line for line in lines if getname(name) in line and \
+                         re.match('.*[\w\s]=\s*'+getname(name)+'\(', line)]
+            if not len(candidate): raise TypeError('import could not be found')
+            candidate = candidate[-1]
+            name = candidate.split('=',1)[0].split()[-1].strip()
+            src = _getimport(mod, name)
         func_vars[name] = src
     return func_vars
 
@@ -819,8 +823,7 @@ def _getclosuredsource(func):
         func_vars[None] = src
     return func_vars
 
-#FIXME: needs alias, source, enclosing (and maybe: force, builtin, lstrip)
-#FIXME: sometimes has an additional leading '\n' or unnecessary '\n' in middle
+#FIXME: needs alias, enclosing (and maybe: force, builtin, lstrip)
 def _getimportable(func, source=True): #, alias='', enclosing=False):
     '''get an importable string, including any required objects from the 
     enclosing and global scope'''
@@ -837,12 +840,16 @@ def _getimportable(func, source=True): #, alias='', enclosing=False):
         raise NotImplementedError('not implemented')
     if len(src) > 1:
         raise NotImplementedError('not implemented')
-    src = '\n'.join(list(src.values())[0])
+    src = list(src.values())[0]
+    if src[0] and src[-1]: src = '\n'.join(src)
+    elif src[0]: src = src[0]
+    elif src[-1]: src = src[-1]
+    else: src = ''
     # get source code of objects referred to by func in global scope
     from dill.detect import globalvars
     func = globalvars(func)
-    func = (getsource(obj, name) for (name,obj) in func.items())
-    func = '\n'.join(func)
+    func = list(getsource(obj, name) for (name,obj) in func.items())
+    func = '\n'.join(func) if func else ''
     # combine all referred-to source (global then enclosing)
     if not func: return src
     if not src: return func
