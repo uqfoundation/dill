@@ -873,8 +873,8 @@ def importable(obj, alias='', source=True, builtin=True):
 
 # backward compatability
 def getimportable(obj, alias='', byname=True, explicit=False):
-    return importable(obj,alias,source=(not byname),builtin=explicit)
-   #return outdent(_importable(obj,alias,source=(not byname),builtin=explicit))
+   #return importable(obj,alias,source=(not byname),builtin=explicit)
+    return outdent(_importable(obj,alias,source=(not byname),builtin=explicit))
 def likely_import(obj, passive=False, explicit=False):
     return getimport(obj, verify=(not passive), builtin=explicit)
 def _likely_import(first, last, passive=False, explicit=True):
