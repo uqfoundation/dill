@@ -251,7 +251,8 @@ def getsourcelines(object, lstrip=False, enclosing=False):
 
 
 #NOTE: broke backward compatibility 4/16/14 (was lstrip=True, force=True)
-def getsource(object, alias='', lstrip=False, enclosing=False, force=False):
+def getsource(object, alias='', lstrip=False, enclosing=False, \
+                                              force=False, builtin=False):
     """Return the text of the source code for an object. The source code for
     interactively-defined objects are extracted from the interpreter's history.
 
@@ -261,10 +262,11 @@ def getsource(object, alias='', lstrip=False, enclosing=False, force=False):
     TypeError is raised for objects where the source code is unavailable
     (e.g. builtins).
 
+    If alias is provided, then add a line of code that renames the object.
+    If lstrip=True, ensure there is no indentation in the first line of code.
     If enclosing=True, then also return any enclosing code.
     If force=True, catch (TypeError,IOError) and try to use import hooks.
-    If lstrip=True, ensure there is no indentation in the first line of code.
-    If alias is provided, then add a line of code that renames the object.
+    If builtin=True, force an import for any builtins
     """
     # hascode denotes a callable
     hascode = _hascode(object)
@@ -278,20 +280,20 @@ def getsource(object, alias='', lstrip=False, enclosing=False, force=False):
         if not force: # don't try to get types that findsource can't get
             raise
         if not getmodule(object): # get things like 'None' and '1'
-            if not instance: return getimport(object, alias)
+            if not instance: return getimport(object, alias, builtin=builtin)
             # special handling (numpy arrays, ...)
-            _import = getimport(object)
+            _import = getimport(object, builtin=builtin)
             name = getname(object, force=True)
             _alias = "%s = " % alias if alias else ""
             if alias == name: _alias = ""
             return _import+_alias+"%s\n" % name
         else: #FIXME: could use a good bit of cleanup, since using getimport...
-            if not instance: return getimport(object, alias)
+            if not instance: return getimport(object, alias, builtin=builtin)
             # now we are dealing with an instance...
             name = object.__class__.__name__
             module = object.__module__
             if module in ['builtins','__builtin__']:
-                return getimport(object, alias)
+                return getimport(object, alias, builtin=builtin)
             else: #FIXME: leverage getimport? use 'from module import name'?
                 lines, lnum = ["%s = __import__('%s', fromlist=['%s']).%s\n" % (name,module,name,name)], 0
                 obj = eval(lines[0].lstrip(name + ' = '))
@@ -653,8 +655,13 @@ def getimport(obj, alias='', verify=True, builtin=False, enclosing=False):
         _obj = outermost(obj)
         obj = _obj if _obj else obj
     # for named things... with a nice repr #XXX: move into _namespace?
-    if not repr(obj).startswith('<'): name = repr(obj).split('(')[0]
-    else: name = None
+    try: # look for '<...>' and be mindful it might be in lists, dicts, etc...
+        name = repr(obj).split('<',1)[1].split('>',1)[1]
+        name = None # we have a 'object'-style repr
+    except: # it's probably something 'importable'
+        name = repr(obj).split('(')[0]
+   #if not repr(obj).startswith('<'): name = repr(obj).split('(')[0]
+   #else: name = None
     # get the namespace
     qual = _namespace(obj)
     head = '.'.join(qual[:-1])
@@ -706,12 +713,12 @@ def _importable(obj, alias='', source=True, enclosing=False, force=True, \
     if source: # first try to get the source
         try:
             return getsource(obj, alias, enclosing=enclosing, \
-                                         force=force, lstrip=lstrip)
+                             force=force, lstrip=lstrip, builtin=builtin)
         except: pass
     try:
         if not _isinstance(obj):
             return getimport(obj, alias, enclosing=enclosing, \
-                                         verify=(not force), builtin=builtin)
+                                  verify=(not force), builtin=builtin)
         # first 'get the import', then 'get the instance'
         _import = getimport(obj, enclosing=enclosing, \
                                  verify=(not force), builtin=builtin)
@@ -726,7 +733,7 @@ def _importable(obj, alias='', source=True, enclosing=False, force=True, \
     if not source: # try getsource, only if it hasn't been tried yet
         try:
             return getsource(obj, alias, enclosing=enclosing, \
-                                         force=force, lstrip=lstrip)
+                             force=force, lstrip=lstrip, builtin=builtin)
         except: pass
     # get the name (of functions, lambdas, and classes)
     # or hope that obj can be built from the __repr__
@@ -840,41 +847,55 @@ def importable(obj, alias='', source=True, builtin=True):
     """
     #NOTE: we always 'force', and 'lstrip' as necessary
     #NOTE: for 'enclosing', use importable(outermost(obj))
-    if not source: # we want an import
-        if _isinstance(obj): # for instances, punt to _importable
-            return _importable(obj, alias, source=False, builtin=builtin)
-        src = _closuredimport(obj, alias=alias, builtin=builtin)
-        if len(src) == 0:
-            raise NotImplementedError('not implemented')
-        if len(src) > 1:
-            raise NotImplementedError('not implemented')
-        return list(src.values())[0]
-    # we want the source
-    src = _closuredsource(obj, alias=alias)
-    if len(src) == 0:
-        raise NotImplementedError('not implemented')
-    if len(src) > 1:
-        raise NotImplementedError('not implemented')
-    src = list(src.values())[0]
-    if src[0] and src[-1]: src = '\n'.join(src)
-    elif src[0]: src = src[0]
-    elif src[-1]: src = src[-1]
-    else: src = ''
-    # get source code of objects referred to by obj in global scope
-    from dill.detect import globalvars
-    obj = globalvars(obj) #XXX: don't worry about alias?
-    obj = list(getsource(_obj, name) for (name,_obj) in obj.items())
-    obj = '\n'.join(obj) if obj else ''
-    # combine all referred-to source (global then enclosing)
-    if not obj: return src
-    if not src: return obj
-    return obj + src
+    if builtin and isbuiltin(obj): source = False
+    tried_source = tried_import = False
+    while True:
+        if not source: # we want an import
+            try:
+                if _isinstance(obj): # for instances, punt to _importable
+                    return _importable(obj, alias, source=False, builtin=builtin)
+                src = _closuredimport(obj, alias=alias, builtin=builtin)
+                if len(src) == 0:
+                    raise NotImplementedError('not implemented')
+                if len(src) > 1:
+                    raise NotImplementedError('not implemented')
+                return list(src.values())[0]
+            except:
+                if tried_source: raise
+                tried_import = True
+        # we want the source
+        try:
+            src = _closuredsource(obj, alias=alias)
+            if len(src) == 0:
+                raise NotImplementedError('not implemented')
+            if len(src) > 1:
+                raise NotImplementedError('not implemented')
+            src = list(src.values())[0]
+            if src[0] and src[-1]: src = '\n'.join(src)
+            elif src[0]: src = src[0]
+            elif src[-1]: src = src[-1]
+            else: src = ''
+            # get source code of objects referred to by obj in global scope
+            from dill.detect import globalvars
+            obj = globalvars(obj) #XXX: don't worry about alias?
+            obj = list(getsource(_obj,name,force=True) for (name,_obj) in obj.items())
+            obj = '\n'.join(obj) if obj else ''
+            # combine all referred-to source (global then enclosing)
+            if not obj: return src
+            if not src: return obj
+            return obj + src
+        except:
+            if tried_import: raise
+            tried_source = True
+            source = not source
+    # should never get here
+    return
 
 
 # backward compatability
 def getimportable(obj, alias='', byname=True, explicit=False):
-   #return importable(obj,alias,source=(not byname),builtin=explicit)
-    return outdent(_importable(obj,alias,source=(not byname),builtin=explicit))
+    return importable(obj,alias,source=(not byname),builtin=explicit)
+   #return outdent(_importable(obj,alias,source=(not byname),builtin=explicit))
 def likely_import(obj, passive=False, explicit=False):
     return getimport(obj, verify=(not passive), builtin=explicit)
 def _likely_import(first, last, passive=False, explicit=True):
