@@ -31,6 +31,43 @@ from inspect import getblock, indentsize, isbuiltin
 from .dill import PY3
 
 
+def _matchlambda(func, line):
+    """check if lambda object 'func' matches raw line of code 'line'"""
+    from dill.detect import code as getcode
+    from dill.detect import freevars, globalvars, varnames
+    dummy = lambda : '__this_is_a_big_dummy_function__'
+    # process the line (removing leading whitespace, etc)
+    lhs,rhs = line.split('lambda ',1)[-1].split(":", 1)
+    try: #FIXME: unsafe
+        _ = eval("lambda %s : %s" % (lhs,rhs), globals(),locals())
+    except: _ = dummy
+    # get code objects, for comparison
+    _, code = getcode(_).co_code, getcode(func).co_code
+    # check if func is in closure
+    _f = [line.count(i) for i in freevars(func).keys()]
+    if not _f: # not in closure
+        # check if code matches
+        if _ == code: return True
+        return False
+    # weak check on freevars and indentsize
+    if not all(_f): return False  #XXX: VERY WEAK
+    if not indentsize(line): return False #XXX: WRONG?
+    # weak check on varnames and globalvars
+    _f = varnames(func)
+    _f = [line.count(i) for i in _f[0]+_f[1]]
+    if _f and not all(_f): return False  #XXX: VERY WEAK
+    _f = [line.count(i) for i in globalvars(func).keys()]
+    if _f and not all(_f): return False  #XXX: VERY WEAK
+    # check if code 'pattern' matches
+    _ = _.split(_[0])  # 't'
+    _f = code.split(code[0])  # '\x88'
+    _ = dict(re.match('([\W\D\S])(.*)', _[i]).groups() for i in range(1,len(_)))
+    _f = dict(re.match('([\W\D\S])(.*)', _f[i]).groups() for i in range(1,len(_f)))
+    if (_.keys() == _f.keys()) and (sorted(_.values()) == sorted(_f.values())):
+        return True
+    return False
+
+
 def findsource(object):
     """Return the entire source file and starting line number for an object.
     For interactively-defined objects, the 'file' is the interpreter's history.
@@ -77,7 +114,7 @@ def findsource(object):
     if ismodule(object):
         return lines, 0
 
-    name = pat1 = ''
+    name = pat1 = obj = ''
     pat2 = r'^(\s*@)'
 #   pat1b = r'^(\s*%s\W*=)' % name #FIXME: finds 'f = decorate(f)', but not exec
     if ismethod(object):
@@ -88,7 +125,9 @@ def findsource(object):
         else: object = object.im_func
     if isfunction(object):
         name = object.__name__
-        if name == '<lambda>': pat1 = r'(.*(?<!\w)lambda(:|\s))'
+        if name == '<lambda>':
+            pat1 = r'(.*(?<!\w)lambda(:|\s))'
+            obj = object #XXX: better a copy?
         else: pat1 = r'^(\s*def\s)'
         if PY3: object = object.__code__
         else: object = object.func_code
@@ -107,20 +146,12 @@ def findsource(object):
             lnum = object.co_firstlineno - 1
             pat1 = r'^(\s*def\s)|(.*(?<!\w)lambda(:|\s))|^(\s*@)'
         pat1 = re.compile(pat1); pat2 = re.compile(pat2)
-        dummy = lambda : '__this_is_a_big_dummy_function__'
         while lnum > 0: #XXX: won't find decorators in <stdin> ?
             line = lines[lnum]
             if pat1.match(line):
                 if not stdin: break # co_firstlineno does the job
                 if name == '<lambda>': # hackery needed to confirm a match
-                    lhs,rhs = line.split('lambda ',1)[-1].split(":", 1)
-                    try: #FIXME: unsafe
-                        _ = eval("lambda %s : %s" % (lhs,rhs), globals(),\
-                                                               locals())
-                    except: _ = dummy 
-                    if PY3: _ = _.__code__
-                    else: _ = _.func_code
-                    if _.co_code == object.co_code: break
+                    if _matchlambda(obj, line): break
                 else: # not a lambda, just look for the name
                     if name in line: # need to check for decorator...
                         hats = 0
