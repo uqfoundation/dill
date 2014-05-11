@@ -155,7 +155,7 @@ def findsource(object):
                 else: # not a lambda, just look for the name
                     if name in line: # need to check for decorator...
                         hats = 0
-                        for _lnum in xrange(lnum-1,-1,-1):
+                        for _lnum in range(lnum-1,-1,-1):
                             if pat2.match(lines[_lnum]): hats += 1
                             else: break
                         lnum = lnum - hats
