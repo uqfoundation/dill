@@ -126,13 +126,13 @@ def findsource(object):
     if not lines:
         raise IOError('could not get source code')
 
-    #FIXME: all below may fail if exec/eval used (i.e. exec('f = lambda x:x') )
+    #FIXME: all below may fail if exec used (i.e. exec('f = lambda x:x') )
     if ismodule(object):
         return lines, 0
 
     name = pat1 = obj = ''
     pat2 = r'^(\s*@)'
-#   pat1b = r'^(\s*%s\W*=)' % name #FIXME: finds 'f = decorate(f)', but not exec
+#   pat1b = r'^(\s*%s\W*=)' % name #FIXME: finds 'f = decorate(f)', not exec
     if ismethod(object):
         name = object.__name__
         if name == '<lambda>': pat1 = r'(.*(?<!\w)lambda(:|\s))'
