@@ -760,7 +760,7 @@ def save_module(pickler, obj):
     # so should be pickled as a reference
     prefix = sys.base_prefix if PY3 else sys.prefix
     if obj.__name__ not in ("builtins", "dill") \
-       and not getattr(obj, "__file__", "").startswith(prefix):
+       and not getattr(obj, "__file__", prefix).startswith(prefix):
         log.info("M1: %s" % obj)
         _main_dict = obj.__dict__.copy() #XXX: better no copy? option to copy?
         [_main_dict.pop(item, None) for item in singletontypes
