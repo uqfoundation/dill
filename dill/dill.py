@@ -756,11 +756,16 @@ def save_weakproxy(pickler, obj):
 
 @register(ModuleType)
 def save_module(pickler, obj):
-    if is_dill(pickler) and obj is pickler._main_module:
+    # if a module file name starts with this, it should be a standard module,
+    # so should be pickled as a reference
+    prefix = sys.base_prefix if PY3 else sys.prefix
+    if obj.__name__ not in ("builtins", "dill") \
+       and not getattr(obj, "__file__", "").startswith(prefix):
         log.info("M1: %s" % obj)
         _main_dict = obj.__dict__.copy() #XXX: better no copy? option to copy?
-        [_main_dict.pop(item,None) for item in singletontypes]
-        pickler.save_reduce(__import__, (obj.__name__,), obj=obj,
+        [_main_dict.pop(item, None) for item in singletontypes
+         + ["__builtins__", "__loader__"]]
+        pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
                             state=_main_dict)
     else:
         log.info("M2: %s" % obj)
