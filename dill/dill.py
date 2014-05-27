@@ -759,8 +759,9 @@ def save_module(pickler, obj):
     # if a module file name starts with this, it should be a standard module,
     # so should be pickled as a reference
     prefix = sys.base_prefix if PY3 else sys.prefix
+    std_mod = getattr(obj, "__file__", prefix).startswith(prefix)
     if obj.__name__ not in ("builtins", "dill") \
-       and not getattr(obj, "__file__", prefix).startswith(prefix):
+       and not std_mod or is_dill(pickler) and obj is pickler._main_module:
         log.info("M1: %s" % obj)
         _main_dict = obj.__dict__.copy() #XXX: better no copy? option to copy?
         [_main_dict.pop(item, None) for item in singletontypes
