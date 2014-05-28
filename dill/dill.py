@@ -340,7 +340,7 @@ def _create_filehandle(name, mode, position, closed, open=open): # buffering=0
                 raise UnpicklingError(err)
                 #XXX: python default is closed '<uninitialized file>' file/mode
     if closed: f.close()
-    else: f.seek(position)
+    elif position >= 0: f.seek(position)
     return f
 
 def _create_stringi(value, position, closed):
@@ -551,12 +551,15 @@ def save_file(pickler, obj):
     if obj.closed:
         position = None
     else:
-        position = obj.tell()
+        if obj in (sys.__stdout__, sys.__stderr__, sys.__stdin__):
+            position = -1
+        else:
+            position = obj.tell()
     pickler.save_reduce(_create_filehandle, (obj.name, obj.mode, position, \
                                              obj.closed), obj=obj)
     return
 
-if PyTextWrapperType:
+if PyTextWrapperType: #XXX: are stdout, stderr or stdin ever _pyio files?
     @register(PyBufferedRandomType)
     @register(PyBufferedReaderType)
     @register(PyBufferedWriterType)
