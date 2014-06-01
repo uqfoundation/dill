@@ -18,6 +18,7 @@ tests/test_classdef.py
 tests/test_detect.py
 tests/test_extendpickle.py
 tests/test_mixins.py
+tests/test_module.py
 tests/test_moduledict.py
 tests/test_nested.py
 tests/test_objects.py
