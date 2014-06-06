@@ -77,8 +77,18 @@ except ImportError:
     HAS_CTYPES = False
 try:
     from numpy import ufunc as NumpyUfuncType
+    from numpy import ndarray as NumpyArrayType
+    def ndarrayinstance(obj):
+        if not isinstance(obj, NumpyArrayType): return False
+        # verify that __reduce__ has not been overridden
+        NumpyInstance = NumpyArrayType((0,),'int8')
+        if id(obj.__reduce_ex__) == id(NumpyInstance.__reduce_ex__) and \
+           id(obj.__reduce__) == id(NumpyInstance.__reduce__): return True
+        return False
 except ImportError:
     NumpyUfuncType = None
+    NumpyArrayType = None
+    def ndarrayinstance(obj): return False
 
 # make sure to add these 'hand-built' types to _typemap
 if PY3:
@@ -133,6 +143,17 @@ def dump(obj, file, protocol=None, byref=False):
     pik._main_module = _main_module
     _byref = pik._byref
     pik._byref = bool(byref)
+    # hack to catch subclassed numpy array instances
+    #FIXME: deactivated, as causes test_weakref to fail for py32-py34
+    if False and NumpyArrayType and ndarrayinstance(obj):
+        @register(type(obj))
+        def save_numpy_array(pickler, obj):
+            log.info("Nu: (%s, %s)" % (obj.shape,obj.dtype))
+            npdict = getattr(obj, '__dict__', None)
+            f, args, state = obj.__reduce__()
+            pik.save_reduce(_create_array, (f, args, state, npdict), obj=obj)
+            return
+    # end hack
     pik.dump(obj)
     pik._byref = _byref
     return
@@ -412,6 +433,14 @@ def _create_weakproxy(obj, callable=False, *args):
 
 def _eval_repr(repr_str):
     return eval(repr_str)
+
+def _create_array(f, args, state, npdict=None):
+   #array = numpy.core.multiarray._reconstruct(*args)
+    array = f(*args)
+    array.__setstate__(state)
+    if npdict is not None: # we also have saved state in __dict__
+        array.__dict__.update(npdict)
+    return array
 
 def _getattr(objclass, name, repr_str):
     # hack to grab the reference directly
@@ -701,7 +730,7 @@ def save_singleton(pickler, obj):
     return
 
 # thanks to Paul Kienzle for pointing out ufuncs didn't pickle
-if NumpyUfuncType:
+if NumpyArrayType:
     @register(NumpyUfuncType)
     def save_numpy_ufunc(pickler, obj):
         log.info("Nu: %s" % obj)
