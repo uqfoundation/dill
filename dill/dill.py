@@ -79,7 +79,9 @@ try:
     from numpy import ufunc as NumpyUfuncType
     from numpy import ndarray as NumpyArrayType
     def ndarrayinstance(obj):
-        if not isinstance(obj, NumpyArrayType): return False
+        try:
+            if not isinstance(obj, NumpyArrayType): return False
+        except ReferenceError: return False # handle 'R3' weakref in 3.x
         # verify that __reduce__ has not been overridden
         NumpyInstance = NumpyArrayType((0,),'int8')
         if id(obj.__reduce_ex__) == id(NumpyInstance.__reduce_ex__) and \
@@ -144,8 +146,7 @@ def dump(obj, file, protocol=None, byref=False):
     _byref = pik._byref
     pik._byref = bool(byref)
     # hack to catch subclassed numpy array instances
-    #FIXME: deactivated, as causes test_weakref to fail for py32-py34
-    if False and NumpyArrayType and ndarrayinstance(obj):
+    if NumpyArrayType and ndarrayinstance(obj):
         @register(type(obj))
         def save_numpy_array(pickler, obj):
             log.info("Nu: (%s, %s)" % (obj.shape,obj.dtype))
@@ -773,7 +774,7 @@ def _locate_object(address, module=None):
 @register(ReferenceType)
 def save_weakref(pickler, obj):
     refobj = obj()
-    log.info("Rf: %s" % obj)
+    log.info("R1: %s" % obj)
    #refobj = ctypes.pythonapi.PyWeakref_GetObject(obj) # dead returns "None"
     pickler.save_reduce(_create_weakref, (refobj,), obj=obj)
     return
@@ -782,8 +783,8 @@ def save_weakref(pickler, obj):
 @register(CallableProxyType)
 def save_weakproxy(pickler, obj):
     refobj = _locate_object(_proxy_helper(obj))
-    try: log.info("Rf: %s" % obj)
-    except ReferenceError: log.info("Rf: %s" % sys.exc_info()[1])
+    try: log.info("R2: %s" % obj)
+    except ReferenceError: log.info("R3: %s" % sys.exc_info()[1])
    #callable = bool(getattr(refobj, '__call__', None))
     if type(obj) is CallableProxyType: callable = True
     else: callable = False
@@ -857,9 +858,14 @@ def pickles(obj,exact=False,safe=False,**kwds):
         exceptions = (TypeError, AssertionError, PicklingError, UnpicklingError)
     try:
         pik = copy(obj, **kwds)
-        if exact:
-            return pik == obj
-        return type(pik) == type(obj)
+        try:
+            result = bool(pik.all() == obj.all())
+        except AttributeError:
+            result = pik == obj
+        if result: return True
+        if not exact:
+            return type(pik) == type(obj)
+        return False
     except exceptions:
         return False
 

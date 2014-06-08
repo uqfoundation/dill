@@ -58,6 +58,7 @@ xp = weakref.proxy(x)
 
 objlist = [r,dr,m,dm,fr,xr, p,dp,t,dt, c,dc,d,dd, fp,xp]
 
+#dill.detect.trace(True)
 for obj in objlist:
   res = dill.detect.errors(obj)
   if res:
