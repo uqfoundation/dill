@@ -30,6 +30,10 @@ def _trace(boolean):
 
 import os
 import sys
+try:
+    from . import memorise
+except ImportError:
+    import memorise
 PY3 = (hex(sys.hexversion) >= '0x30000f0')
 if PY3: #XXX: get types from dill.objtypes ?
     import builtins as __builtin__
@@ -793,21 +797,15 @@ def save_weakproxy(pickler, obj):
 
 @register(ModuleType)
 def save_module(pickler, obj):
-    # if a module file name starts with this, it should be a standard module,
-    # so should be pickled as a reference
-    prefix = sys.base_prefix if PY3 else sys.prefix
-    std_mod = getattr(obj, "__file__", prefix).startswith(prefix)
-    if obj.__name__ not in ("builtins", "dill") \
-       and not std_mod or is_dill(pickler) and obj is pickler._main_module:
-        log.info("M1: %s" % obj)
-        _main_dict = obj.__dict__.copy() #XXX: better no copy? option to copy?
-        [_main_dict.pop(item, None) for item in singletontypes
-         + ["__builtins__", "__loader__"]]
-        pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
-                            state=_main_dict)
-    else:
+    try:
+        _main_dict = memorise.whats_changed(obj)[0]
+    except RuntimeError:  # not memorised module, probably part of dill
         log.info("M2: %s" % obj)
         pickler.save_reduce(_import_module, (obj.__name__,), obj=obj)
+    else:
+        log.info("M1: %s" % obj)
+        pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
+                            state=_main_dict)
     return
 
 @register(TypeType)
