@@ -240,7 +240,7 @@ class Pickler(StockPickler):
     def __init__(self, *args, **kwargs):
         StockPickler.__init__(self, *args, **kwargs)
         self._main_module = _main_module
-        self._dill_memorise_cashe = {}
+        self._memorise_cashe = {}
 
 class Unpickler(StockUnpickler):
     """python's Unpickler extended to interpreter sessions and more types"""
@@ -798,16 +798,20 @@ def save_weakproxy(pickler, obj):
 
 @register(ModuleType)
 def save_module(pickler, obj):
-    try:
-        changed = memorise.whats_changed(obj,
-                                         seen=pickler._dill_memorise_cashe)[0]
-    except RuntimeError:  # not memorised module, probably part of dill
-        log.info("M2: %s" % obj)
-        pickler.save_reduce(_import_module, (obj.__name__,), obj=obj)
-    else:
-        log.info("M1: %s" % obj)
-        pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
-                            state=changed)
+    if obj.__name__ != "dill":
+        try:
+            changed = memorise.whats_changed(obj,
+                                             seen=pickler._memorise_cashe)[0]
+        except RuntimeError:  # not memorised module, probably part of dill
+            pass
+        else:
+            log.info("M1: %s" % obj)
+            pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
+                                state=changed)
+            return
+
+    log.info("M2: %s" % obj)
+    pickler.save_reduce(_import_module, (obj.__name__,), obj=obj)
     return
 
 @register(TypeType)

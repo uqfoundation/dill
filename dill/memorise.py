@@ -33,7 +33,10 @@ def get_attrs(obj):
     if type(obj) in builtins_types \
        or type(obj) is type and obj in builtins_types:
         return None
-    return obj.__dict__ if hasattr(obj, "__dict__") else None
+    try:
+        return obj.__dict__ if hasattr(obj, "__dict__") else None
+    except:
+        return None
 
 
 def get_seq(obj, cashe={str: False, frozenset: False, list: True, set: True,
@@ -71,8 +74,11 @@ def get_attrs_id(obj):
     if type(obj) in builtins_types \
        or type(obj) is type and obj in builtins_types:
         return None
-    return {key: id(value) for key, value in obj.__dict__.items()} \
-        if hasattr(obj, "__dict__") else None
+    try:
+        return {key: id(value) for key, value in obj.__dict__.items()} \
+            if hasattr(obj, "__dict__") else None
+    except:
+        return None
 
 
 def get_seq_id(obj, done=None):
