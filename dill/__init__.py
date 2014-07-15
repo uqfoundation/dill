@@ -25,7 +25,8 @@ __license__ = """
 
 from .dill import dump, dumps, load, loads, dump_session, load_session, \
     Pickler, Unpickler, register, copy, pickle, pickles, HIGHEST_PROTOCOL, \
-    DEFAULT_PROTOCOL, PicklingError, UnpicklingError
+    DEFAULT_PROTOCOL, PicklingError, UnpicklingError, \
+    _revert_extension as revert_extension, _extend as extend
 from . import source, temp, detect
 
 # make sure "trace" is turned off
@@ -73,11 +74,7 @@ def load_types(pickleable=True, unpickleable=True):
     # add corresponding types from objects to types
     reload(types)
 
-def __extend():
-    from .dill import _extend
-    _extend()
-    return
-__extend(); del __extend
+extend()
 
 def license():
     """print license"""
