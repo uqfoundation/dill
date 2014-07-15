@@ -271,7 +271,7 @@ def register(t):
         return func
     return proxy
 
-def revert_extension():
+def _revert_extension():
     for type, func in list(StockPickler.dispatch.items()):
         if func.__module__ == __name__:
             del StockPickler.dispatch[type]
