@@ -258,6 +258,8 @@ def dispatch_table():
     return Pickler.dispatch
 '''
 
+pickle_dispatch_copy = StockPickler.dispatch.copy()
+
 def pickle(t, func):
     """expose dispatch table for user-created extensions"""
     Pickler.dispatch[t] = func
@@ -273,6 +275,8 @@ def revert_extension():
     for type, func in list(StockPickler.dispatch.items()):
         if func.__module__ == __name__:
             del StockPickler.dispatch[type]
+            if type in pickle_dispatch_copy:
+                StockPickler.dispatch[type] = pickle_dispatch_copy[type]
 
 def _create_typemap():
     import types
