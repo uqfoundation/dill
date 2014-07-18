@@ -404,6 +404,9 @@ def _isinstance(object):
     # special handling (numpy arrays, ...)
     if not getmodule(object) and getmodule(type(object)).__name__ in ['numpy']:
         return True
+#   # check if is instance of a builtin
+#   if not getmodule(object) and getmodule(type(object)).__name__ in ['__builtin__','builtins']:
+#       return False
     _types = ('<class ',"<type 'instance'>")
     if not repr(type(object)).startswith(_types): #FIXME: weak hack
         return False
@@ -702,18 +705,21 @@ def getimport(obj, alias='', verify=True, builtin=False, enclosing=False):
         from dill.detect import outermost
         _obj = outermost(obj)
         obj = _obj if _obj else obj
+    # get the namespace
+    qual = _namespace(obj)
+    head = '.'.join(qual[:-1])
+    tail = qual[-1]
     # for named things... with a nice repr #XXX: move into _namespace?
     try: # look for '<...>' and be mindful it might be in lists, dicts, etc...
         name = repr(obj).split('<',1)[1].split('>',1)[1]
         name = None # we have a 'object'-style repr
     except: # it's probably something 'importable'
-        name = repr(obj).split('(')[0]
+        if head in ['builtins','__builtin__']:
+            name = repr(obj) #XXX: catch [1,2], (1,2), set([1,2])... others?
+        else:
+            name = repr(obj).split('(')[0]
    #if not repr(obj).startswith('<'): name = repr(obj).split('(')[0]
    #else: name = None
-    # get the namespace
-    qual = _namespace(obj)
-    head = '.'.join(qual[:-1])
-    tail = qual[-1]
     if name: # try using name instead of tail
         try: return _getimport(head, name, alias, verify, builtin)
         except ImportError: pass
@@ -873,11 +879,13 @@ def _closuredsource(func, alias=''):
             org = getsource(func, enclosing=True, lstrip=False)
             src = (org, src) # target first, then decorated
         func_vars[name] = src
+    src = ''.join(free_vars.values())
     if not func_vars: #FIXME: 'enclose' in dummy; wrong ref 'name'
-        src = ''.join(free_vars.values())
         org = getsource(func, alias, force=True, enclosing=False, lstrip=True)
         src = (src, org) # variables first, then target
-        func_vars[None] = src
+    else:
+        src = (src, None) # just variables        (better '' instead of None?)
+    func_vars[None] = src
     return func_vars
 
 def importable(obj, alias='', source=True, builtin=True):
@@ -916,13 +924,28 @@ def importable(obj, alias='', source=True, builtin=True):
             src = _closuredsource(obj, alias=alias)
             if len(src) == 0:
                 raise NotImplementedError('not implemented')
-            if len(src) > 1:
-                raise NotImplementedError('not implemented')
-            src = list(src.values())[0]
-            if src[0] and src[-1]: src = '\n'.join(src)
-            elif src[0]: src = src[0]
-            elif src[-1]: src = src[-1]
-            else: src = ''
+            # groan... an inline code stitcher
+            def _code_stitcher(block):
+                "stitch together the strings in tuple 'block'"
+                if block[0] and block[-1]: block = '\n'.join(block)
+                elif block[0]: block = block[0]
+                elif block[-1]: block = block[-1]
+                else: block = ''
+                return block
+            # get free_vars first
+            _src = _code_stitcher(src.pop(None))
+            _src = [_src] if _src else []
+            # get func_vars
+            for xxx in src.values():
+                xxx = _code_stitcher(xxx)
+                if xxx: _src.append(xxx)
+            # make a single source string
+            if not len(_src):
+                src = ''
+            elif len(_src) == 1:
+                src = _src[0]
+            else:
+                src = '\n'.join(_src)
             # get source code of objects referred to by obj in global scope
             from dill.detect import globalvars
             obj = globalvars(obj) #XXX: don't worry about alias?
