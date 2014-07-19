@@ -858,6 +858,10 @@ def _closuredimport(func, alias='', builtin=False):
 def _closuredsource(func, alias=''):
     """get source code for closured objects; return a dict of 'name'
     and 'code blocks'"""
+    #FIXME: this entire function is a messy messy HACK
+    #      - pollutes global namespace
+    #      - fails if name of freevars are reused
+    #      - can unnecessarily duplicate function code
     from dill.detect import freevars
     free_vars = freevars(func)
     func_vars = {}
@@ -869,14 +873,15 @@ def _closuredsource(func, alias=''):
             continue
         # get source for 'funcs'
         fobj = free_vars.pop(name)
-        src = getsource(fobj, alias)
+        src = getsource(fobj, alias) # DO NOT include dependencies
         # if source doesn't start with '@', use name as the alias
         if not src.lstrip().startswith('@'): #FIXME: 'enclose' in dummy;
-            src = getsource(fobj, alias=name)#        wrong ref 'name'
+            src = importable(fobj,alias=name)#        wrong ref 'name'
             org = getsource(func, alias, enclosing=False, lstrip=True)
             src = (src, org) # undecorated first, then target
         else: #NOTE: reproduces the code!
             org = getsource(func, enclosing=True, lstrip=False)
+            src = importable(fobj, alias) # include any dependencies
             src = (org, src) # target first, then decorated
         func_vars[name] = src
     src = ''.join(free_vars.values())
@@ -886,6 +891,7 @@ def _closuredsource(func, alias=''):
     else:
         src = (src, None) # just variables        (better '' instead of None?)
     func_vars[None] = src
+    # FIXME: remove duplicates (however, order is important...)
     return func_vars
 
 def importable(obj, alias='', source=True, builtin=True):
