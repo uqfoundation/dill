@@ -138,13 +138,14 @@ def copy(obj, *args, **kwds):
     """use pickling to 'copy' an object"""
     return loads(dumps(obj, *args, **kwds))
 
-def dump(obj, file, protocol=None, byref=False):
+def dump(obj, file, protocol=None, byref=False, safe_file=False):
     """pickle an object to a file"""
     if protocol is None: protocol = DEFAULT_PROTOCOL
     pik = Pickler(file, protocol)
     pik._main_module = _main_module
     _byref = pik._byref
     pik._byref = bool(byref)
+    pik._safe_file = safe_file
     # hack to catch subclassed numpy array instances
     if NumpyArrayType and ndarrayinstance(obj):
         @register(type(obj))
@@ -159,10 +160,10 @@ def dump(obj, file, protocol=None, byref=False):
     pik._byref = _byref
     return
 
-def dumps(obj, protocol=None, byref=False):
+def dumps(obj, protocol=None, byref=False, safe_file=False):
     """pickle an object to a string"""
     file = StringIO()
-    dump(obj, file, protocol, byref)
+    dump(obj, file, protocol, byref, safe_file)
     return file.getvalue()
 
 def load(file):
@@ -231,6 +232,7 @@ class Pickler(StockPickler):
     _main_module = None
     _session = False
     _byref = False
+    _safe_file = False
     pass
 
     def __init__(self, *args, **kwargs):
@@ -355,27 +357,54 @@ def _create_lock(locked, *args):
             raise UnpicklingError("Cannot acquire lock")
     return lock
 
-def _create_filehandle(name, mode, position, closed, open=open): # buffering=0
+def _create_filehandle(name, mode, position, closed, open=open, safe=False): # buffering=0
     # only pickles the handle, not the file contents... good? or StringIO(data)?
     # (for file contents see: http://effbot.org/librarybook/copy-reg.htm)
     # NOTE: handle special cases first (are there more special cases?)
     names = {'<stdin>':sys.__stdin__, '<stdout>':sys.__stdout__,
              '<stderr>':sys.__stderr__} #XXX: better fileno=(0,1,2) ?
-    if name in list(names.keys()): f = names[name] #XXX: safer "f=sys.stdin"
-    elif name == '<tmpfile>': import os; f = os.tmpfile()
-    elif name == '<fdopen>': import tempfile; f = tempfile.TemporaryFile(mode)
+    if name in list(names.keys()):
+        f = names[name] #XXX: safer "f=sys.stdin"
+    elif name == '<tmpfile>':
+        import os
+        f = os.tmpfile()
+    elif name == '<fdopen>':
+        import tempfile
+        f = tempfile.TemporaryFile(mode)
     else:
-        try: # try to open the file by name   # NOTE: has different fileno
-            f = open(name, mode)#FIXME: missing: *buffering*, encoding,softspace
-        except IOError: 
+        import os
+        # Mode translation
+        # Mode    | Unpickled mode
+        # --------|---------------
+        # r       | r
+        # r+      | r+
+        # w       | r+
+        # w+      | r+
+        # a       | a
+        # a+      | a+
+
+        if os.path.exists(name):
+            mode = mode.replace("w+", "r+")
+            mode = mode.replace("w", "r+")
+        elif safe:
+            raise IOError("File '%s' does not exist" % name)
+        elif "w" not in mode:
+            name = os.devnull
+        if safe:
+            if position > os.path.getsize(name):
+                raise IOError("File '%s' is too short" % name)
+        # try to open the file by name
+        # NOTE: has different fileno
+        try:
+            f = open(name, mode) #FIXME: missing: *buffering*, encoding, softspace
+        except IOError:
             err = sys.exc_info()[1]
-            try: # failing, then use /dev/null #XXX: better to just fail here?
-                import os; f = open(os.devnull, mode)
-            except IOError:
-                raise UnpicklingError(err)
-                #XXX: python default is closed '<uninitialized file>' file/mode
-    if closed: f.close()
-    elif position >= 0: f.seek(position)
+            raise UnpicklingError(err)
+            #XXX: python default is closed '<uninitialized file>' file/mode
+    if closed:
+        f.close()
+    elif position >= 0:
+        f.seek(position)
     return f
 
 def _create_stringi(value, position, closed):
@@ -599,7 +628,7 @@ def save_file(pickler, obj):
         else:
             position = obj.tell()
     pickler.save_reduce(_create_filehandle, (obj.name, obj.mode, position, \
-                                             obj.closed), obj=obj)
+                                             obj.closed, open, pickler._safe_file), obj=obj)
     return
 
 if PyTextWrapperType: #XXX: are stdout, stderr or stdin ever _pyio files?
@@ -614,7 +643,7 @@ if PyTextWrapperType: #XXX: are stdout, stderr or stdin ever _pyio files?
         else:
             position = obj.tell()
         pickler.save_reduce(_create_filehandle, (obj.name, obj.mode, position, \
-                                                 obj.closed, _open), obj=obj)
+                                                 obj.closed, _open, pickler._safe_file), obj=obj)
         return
 
 # The following two functions are based on 'saveCStringIoInput'
