@@ -20,7 +20,7 @@ in a file.
 from __future__ import absolute_import
 __all__ = ['findsource', 'getsourcelines', 'getsource', 'indent', 'outdent', \
            '_wrap', 'dumpsource', 'getname', '_namespace', 'getimport', \
-           '_importable', 'importable']
+           '_importable', 'importable','isdynamic', 'isfrommain']
 
 import re
 import linecache
@@ -29,6 +29,22 @@ from inspect import ismodule, isclass, ismethod, isfunction, istraceback
 from inspect import isframe, iscode, getfile, getmodule, getsourcefile
 from inspect import getblock, indentsize, isbuiltin
 from .dill import PY3
+
+def isfrommain(obj):
+    "check if object was built in __main__"
+    module = getmodule(obj)
+    if module and module.__name__ == '__main__':
+        return True
+    return False
+
+
+def isdynamic(obj):
+    "check if object was built in the interpreter"
+    try: file = getfile(obj)
+    except TypeError: file = None 
+    if file == '<stdin>' and isfrommain(obj):
+        return True
+    return False
 
 
 def _matchlambda(func, line):
@@ -404,6 +420,9 @@ def _isinstance(object):
     # special handling (numpy arrays, ...)
     if not getmodule(object) and getmodule(type(object)).__name__ in ['numpy']:
         return True
+#   # check if is instance of a builtin
+#   if not getmodule(object) and getmodule(type(object)).__name__ in ['__builtin__','builtins']:
+#       return False
     _types = ('<class ',"<type 'instance'>")
     if not repr(type(object)).startswith(_types): #FIXME: weak hack
         return False
@@ -702,18 +721,21 @@ def getimport(obj, alias='', verify=True, builtin=False, enclosing=False):
         from dill.detect import outermost
         _obj = outermost(obj)
         obj = _obj if _obj else obj
+    # get the namespace
+    qual = _namespace(obj)
+    head = '.'.join(qual[:-1])
+    tail = qual[-1]
     # for named things... with a nice repr #XXX: move into _namespace?
     try: # look for '<...>' and be mindful it might be in lists, dicts, etc...
         name = repr(obj).split('<',1)[1].split('>',1)[1]
         name = None # we have a 'object'-style repr
     except: # it's probably something 'importable'
-        name = repr(obj).split('(')[0]
+        if head in ['builtins','__builtin__']:
+            name = repr(obj) #XXX: catch [1,2], (1,2), set([1,2])... others?
+        else:
+            name = repr(obj).split('(')[0]
    #if not repr(obj).startswith('<'): name = repr(obj).split('(')[0]
    #else: name = None
-    # get the namespace
-    qual = _namespace(obj)
-    head = '.'.join(qual[:-1])
-    tail = qual[-1]
     if name: # try using name instead of tail
         try: return _getimport(head, name, alias, verify, builtin)
         except ImportError: pass
@@ -737,16 +759,17 @@ def getimport(obj, alias='', verify=True, builtin=False, enclosing=False):
         raise # could do some checking against obj
 
 
-def _importable(obj, alias='', source=True, enclosing=False, force=True, \
+def _importable(obj, alias='', source=None, enclosing=False, force=True, \
                                               builtin=True, lstrip=True):
     """get an import string (or the source code) for the given object
 
-    For simple objects, this function will discover the name of the object, or
-    the repr of the object, or the source code for the object. To attempt to force
-    discovery of the source code, use source=True, otherwise an import will be
-    sought. The intent is to build a string that can be imported from a python
-    file. obj is the object to inspect. If alias is provided, then rename the
-    object with the given alias.
+    This function will attempt to discover the name of the object, or the repr
+    of the object, or the source code for the object. To attempt to force
+    discovery of the source code, use source=True, to attempt to force the
+    use of an import, use source=False; otherwise an import will be sought
+    for objects not defined in __main__. The intent is to build a string
+    that can be imported from a python file. obj is the object to inspect.
+    If alias is provided, then rename the object with the given alias.
 
     If source=True, use these options:
       If enclosing=True, then also return any enclosing code.
@@ -758,6 +781,8 @@ def _importable(obj, alias='', source=True, enclosing=False, force=True, \
       If force=True, then don't test the import string before returning it.
       If builtin=True, then force an import for builtins where possible.
     """
+    if source is None:
+        source = True if isfrommain(obj) else False
     if source: # first try to get the source
         try:
             return getsource(obj, alias, enclosing=enclosing, \
@@ -852,6 +877,10 @@ def _closuredimport(func, alias='', builtin=False):
 def _closuredsource(func, alias=''):
     """get source code for closured objects; return a dict of 'name'
     and 'code blocks'"""
+    #FIXME: this entire function is a messy messy HACK
+    #      - pollutes global namespace
+    #      - fails if name of freevars are reused
+    #      - can unnecessarily duplicate function code
     from dill.detect import freevars
     free_vars = freevars(func)
     func_vars = {}
@@ -863,39 +892,49 @@ def _closuredsource(func, alias=''):
             continue
         # get source for 'funcs'
         fobj = free_vars.pop(name)
-        src = getsource(fobj, alias)
+        src = getsource(fobj, alias) # DO NOT include dependencies
         # if source doesn't start with '@', use name as the alias
         if not src.lstrip().startswith('@'): #FIXME: 'enclose' in dummy;
-            src = getsource(fobj, alias=name)#        wrong ref 'name'
+            src = importable(fobj,alias=name)#        wrong ref 'name'
             org = getsource(func, alias, enclosing=False, lstrip=True)
             src = (src, org) # undecorated first, then target
         else: #NOTE: reproduces the code!
             org = getsource(func, enclosing=True, lstrip=False)
+            src = importable(fobj, alias, source=True) # include dependencies
             src = (org, src) # target first, then decorated
         func_vars[name] = src
+    src = ''.join(free_vars.values())
     if not func_vars: #FIXME: 'enclose' in dummy; wrong ref 'name'
-        src = ''.join(free_vars.values())
         org = getsource(func, alias, force=True, enclosing=False, lstrip=True)
         src = (src, org) # variables first, then target
-        func_vars[None] = src
+    else:
+        src = (src, None) # just variables        (better '' instead of None?)
+    func_vars[None] = src
+    # FIXME: remove duplicates (however, order is important...)
     return func_vars
 
-def importable(obj, alias='', source=True, builtin=True):
+def importable(obj, alias='', source=None, builtin=True):
     """get an importable string (i.e. source code or the import string)
     for the given object, including any required objects from the enclosing
     and global scope
 
     This function will attempt to discover the name of the object, or the repr
     of the object, or the source code for the object. To attempt to force
-    discovery of the source code, use source=True, otherwise an import will be
-    sought. The intent is to build a string that can be imported from a python
-    file. obj is the object to inspect. If alias is provided, then rename the
+    discovery of the source code, use source=True, to attempt to force the
+    use of an import, use source=False; otherwise an import will be sought
+    for objects not defined in __main__. The intent is to build a string
+    that can be imported from a python file.
+
+    obj is the object to inspect. If alias is provided, then rename the
     object with the given alias. If builtin=True, then force an import for
     builtins where possible.
     """
     #NOTE: we always 'force', and 'lstrip' as necessary
     #NOTE: for 'enclosing', use importable(outermost(obj))
-    if builtin and isbuiltin(obj): source = False
+    if source is None:
+        source = True if isfrommain(obj) else False
+    elif builtin and isbuiltin(obj):
+        source = False
     tried_source = tried_import = False
     while True:
         if not source: # we want an import
@@ -916,13 +955,28 @@ def importable(obj, alias='', source=True, builtin=True):
             src = _closuredsource(obj, alias=alias)
             if len(src) == 0:
                 raise NotImplementedError('not implemented')
-            if len(src) > 1:
-                raise NotImplementedError('not implemented')
-            src = list(src.values())[0]
-            if src[0] and src[-1]: src = '\n'.join(src)
-            elif src[0]: src = src[0]
-            elif src[-1]: src = src[-1]
-            else: src = ''
+            # groan... an inline code stitcher
+            def _code_stitcher(block):
+                "stitch together the strings in tuple 'block'"
+                if block[0] and block[-1]: block = '\n'.join(block)
+                elif block[0]: block = block[0]
+                elif block[-1]: block = block[-1]
+                else: block = ''
+                return block
+            # get free_vars first
+            _src = _code_stitcher(src.pop(None))
+            _src = [_src] if _src else []
+            # get func_vars
+            for xxx in src.values():
+                xxx = _code_stitcher(xxx)
+                if xxx: _src.append(xxx)
+            # make a single source string
+            if not len(_src):
+                src = ''
+            elif len(_src) == 1:
+                src = _src[0]
+            else:
+                src = '\n'.join(_src)
             # get source code of objects referred to by obj in global scope
             from dill.detect import globalvars
             obj = globalvars(obj) #XXX: don't worry about alias?
