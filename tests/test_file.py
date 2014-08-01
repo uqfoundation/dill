@@ -63,7 +63,7 @@ def test(safefmode=False, kwargs={}):
     assert open(fname).read() == "\x00\x00\x00\x00\x00 world!"
     assert f2mode == fmode
     assert f2tell == ftell
-    # 2) treat as if new filehandle, will truncated file
+    # 2) treat as if new filehandle, will truncate file
     # assert open(fname).read() == " world!"
     # assert f2mode == fmode
     # assert f2tell == 0
@@ -95,17 +95,22 @@ def test(safefmode=False, kwargs={}):
     _fstr = write_randomness(number=_flen)
 
     if safefmode: # throw error if ftell > EOF
-        # 3) prefer data over filehandle state
         assert throws(dill.loads, (f_dumped,), IOError)
     else:
         f2 = dill.loads(f_dumped)
-        assert f2.mode == fmode   # 'r'
+        assert f2.mode == fmode
         # 1) preserve mode and position  #XXX: ?
         assert f2.tell() == ftell # 200
         assert f2.read() == ""
         f2.seek(0)
         assert f2.read() == _fstr
         assert f2.tell() == _flen # 150
+        # 3) prefer data over filehandle state
+        # assert f2.tell() == ftell # 200
+        # assert f2.read() == ""
+        # f2.seek(0)
+        # assert f2.read() == _fstr
+        # assert f2.tell() == _flen # 150
         # 4) preserve mode and position, seek(EOF) if ftell > EOF
         # assert f2.tell() == _flen # 150
         # assert f2.read() == ""
@@ -124,7 +129,6 @@ def test(safefmode=False, kwargs={}):
         # assert f2.tell() == ftell # 200
         f2.close()
 
-    #XXX XXX XXX XXX XXX XXX STOPPED HERE XXX XXX XXX XXX XXX XXX
     # write
 
     write_randomness()
@@ -132,19 +136,49 @@ def test(safefmode=False, kwargs={}):
     f = open(fname, "w")
     f.write("hello")
     f_dumped = dill.dumps(f, **kwargs)
+    fmode = f.mode
+    ftell = f.tell()
     f.close()
+    fstr = open(fname).read()
 
     f = open(fname, "w")
     f.write("h")
+    _ftell = f.tell()
     f.close()
 
-    if safefmode:
+    if safefmode: # throw error if ftell > EOF
         assert throws(dill.loads, (f_dumped,), IOError)
     else:
         f2 = dill.loads(f_dumped)
+        f2mode = f2.mode
+        f2tell = f2.tell()
         f2.write(" world!")
         f2.close()
-        assert open(fname).read() == "h\x00\x00\x00\x00 world!"
+        # 1) preserve mode and position  #FIXME
+        assert open(fname).read() == "\x00\x00\x00\x00\x00 world!"
+        assert f2mode == fmode
+        assert f2tell == ftell
+        # 3) prefer data over filehandle state
+        # assert open(fname).read() == "h\x00\x00\x00\x00 world!"
+        # assert f2mode == 'r+'  #XXX: have to decide 'r+', 'a', ...?
+        # assert f2tell == ftell
+        # 2) treat as if new filehandle, will truncate file
+        # assert open(fname).read() == " world!"
+        # assert f2mode == fmode
+        # assert f2tell == 0
+        # 5) pickle data along with filehandle  #XXX: Yikes
+        # assert open(fname).read() == "hello world!"
+        # assert f2mode == fmode
+        # assert f2tell == ftell
+        # 4a) use "r" to read data, then use "w" to write new file
+        # assert open(fname).read() == "h\x00\x00\x00\x00 world!"
+        # assert f2mode == fmode
+        # assert f2tell == ftell
+        # 4b) preserve mode and position, seek(EOF) if ftell > EOF
+        # assert open(fname).read() == "h world!"
+        # assert f2mode == fmode
+        # assert f2tell == _ftell
+        f2.close()
 
     # file does not exist
     # read
@@ -152,17 +186,47 @@ def test(safefmode=False, kwargs={}):
     write_randomness()
 
     f = open(fname, "r")
-    f.read()
+    fstr = f.read()
     f_dumped = dill.dumps(f, **kwargs)
+    fmode = f.mode
+    ftell = f.tell()
     f.close()
 
     os.remove(fname)
 
-    if safefmode:
+    if safefmode: # throw error if file DNE
         assert throws(dill.loads, (f_dumped,), IOError)
     else:
         f2 = dill.loads(f_dumped)
+        assert f2.mode == fmode
+        # 1) preserve mode and position  #XXX: ?
+        assert f2.tell() == ftell # 200
         assert f2.read() == ""
+        f2.seek(0)
+        assert f2.read() == ""
+        assert f2.tell() == 0
+        # 3) prefer data over filehandle state
+        # assert f2.tell() == ftell # 200
+        # assert f2.read() == ""
+        # f2.seek(0)
+        # assert f2.read() == ""
+        # assert f2.tell() == 0
+        # 5) pickle data along with filehandle  #XXX: Yikes
+        # assert f2.tell() == ftell # 200
+        # assert f2.read() == ""
+        # f2.seek(0)
+        # assert f2.read() == fstr
+        # assert f2.tell() == ftell # 200
+        # 2) treat as if new filehandle, will seek(0)
+        # assert f2.tell() == 0
+        # assert f2.read() == ""
+        # assert f2.tell() == 0
+        # 4) preserve mode and position, seek(EOF) if ftell > EOF
+        # assert f2.tell() == 0
+        # assert f2.read() == ""
+        # f2.seek(0)
+        # assert f2.read() == ""
+        # assert f2.tell() == 0
         f2.close()
 
     # write
@@ -172,17 +236,56 @@ def test(safefmode=False, kwargs={}):
     f = open(fname, "w+")
     f.write("hello")
     f_dumped = dill.dumps(f, **kwargs)
+    ftell = f.tell()
+    fmode = f.mode
     f.close()
 
     os.remove(fname)
 
-    if safefmode:
+    if safefmode: # throw error if file DNE
         assert throws(dill.loads, (f_dumped,), IOError)
     else:
         f2 = dill.loads(f_dumped)
+        f2mode = f2.mode
+        f2tell = f2.tell()
         f2.write(" world!")
         f2.close()
+        # 1) preserve mode and position  #FIXME
         assert open(fname).read() == "\x00\x00\x00\x00\x00 world!"
+        assert f2mode == fmode
+        assert f2tell == ftell
+        # 3) prefer data over filehandle state
+        # assert open(fname).read() == "\x00\x00\x00\x00\x00 world!"
+        # assert f2mode == 'r+'  #XXX: have to decide 'r+', 'a', ...?
+        # assert f2tell == ftell
+        # 2) treat as if new filehandle, will truncate file
+        # assert open(fname).read() == " world!"
+        # assert f2mode == fmode
+        # assert f2tell == 0
+        # 5) pickle data along with filehandle  #XXX: Yikes
+        # assert open(fname).read() == "hello world!"
+        # assert f2mode == fmode
+        # assert f2tell == ftell
+        # 4a) use "r" to read data, then use "w" to write new file
+        # assert open(fname).read() == "\x00\x00\x00\x00\x00 world!"
+        # assert f2mode == fmode
+        # assert f2tell == ftell
+        # 4b) preserve mode and position, seek(EOF) if ftell > EOF
+        # assert open(fname).read() == " world!"
+        # assert f2mode == fmode
+        # assert f2tell == 0
+
+    # TODO:
+    # file exists, with different contents (larger size)
+    # read
+    # write
+
+    # TODO:
+    # <for all above cases>
+    # append
+    # read+   ?
+    # write+  ?
+    # append+ ?
 
 test()
 # TODO: switch this on when #57 is closed
