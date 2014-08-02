@@ -275,17 +275,104 @@ def test(safefmode=False, kwargs={}):
         # assert f2mode == fmode
         # assert f2tell == 0
 
-    # TODO:
     # file exists, with different contents (larger size)
     # read
+
+    write_randomness()
+
+    f = open(fname, "r")
+    fstr = f.read()
+    f_dumped = dill.dumps(f, **kwargs)
+    fmode = f.mode
+    ftell = f.tell()
+    f.close()
+    _flen = 250
+    _fstr = write_randomness(number=_flen)
+
+    #XXX: no safefmode: no way to be 'safe'?
+
+    f2 = dill.loads(f_dumped)
+    assert f2.mode == fmode
+    # 1) preserve mode and position  #XXX: ?
+    assert f2.tell() == ftell # 200
+    assert f2.read() == _fstr[ftell:]
+    f2.seek(0)
+    assert f2.read() == _fstr
+    assert f2.tell() == _flen # 250
+    # 3) prefer data over filehandle state
+    # assert f2.tell() == ftell # 200
+    # assert f2.read() == _fstr[ftell:]
+    # f2.seek(0)
+    # assert f2.read() == _fstr
+    # assert f2.tell() == _flen # 250
+    # 4) preserve mode and position, seek(EOF) if ftell > EOF
+    # assert f2.tell() == ftell # 200
+    # assert f2.read() == _fstr[ftell:]
+    # f2.seek(0)
+    # assert f2.read() == _fstr
+    # assert f2.tell() == _flen # 250
+    # 2) treat as if new filehandle, will seek(0)
+    # assert f2.tell() == 0
+    # assert f2.read() == _fstr
+    # assert f2.tell() == _flen # 250
+    # 5) pickle data along with filehandle  #XXX: Yikes
+    # assert f2.tell() == ftell # 200
+    # assert f2.read() == ""
+    # f2.seek(0)
+    # assert f2.read() == fstr
+    # assert f2.tell() == ftell # 200
+    f2.close()  #XXX: other alternatives?
+
     # write
+
+    write_randomness()
+
+    f = open(fname, "w")
+    f.write("hello")
+    f_dumped = dill.dumps(f, **kwargs)
+    fmode = f.mode
+    ftell = f.tell()
+#   f.close()
+    fstr = open(fname).read()
+
+#   f = open(fname, "a")
+    f.write(" and goodbye!")
+    _ftell = f.tell()
+    f.close()
+
+    #XXX: no safefmode: no way to be 'safe'?
+
+    f2 = dill.loads(f_dumped)
+    f2mode = f2.mode
+    f2tell = f2.tell()
+    f2.write(" world!")
+    f2.close()
+    # 1) preserve mode and position  #FIXME
+    assert open(fname).read() == "\x00\x00\x00\x00\x00 world!"
+    assert f2mode == fmode
+    assert f2tell == ftell
+    # 3) prefer data over filehandle state
+    # assert open(fname).read() == "hello world!odbye!"
+    # assert f2mode == 'r+'  #XXX: have to decide 'r+', 'a', ...?
+    # assert f2tell == ftell
+    # 2) treat as if new filehandle, will truncate file
+    # assert open(fname).read() == " world!"
+    # assert f2mode == fmode
+    # assert f2tell == 0
+    # 5) pickle data along with filehandle  #XXX: Yikes
+    # assert open(fname).read() == "hello world!"
+    # assert f2mode == fmode
+    # assert f2tell == ftell
+    # 4) use "r" to read data, then use "w" to write new file
+    # assert open(fname).read() == "hello world!odbye!"
+    # assert f2mode == fmode
+    # assert f2tell == ftell
+    f2.close()
 
     # TODO:
     # <for all above cases>
     # append
-    # read+   ?
-    # write+  ?
-    # append+ ?
+
 
 test()
 # TODO: switch this on when #57 is closed
