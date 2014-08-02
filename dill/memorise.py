@@ -11,7 +11,12 @@ Module to show if an object has changed since it was memorised
 
 import os
 import sys
-import numpy
+import types
+try:
+    import numpy
+    HAS_NUMPY = True
+except:
+    HAS_NUMPY = False
 try:
     import builtins
 except ImportError:
@@ -24,6 +29,8 @@ memo = {}
 id_to_obj = {}
 # types that cannot have changing attributes
 builtins_types = {str, list, dict, set, frozenset, int}
+dont_memo = {id(i) for i in (memo, sys.modules, sys.path_importer_cache,
+             os.environ, id_to_obj)}
 
 
 def get_attrs(obj):
@@ -32,137 +39,122 @@ def get_attrs(obj):
     """
     if type(obj) in builtins_types \
        or type(obj) is type and obj in builtins_types:
-        return None
+        return
     try:
-        return obj.__dict__ if hasattr(obj, "__dict__") else None
+        return obj.__dict__
     except:
-        return None
+        return
 
 
 def get_seq(obj, cashe={str: False, frozenset: False, list: True, set: True,
-                        dict: True, tuple: True}):
+                        dict: True, tuple: True, type: False,
+                        types.ModuleType: False, types.FunctionType: False,
+                        types.BuiltinFunctionType: False}):
     """
     Gets all the items in a sequence or return None
     """
-    o_type = type(obj)
-    if o_type in (numpy.ndarray, numpy.ma.core.MaskedConstant):
+    o_type = obj.__class__
+    hsattr = hasattr
+    if o_type in cashe:
+        if cashe[o_type]:
+            if hsattr(obj, "copy"):
+                return obj.copy()
+            return obj
+    elif HAS_NUMPY and o_type in (numpy.ndarray, numpy.ma.core.MaskedConstant):
         if obj.shape and obj.size:
             return obj
         else:
             return []
-    if o_type in cashe:
-        if cashe[o_type]:
-            if hasattr(obj, "copy"):
-                return obj.copy()
-            return obj
-        return None
-    elif hasattr(obj, "__contains__") and hasattr(obj, "__iter__") \
-       and hasattr(obj, "__len__") and hasattr(o_type, "__contains__") \
-       and hasattr(o_type, "__iter__") and hasattr(o_type, "__len__"):
+    elif hsattr(obj, "__contains__") and hsattr(obj, "__iter__") \
+       and hsattr(obj, "__len__") and hsattr(o_type, "__contains__") \
+       and hsattr(o_type, "__iter__") and hsattr(o_type, "__len__"):
         cashe[o_type] = True
-        if hasattr(obj, "copy"):
+        if hsattr(obj, "copy"):
             return obj.copy()
         return obj
-    cashe[o_type] = None
-    return None
-
-
-def get_attrs_id(obj):
-    """
-    Gets the ids of an object's attributes though its __dict__ or return None
-    """
-    if type(obj) in builtins_types \
-       or type(obj) is type and obj in builtins_types:
-        return None
-    try:
-        return {key: id(value) for key, value in obj.__dict__.items()} \
-            if hasattr(obj, "__dict__") else None
-    except:
-        return None
-
-
-def get_seq_id(obj, done=None):
-    """
-    Gets the ids of the items in a sequence or return None
-    """
-    if done is not None:
-        g = done
     else:
-        g = get_seq(obj)
-    if g is None:
+        cashe[o_type] = False
         return None
-    if hasattr(g, "items"):
-        return {id(key): id(value) for key, value in g.items()}
-    return [id(i) for i in g]
 
 
-def memorise(obj, force=False, first=True):
+def memorise(obj, force=False):
     """
     Adds an object to the memo, and recursively adds all the objects
     attributes, and if it is a container, its items. Use force=True to update
     an object already in the memo. Updating is not recursively done.
     """
-    if first:
-        # add actions here
-        pass
-    if id(obj) in memo and not force:
+    obj_id = id(obj)
+    if obj_id in memo and not force or obj_id in dont_memo:
         return
-    if obj is memo or obj is id_to_obj:
-        return
+    id_ = id
     g = get_attrs(obj)
+    if g is None:
+        attrs_id = None
+    else:
+        attrs_id = {key: id_(value) for key, value in g.items()}
+
     s = get_seq(obj)
-    memo[id(obj)] = get_attrs_id(obj), get_seq_id(obj, done=s)
-    id_to_obj[id(obj)] = obj
+    if s is None:
+        seq_id = None
+    elif hasattr(s, "items"):
+        seq_id = {id_(key): id_(value) for key, value in s.items()}
+    else:
+        seq_id = [id_(i) for i in s]
+
+    memo[obj_id] = attrs_id, seq_id
+    id_to_obj[obj_id] = obj
+    mem = memorise
     if g is not None:
-        for key, value in g.items():
-            memorise(value, first=False)
+        [mem(value) for key, value in g.items()]
+
     if s is not None:
         if hasattr(s, "items"):
-            for key, item in s.items():
-                memorise(key, first=False)
-                memorise(item, first=False)
+            [(mem(key), mem(item))
+             for key, item in s.items()]
         else:
-            for item in s:
-                memorise(item, first=False)
+            [mem(item) for item in s]
 
 
 def release_gone():
-    rm = [id_ for id_, obj in id_to_obj.items() if sys.getrefcount(obj) < 4]
-    for id_ in rm:
-        del id_to_obj[id_]
-        del memo[id_]
+    itop, mp, src = id_to_obj.pop, memo.pop, sys.getrefcount
+    [(itop(id_), mp(id_)) for id_, obj in list(id_to_obj.items())
+     if src(obj) < 4]
 
 
-def whats_changed(obj, seen=None, first=True, simple=False):
+def whats_changed(obj, seen=None, simple=False, first=True):
     """
-    Check an object against the memo. Returns a tuple in the form
+    Check an object against the memo. Returns a list in the form
     (attribute changes, container changed). Attribute changes is a dict of
     attribute name to attribute value. container changed is a boolean.
+    If simple is true, just returns a boolean. None for either item means
+    that it has not been checked yet
     """
-    seen = {} if seen is None else seen
+    # Special cases
     if first:
         # ignore the _ variable, which only appears in interactive sessions
         if "_" in builtins.__dict__:
             del builtins._
+        if seen is None:
+            seen = {}
 
     obj_id = id(obj)
-    if obj_id not in memo:
-        if simple:
-            return True
-        else:
-            raise RuntimeError("Object not memorised " + str(obj))
 
     if obj_id in seen:
         if simple:
             return any(seen[obj_id])
         return seen[obj_id]
 
-    if any(obj is i for i in (memo, sys.modules, sys.path_importer_cache,
-           os.environ, id_to_obj)):
-        seen[obj_id] = ({}, False)
+    # Safety checks
+    if obj_id in dont_memo:
+        seen[obj_id] = [{}, False]
         if simple:
             return False
         return seen[obj_id]
+    elif obj_id not in memo:
+        if simple:
+            return True
+        else:
+            raise RuntimeError("Object not memorised " + str(obj))
 
     seen[obj_id] = ({}, False)
 
@@ -171,38 +163,36 @@ def whats_changed(obj, seen=None, first=True, simple=False):
 
     # compare attributes
     attrs = get_attrs(obj)
-    if attrs is not None:
-        obj_attrs = memo[id(obj)][0]
+    if attrs is None:
+        changed = {}
+    else:
+        obj_attrs = memo[obj_id][0]
         obj_get = obj_attrs.get
         changed = {key: None for key in obj_attrs if key not in attrs}
-        changed.update({key: o for key, o in attrs.items()
-                        if id(o) != obj_get(key)
-                        or chngd(o, seen, first=False, simple=True)})
-    else:
-        changed = {}
+        for key, o in attrs.items():
+            if id_(o) != obj_get(key, None) or chngd(o, seen, True, False):
+                changed[key] = o
 
     # compare sequence
     items = get_seq(obj)
+    seq_diff = False
     if items is not None:
-        seq_diff = False
-        obj_seq = memo[id(obj)][1]
+        obj_seq = memo[obj_id][1]
         if len(items) != len(obj_seq):
             seq_diff = True
-        elif hasattr(obj, "items"):
+        elif hasattr(obj, "items"):  # dict type obj
             obj_get = obj_seq.get
             for key, item in items.items():
                 if id_(item) != obj_get(id_(key)) \
-                   or chngd(key, seen, first=False, simple=True) \
-                   or chngd(item, seen, first=False, simple=True):
+                   or chngd(key, seen, True, False) \
+                   or chngd(item, seen, True, False):
                     seq_diff = True
                     break
         else:
-            for i, j in zip(items, obj_seq):
-                if id_(i) != j or chngd(i, seen, first=False, simple=True):
+            for i, j in zip(items, obj_seq):  # list type obj
+                if id_(i) != j or chngd(i, seen, True, False):
                     seq_diff = True
                     break
-    else:
-        seq_diff = False
     seen[obj_id] = changed, seq_diff
     if simple:
         return changed or seq_diff
@@ -220,8 +210,11 @@ def _imp(*args, **kwargs):
     Replaces the default __import__, to allow a module to be memorised
     before the user can change it
     """
+    before = set(sys.modules.keys())
     mod = __import__(*args, **kwargs)
-    memorise(mod)
+    after = set(sys.modules.keys()).difference(before)
+    for m in after:
+        memorise(sys.modules[m])
     return mod
 
 builtins.__import__ = _imp
@@ -231,5 +224,5 @@ if hasattr(builtins, "_"):
 # memorise all already imported modules. This implies that this must be
 # imported first for any changes to be recorded
 for mod in sys.modules.values():
-    memorise(mod, first=False)
+    memorise(mod)
 release_gone()
