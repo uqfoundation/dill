@@ -53,7 +53,7 @@ def get_seq(obj, cashe={str: False, frozenset: False, list: True, set: True,
     """
     Gets all the items in a sequence or return None
     """
-    o_type = obj.__class__
+    o_type = type(obj)
     hsattr = hasattr
     if o_type in cashe:
         if cashe[o_type]:
