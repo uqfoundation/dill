@@ -335,7 +335,7 @@ def test(safefmode=False, kwargs={}):
         assert f2tell == ftell
         # 3) prefer data over filehandle state
         # assert open(fname).read() == "\x00\x00\x00\x00\x00 world!"
-        # assert f2mode == 'r+'  #FIXME: spec'd as 'r+' but is 'w+'
+        # assert f2mode == 'w+'
         # assert f2tell == ftell
         # 2) treat as if new filehandle, will truncate file
         # assert open(fname).read() == " world!"
@@ -377,7 +377,7 @@ def test(safefmode=False, kwargs={}):
         f2.close()
         assert f2mode == fmode
         # 1) preserve mode and position  #XXX: also 3)
-        assert open(fname).read() == " world!" # 3) FIXME: throws, should not?
+        assert open(fname).read() == " world!" # 3)
         assert f2tell == ftell
         # 2) treat as if new filehandle, will seek(EOF)
         # assert open(fname).read() == " world!"

@@ -382,13 +382,17 @@ def _create_filehandle(name, mode, position, closed, open=open, safe=False): # b
         # w+      | r+
         # a       | a
         # a+      | a+
+        # Note: If the file does not exist, the mode is not translated
+
+        if mode == "x":
+            mode = "w"
 
         if os.path.exists(name):
             mode = mode.replace("w+", "r+")
             mode = mode.replace("w", "r+")
         elif safe:
             raise IOError("File '%s' does not exist" % name)
-        elif "w" not in mode:
+        elif "r" in mode:
             name = os.devnull
         if safe:
             if position > os.path.getsize(name):
