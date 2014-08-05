@@ -408,7 +408,8 @@ def _create_filehandle(name, mode, position, closed, open=open, safe=False): # b
     if closed:
         f.close()
     elif position >= 0:
-        f.seek(position)
+        eof = os.path.getsize(name)
+        f.seek(position if position < eof else eof)
     return f
 
 def _create_stringi(value, position, closed):

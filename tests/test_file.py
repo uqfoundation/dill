@@ -65,17 +65,17 @@ def test(safefmode=False, kwargs={}):
     f2.close()
 
     # 1) preserve mode and position
-    assert open(fname).read() == "\x00\x00\x00\x00\x00 world!"
-    assert f2mode == fmode
-    assert f2tell == ftell
+    # assert open(fname).read() == "\x00\x00\x00\x00\x00 world!"
+    # assert f2mode == fmode
+    # assert f2tell == ftell
     # 2) treat as if new filehandle, will truncate file
     # assert open(fname).read() == " world!"
     # assert f2mode == fmode
     # assert f2tell == 0
     # 3) prefer data over filehandle state
-    # assert open(fname).read() == "hello world!"
-    # assert f2mode == 'r+'  #XXX: have to decide 'r+', 'a', ...?
-    # assert f2tell == ftell
+    assert open(fname).read() == "hello world!"
+    assert f2mode == 'r+'  #XXX: have to decide 'r+', 'a', ...?
+    assert f2tell == ftell
     # 4) use "r" to read data, then use "w" to write new file
     # assert open(fname).read() == "hello world!"
     # assert f2mode == fmode
@@ -135,17 +135,17 @@ def test(safefmode=False, kwargs={}):
         f2 = dill.loads(f_dumped)
         assert f2.mode == fmode
         # 1) preserve mode and position  #XXX: ?
-        assert f2.tell() == ftell # 200
-        assert f2.read() == ""
-        f2.seek(0)
-        assert f2.read() == _fstr
-        assert f2.tell() == _flen # 150
-        # 3) prefer data over filehandle state
         # assert f2.tell() == ftell # 200
         # assert f2.read() == ""
         # f2.seek(0)
         # assert f2.read() == _fstr
         # assert f2.tell() == _flen # 150
+        # 3) prefer data over filehandle state
+        assert f2.tell() == _flen
+        assert f2.read() == ""
+        f2.seek(0)
+        assert f2.read() == _fstr
+        assert f2.tell() == _flen # 150
         # 4) preserve mode and position, seek(EOF) if ftell > EOF
         # assert f2.tell() == _flen # 150
         # assert f2.read() == ""
@@ -190,13 +190,13 @@ def test(safefmode=False, kwargs={}):
         f2.write(" world!")
         f2.close()
         # 1) preserve mode and position
-        assert open(fname).read() == "\x00\x00\x00\x00\x00 world!"
-        assert f2mode == fmode
-        assert f2tell == ftell
-        # 3) prefer data over filehandle state
-        # assert open(fname).read() == "h\x00\x00\x00\x00 world!"
-        # assert f2mode == 'r+'  #XXX: have to decide 'r+', 'a', ...?
+        # assert open(fname).read() == "\x00\x00\x00\x00\x00 world!"
+        # assert f2mode == fmode
         # assert f2tell == ftell
+        # 3) prefer data over filehandle state
+        assert open(fname).read() == "h world!"
+        assert f2mode == 'r+'  #XXX: have to decide 'r+', 'a', ...?
+        assert f2tell == _ftell
         # 2) treat as if new filehandle, will truncate file
         # assert open(fname).read() == " world!"
         # assert f2mode == fmode
@@ -244,7 +244,7 @@ def test(safefmode=False, kwargs={}):
         # 1) preserve mode and position  # also 3)
         # position of writes cannot be changed on some OSs
         assert open(fname).read() == "h world!"
-        assert f2tell == ftell
+        assert f2tell == _ftell
         # 2) treat as if new filehandle, will seek(EOF)
         # assert open(fname).read() == "h world!"
         # assert f2tell == _ftell
@@ -279,17 +279,18 @@ def test(safefmode=False, kwargs={}):
         f2 = dill.loads(f_dumped)
         assert f2.mode == fmode
         # 1) preserve mode and position  #XXX: ?
-        assert f2.tell() == ftell # 200
-        assert f2.read() == ""
-        f2.seek(0)
-        assert f2.read() == ""
-        assert f2.tell() == 0
-        # 3) prefer data over filehandle state
         # assert f2.tell() == ftell # 200
         # assert f2.read() == ""
         # f2.seek(0)
         # assert f2.read() == ""
         # assert f2.tell() == 0
+        # 3) prefer data over filehandle state
+        # FIXME: this fails on systems where f2.tell() always returns 0
+        # assert f2.tell() == ftell # 200
+        assert f2.read() == ""
+        f2.seek(0)
+        assert f2.read() == ""
+        assert f2.tell() == 0
         # 5) pickle data along with filehandle
         # assert f2.tell() == ftell # 200
         # assert f2.read() == ""
@@ -330,13 +331,13 @@ def test(safefmode=False, kwargs={}):
         f2.write(" world!")
         f2.close()
         # 1) preserve mode and position
-        assert open(fname).read() == "\x00\x00\x00\x00\x00 world!"
-        assert f2mode == fmode
-        assert f2tell == ftell
-        # 3) prefer data over filehandle state
         # assert open(fname).read() == "\x00\x00\x00\x00\x00 world!"
-        # assert f2mode == 'w+'
+        # assert f2mode == fmode
         # assert f2tell == ftell
+        # 3) prefer data over filehandle state
+        assert open(fname).read() == " world!"
+        assert f2mode == 'w+'
+        assert f2tell == 0
         # 2) treat as if new filehandle, will truncate file
         # assert open(fname).read() == " world!"
         # assert f2mode == fmode
@@ -378,7 +379,7 @@ def test(safefmode=False, kwargs={}):
         assert f2mode == fmode
         # 1) preserve mode and position  #XXX: also 3)
         assert open(fname).read() == " world!" # 3)
-        assert f2tell == ftell
+        assert f2tell == 0
         # 2) treat as if new filehandle, will seek(EOF)
         # assert open(fname).read() == " world!"
         # assert f2tell == 0
@@ -411,17 +412,17 @@ def test(safefmode=False, kwargs={}):
     f2 = dill.loads(f_dumped)
     assert f2.mode == fmode
     # 1) preserve mode and position  #XXX: ?
-    assert f2.tell() == ftell # 200
-    assert f2.read() == _fstr[ftell:]
-    f2.seek(0)
-    assert f2.read() == _fstr
-    assert f2.tell() == _flen # 250
-    # 3) prefer data over filehandle state
     # assert f2.tell() == ftell # 200
     # assert f2.read() == _fstr[ftell:]
     # f2.seek(0)
     # assert f2.read() == _fstr
     # assert f2.tell() == _flen # 250
+    # 3) prefer data over filehandle state
+    assert f2.tell() == ftell # 200
+    assert f2.read() == _fstr[ftell:]
+    f2.seek(0)
+    assert f2.read() == _fstr
+    assert f2.tell() == _flen # 250
     # 4) preserve mode and position, seek(EOF) if ftell > EOF
     # assert f2.tell() == ftell # 200
     # assert f2.read() == _fstr[ftell:]
@@ -463,13 +464,13 @@ def test(safefmode=False, kwargs={}):
     f2.write(" world!")
     f2.close()
     # 1) preserve mode and position
-    assert open(fname).read() == "\x00\x00\x00\x00\x00 world!"
-    assert f2mode == fmode
-    assert f2tell == ftell
-    # 3) prefer data over filehandle state
-    # assert open(fname).read() == "hello world!odbye!"
-    # assert f2mode == 'r+'  #XXX: have to decide 'r+', 'a', ...?
+    # assert open(fname).read() == "\x00\x00\x00\x00\x00 world!"
+    # assert f2mode == fmode
     # assert f2tell == ftell
+    # 3) prefer data over filehandle state
+    assert open(fname).read() == "hello world!odbye!"
+    assert f2mode == 'r+'  #XXX: have to decide 'r+', 'a', ...?
+    assert f2tell == ftell
     # 2) treat as if new filehandle, will truncate file
     # assert open(fname).read() == " world!"
     # assert f2mode == fmode
