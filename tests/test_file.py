@@ -1,4 +1,4 @@
-# usr/bin/env python
+#!/usr/bin/env python
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
 # Copyright (c) 2008-2014 California Institute of Technology.
@@ -455,9 +455,10 @@ def test(safe_file, file_mode):
 test(safe_file=False, file_mode=dill.FMODE_NEWHANDLE)
 test(safe_file=False, file_mode=dill.FMODE_PRESERVEDATA)
 test(safe_file=False, file_mode=dill.FMODE_PICKLECONTENTS)
-# TODO: switch this on when #57 is closed
-# test(safe_file=True, file_mode=dill.FMODE_NEWHANDLE)
-# test(safe_file=True, file_mode=dill.FMODE_PRESERVEDATA)
-# test(safe_file=True, file_mode=dill.FMODE_PICKLECONTENTS)
+
+test(safe_file=True, file_mode=dill.FMODE_NEWHANDLE)
+test(safe_file=True, file_mode=dill.FMODE_PRESERVEDATA)
+test(safe_file=True, file_mode=dill.FMODE_PICKLECONTENTS)
+
 if os.path.exists(fname):
     os.remove(fname)

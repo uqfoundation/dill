@@ -14,10 +14,11 @@ Initial port to python3 by Jonathan Dobson, continued by mmckerns.
 Test against "all" python types (Std. Lib. CH 1-15 @ 2.7) by mmckerns.
 Test against CH16+ Std. Lib. ... TBD.
 """
-__all__ = ['dump','dumps','load','loads','dump_session','load_session',\
-           'Pickler','Unpickler','register','copy','pickle','pickles',\
-           'HIGHEST_PROTOCOL','DEFAULT_PROTOCOL',\
-           'PicklingError','UnpicklingError']
+__all__ = ['dump','dumps','load','loads','dump_session','load_session',
+           'Pickler','Unpickler','register','copy','pickle','pickles',
+           'HIGHEST_PROTOCOL','DEFAULT_PROTOCOL',
+           'PicklingError','UnpicklingError','FMODE_NEWHANDLE',
+           'FMODE_PRESERVEDATA','FMODE_PICKLECONTENTS']
 
 import logging
 log = logging.getLogger("dill")
@@ -379,16 +380,13 @@ def _create_filehandle(name, mode, position, closed, open, safe, file_mode, fdat
     if name in list(names.keys()):
         f = names[name] #XXX: safer "f=sys.stdin"
     elif name == '<tmpfile>':
-        import os
         f = os.tmpfile()
     elif name == '<fdopen>':
         import tempfile
         f = tempfile.TemporaryFile(mode)
     else:
-        import os
-
-        if mode == "x":
-            mode = "w"
+        # treat x mode as w mode
+        mode = mode.replace("x", "w")
 
         if not os.path.exists(name):
             if safe:
