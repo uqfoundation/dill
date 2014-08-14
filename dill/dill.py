@@ -399,20 +399,6 @@ def _create_filehandle(name, mode, position, closed, open, safe, file_mode, fdat
         else:
             current_size = os.path.getsize(name)
 
-        if file_mode == FMODE_PRESERVEDATA and os.path.exists(name):
-            # Mode translation
-            # Mode    | Unpickled mode
-            # --------|---------------
-            # r       | r
-            # r+      | r+
-            # w       | r+
-            # w+      | r+
-            # a       | a
-            # a+      | a+
-            # Note: If the file does not exist, the mode is not translated
-            mode = mode.replace("w+", "r+")
-            mode = mode.replace("w", "r+")
-
         if position > current_size:
             if safe:
                 raise IOError("File '%s' is too short" % name)
@@ -421,18 +407,23 @@ def _create_filehandle(name, mode, position, closed, open, safe, file_mode, fdat
         # try to open the file by name
         # NOTE: has different fileno
         try:
+            #FIXME: missing: *buffering*, encoding, softspace
             if file_mode == FMODE_PICKLECONTENTS:
                 f = open(name, mode if "w" in mode else "w")
                 f.write(fdata)
                 if "w" not in mode:
                     f.close()
-                    f = open(name, mode) #FIXME: missing: *buffering*, encoding, softspace
+                    f = open(name, mode)
+            elif file_mode == FMODE_PRESERVEDATA and "w" in mode:
+                # stop truncation when opening
+                def opener(file, flags):
+                    return os.open(file, flags ^ os.O_TRUNC)
+                f = open(name, mode, opener=opener)
             else:
-                f = open(name, mode) #FIXME: missing: *buffering*, encoding, softspace
+                f = open(name, mode)
         except IOError:
             err = sys.exc_info()[1]
             raise UnpicklingError(err)
-            #XXX: python default is closed '<uninitialized file>' file/mode
     if closed:
         f.close()
     elif position >= 0 and file_mode != FMODE_NEWHANDLE:

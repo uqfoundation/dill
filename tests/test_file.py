@@ -61,6 +61,7 @@ def test(safe_file, file_mode):
     f2 = dill.loads(f_dumped)
     f2mode = f2.mode
     f2tell = f2.tell()
+    f2name = f2.name
     f2.write(" world!")
     f2.close()
 
@@ -70,8 +71,9 @@ def test(safe_file, file_mode):
         assert f2tell == 0
     elif file_mode == dill.FMODE_PRESERVEDATA:
         assert open(fname).read() == "hello world!"
-        assert f2mode == 'r+'
+        assert f2mode == fmode
         assert f2tell == ftell
+        assert f2name == fname
     elif file_mode == dill.FMODE_PICKLECONTENTS:
         assert open(fname).read() == "hello world!"
         assert f2mode == fmode
@@ -174,7 +176,7 @@ def test(safe_file, file_mode):
         f2.close()
         if file_mode == dill.FMODE_PRESERVEDATA:
             assert open(fname).read() == "h world!"
-            assert f2mode == 'r+'
+            assert f2mode == fmode
             assert f2tell == _ftell
         elif file_mode == dill.FMODE_NEWHANDLE:
             assert open(fname).read() == " world!"
@@ -399,7 +401,7 @@ def test(safe_file, file_mode):
     f2.close()
     if file_mode == dill.FMODE_PRESERVEDATA:
         assert open(fname).read() == "hello world!odbye!"
-        assert f2mode == 'r+'  # XXX: have to decide 'r+', 'a', ...?
+        assert f2mode == fmode
         assert f2tell == ftell
     elif file_mode == dill.FMODE_NEWHANDLE:
         assert open(fname).read() == " world!"
