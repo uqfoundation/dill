@@ -133,12 +133,23 @@ except NameError:
     ExitType = type(exit)
     singletontypes = []
 
+### File modes
+# pickles the file handle, preserving mode, with position of the unpickled
+# object as for a new file handle.
+FMODE_NEWHANDLE = 0
+# preserves existing data or create file if is does not exist, with
+# position = min(pickled position, EOF), and mode which preserves behaviour
+FMODE_PRESERVEDATA = 1
+# pickles the file handle, preserving mode and position, as well as the file
+# contents
+FMODE_PICKLECONTENTS = 2
+
 ### Shorthands (modified from python2.5/lib/pickle.py)
 def copy(obj, *args, **kwds):
     """use pickling to 'copy' an object"""
     return loads(dumps(obj, *args, **kwds))
 
-def dump(obj, file, protocol=None, byref=False, safe_file=False):
+def dump(obj, file, protocol=None, byref=False, file_mode=FMODE_NEWHANDLE, safe_file=False):
     """pickle an object to a file"""
     if protocol is None: protocol = DEFAULT_PROTOCOL
     pik = Pickler(file, protocol)
@@ -146,6 +157,7 @@ def dump(obj, file, protocol=None, byref=False, safe_file=False):
     _byref = pik._byref
     pik._byref = bool(byref)
     pik._safe_file = safe_file
+    pik._file_mode = file_mode
     # hack to catch subclassed numpy array instances
     if NumpyArrayType and ndarrayinstance(obj):
         @register(type(obj))
@@ -160,10 +172,10 @@ def dump(obj, file, protocol=None, byref=False, safe_file=False):
     pik._byref = _byref
     return
 
-def dumps(obj, protocol=None, byref=False, safe_file=False):
+def dumps(obj, protocol=None, byref=False, file_mode=FMODE_NEWHANDLE, safe_file=False):
     """pickle an object to a string"""
     file = StringIO()
-    dump(obj, file, protocol, byref, safe_file)
+    dump(obj, file, protocol, byref, file_mode, safe_file)
     return file.getvalue()
 
 def load(file):
@@ -233,6 +245,7 @@ class Pickler(StockPickler):
     _session = False
     _byref = False
     _safe_file = False
+    _file_mode = FMODE_NEWHANDLE
     pass
 
     def __init__(self, *args, **kwargs):
@@ -357,7 +370,7 @@ def _create_lock(locked, *args):
             raise UnpicklingError("Cannot acquire lock")
     return lock
 
-def _create_filehandle(name, mode, position, closed, open=open, safe=False): # buffering=0
+def _create_filehandle(name, mode, position, closed, open, safe, file_mode, fdata): # buffering=0
     # only pickles the handle, not the file contents... good? or StringIO(data)?
     # (for file contents see: http://effbot.org/librarybook/copy-reg.htm)
     # NOTE: handle special cases first (are there more special cases?)
@@ -373,43 +386,57 @@ def _create_filehandle(name, mode, position, closed, open=open, safe=False): # b
         f = tempfile.TemporaryFile(mode)
     else:
         import os
-        # Mode translation
-        # Mode    | Unpickled mode
-        # --------|---------------
-        # r       | r
-        # r+      | r+
-        # w       | r+
-        # w+      | r+
-        # a       | a
-        # a+      | a+
-        # Note: If the file does not exist, the mode is not translated
 
         if mode == "x":
             mode = "w"
 
-        if os.path.exists(name):
+        if not os.path.exists(name):
+            if safe:
+                raise IOError("File '%s' does not exist" % name)
+            elif "r" in mode and file_mode != FMODE_PICKLECONTENTS:
+                name = os.devnull
+            current_size = 0
+        else:
+            current_size = os.path.getsize(name)
+
+        if file_mode == FMODE_PRESERVEDATA and os.path.exists(name):
+            # Mode translation
+            # Mode    | Unpickled mode
+            # --------|---------------
+            # r       | r
+            # r+      | r+
+            # w       | r+
+            # w+      | r+
+            # a       | a
+            # a+      | a+
+            # Note: If the file does not exist, the mode is not translated
             mode = mode.replace("w+", "r+")
             mode = mode.replace("w", "r+")
-        elif safe:
-            raise IOError("File '%s' does not exist" % name)
-        elif "r" in mode:
-            name = os.devnull
-        if safe:
-            if position > os.path.getsize(name):
+
+        if position > current_size:
+            if safe:
                 raise IOError("File '%s' is too short" % name)
+            elif file_mode == FMODE_PRESERVEDATA:
+                position = current_size
         # try to open the file by name
         # NOTE: has different fileno
         try:
-            f = open(name, mode) #FIXME: missing: *buffering*, encoding, softspace
+            if file_mode == FMODE_PICKLECONTENTS:
+                f = open(name, mode if "w" in mode else "w")
+                f.write(fdata)
+                if "w" not in mode:
+                    f.close()
+                    f = open(name, mode) #FIXME: missing: *buffering*, encoding, softspace
+            else:
+                f = open(name, mode) #FIXME: missing: *buffering*, encoding, softspace
         except IOError:
             err = sys.exc_info()[1]
             raise UnpicklingError(err)
             #XXX: python default is closed '<uninitialized file>' file/mode
     if closed:
         f.close()
-    elif position >= 0:
-        eof = os.path.getsize(name)
-        f.seek(position if position < eof else eof)
+    elif position >= 0 and file_mode != FMODE_NEWHANDLE:
+        f.seek(position)
     return f
 
 def _create_stringi(value, position, closed):
@@ -616,15 +643,8 @@ def save_attrgetter(pickler, obj):
     pickler.save_reduce(type(obj), tuple(attrs), obj=obj)
     return
 
-# __getstate__ explicitly added to raise TypeError when pickling:
-# http://www.gossamer-threads.com/lists/python/bugs/871199
-@register(FileType) #XXX: in 3.x has buffer=0, needs different _create?
-@register(BufferedRandomType)
-@register(BufferedReaderType)
-@register(BufferedWriterType)
-@register(TextWrapperType)
-def save_file(pickler, obj):
-    log.info("Fi: %s" % obj)
+def _save_file(pickler, obj, open_):
+    obj.flush()
     if obj.closed:
         position = None
     else:
@@ -632,24 +652,35 @@ def save_file(pickler, obj):
             position = -1
         else:
             position = obj.tell()
-    pickler.save_reduce(_create_filehandle, (obj.name, obj.mode, position, \
-                                             obj.closed, open, pickler._safe_file), obj=obj)
+    if pickler._file_mode == FMODE_PICKLECONTENTS:
+        f = open_(obj.name, "r")
+        fdata = f.read()
+        f.close()
+    else:
+        fdata = ""
+    pickler.save_reduce(_create_filehandle, (obj.name, obj.mode, position,
+                                             obj.closed, open_, pickler._safe_file,
+                                             pickler._file_mode, fdata), obj=obj)
     return
 
-if PyTextWrapperType: #XXX: are stdout, stderr or stdin ever _pyio files?
+
+@register(FileType) #XXX: in 3.x has buffer=0, needs different _create?
+@register(BufferedRandomType)
+@register(BufferedReaderType)
+@register(BufferedWriterType)
+@register(TextWrapperType)
+def save_file(pickler, obj):
+    log.info("Fi: %s" % obj)
+    return _save_file(pickler, obj, open)
+
+if PyTextWrapperType:
     @register(PyBufferedRandomType)
     @register(PyBufferedReaderType)
     @register(PyBufferedWriterType)
     @register(PyTextWrapperType)
     def save_file(pickler, obj):
         log.info("Fi: %s" % obj)
-        if obj.closed:
-            position = None
-        else:
-            position = obj.tell()
-        pickler.save_reduce(_create_filehandle, (obj.name, obj.mode, position, \
-                                                 obj.closed, _open, pickler._safe_file), obj=obj)
-        return
+        return _save_file(pickler, obj, _open)
 
 # The following two functions are based on 'saveCStringIoInput'
 # and 'saveCStringIoOutput' from spickle
