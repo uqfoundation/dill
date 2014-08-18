@@ -414,9 +414,34 @@ def _create_filehandle(name, mode, position, closed, open, safe, file_mode, fdat
                     f = open(name, mode)
             elif file_mode == FMODE_PRESERVEDATA and "w" in mode:
                 # stop truncation when opening
-                def opener(file, flags):
-                    return os.open(file, flags ^ os.O_TRUNC)
-                f = open(name, mode, opener=opener)
+                flags = os.O_CREAT
+                if "+" in mode:
+                    flags |= os.O_RDWR
+                else:
+                    flags |= os.O_WRONLY
+                f = os.fdopen(os.open(name, flags), mode)
+                # set name to the correct value
+                if PY3:
+                    r = getattr(f, "buffer", f)
+                    r = getattr(r, "raw", r)
+                    r.name = name
+                else:
+                    class FILE(ctypes.Structure):
+                        _fields_ = [("refcount", ctypes.c_long),
+                                    ("type_obj", ctypes.py_object),
+                                    ("file_pointer", ctypes.c_voidp),
+                                    ("name", ctypes.py_object)]
+
+                    class PyObject(ctypes.Structure):
+                        _fields_ = [
+                            ("ob_refcnt", ctypes.c_int),
+                            ("ob_type", ctypes.py_object)
+                            ]
+                    if not HAS_CTYPES:
+                        raise RuntimeError("Need ctypes to set file name")
+                    ctypes.cast(id(f), ctypes.POINTER(FILE)).contents.name = name
+                    ctypes.cast(id(name), ctypes.POINTER(PyObject)).contents.ob_refcnt += 1
+                assert f.name == name
             else:
                 f = open(name, mode)
         except IOError:
