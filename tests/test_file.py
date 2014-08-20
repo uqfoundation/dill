@@ -15,11 +15,13 @@ rand_chars = list(string.ascii_letters) + ["\n"] * 40  # bias newline
 
 
 def write_randomness(number=200):
-    with open(fname, "w") as f:
-        for i in range(number):
-            f.write(random.choice(rand_chars))
-    with open(fname, "r") as f:
-        contents = f.read()
+    f = open(fname, "w")
+    for i in range(number):
+        f.write(random.choice(rand_chars))
+    f.close()
+    f = open(fname, "r")
+    contents = f.read()
+    f.close()
     return contents
 
 
@@ -335,7 +337,7 @@ def test(safefmode=False, kwargs={}):
         assert f2tell == ftell
         # 3) prefer data over filehandle state
         # assert open(fname).read() == "\x00\x00\x00\x00\x00 world!"
-        # assert f2mode == 'r+'  #FIXME: spec'd as 'r+' but is 'w+'
+        # assert f2mode == 'w+'
         # assert f2tell == ftell
         # 2) treat as if new filehandle, will truncate file
         # assert open(fname).read() == " world!"
@@ -377,7 +379,7 @@ def test(safefmode=False, kwargs={}):
         f2.close()
         assert f2mode == fmode
         # 1) preserve mode and position  #XXX: also 3)
-        assert open(fname).read() == " world!" # 3) FIXME: throws, should not?
+        assert open(fname).read() == " world!"
         assert f2tell == ftell
         # 2) treat as if new filehandle, will seek(EOF)
         # assert open(fname).read() == " world!"

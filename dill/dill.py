@@ -130,7 +130,8 @@ try:
     ExitType = None     # IPython.core.autocall.ExitAutocall
     singletontypes = ['exit', 'quit', 'get_ipython']
 except NameError:
-    ExitType = type(exit)
+    try: ExitType = type(exit) # apparently 'exit' can be removed
+    except NameError: ExitType = None
     singletontypes = []
 
 ### Shorthands (modified from python2.5/lib/pickle.py)
