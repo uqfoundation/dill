@@ -15,11 +15,13 @@ rand_chars = list(string.ascii_letters) + ["\n"] * 40  # bias newline
 
 
 def write_randomness(number=200):
-    with open(fname, "w") as f:
-        for i in range(number):
-            f.write(random.choice(rand_chars))
-    with open(fname, "r") as f:
-        contents = f.read()
+    f = open(fname, "w")
+    for i in range(number):
+        f.write(random.choice(rand_chars))
+    f.close()
+    f = open(fname, "r")
+    contents = f.read()
+    f.close()
     return contents
 
 
