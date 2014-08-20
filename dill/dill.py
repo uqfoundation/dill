@@ -386,7 +386,8 @@ def _create_filehandle(name, mode, position, closed, open, safe, file_mode, fdat
         f = tempfile.TemporaryFile(mode)
     else:
         # treat x mode as w mode
-        mode = mode.replace("x", "w")
+        if "x" in mode and sys.hexversion < 0x03030000:
+                raise IOError("invalid mode 'x'")
 
         if not os.path.exists(name):
             if safe:
@@ -412,7 +413,8 @@ def _create_filehandle(name, mode, position, closed, open, safe, file_mode, fdat
                 if "w" not in mode:
                     f.close()
                     f = open(name, mode)
-            elif file_mode == FMODE_PRESERVEDATA and "w" in mode:
+            elif file_mode == FMODE_PRESERVEDATA \
+               and "w" in mode or "x" in mode:
                 # stop truncation when opening
                 flags = os.O_CREAT
                 if "+" in mode:
