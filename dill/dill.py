@@ -131,7 +131,8 @@ try:
     ExitType = None     # IPython.core.autocall.ExitAutocall
     singletontypes = ['exit', 'quit', 'get_ipython']
 except NameError:
-    ExitType = type(exit)
+    try: ExitType = type(exit) # apparently 'exit' can be removed
+    except NameError: ExitType = None
     singletontypes = []
 
 ### File modes
