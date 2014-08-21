@@ -676,8 +676,8 @@ def _save_file(pickler, obj, open_):
     else:
         fdata = ""
     pickler.save_reduce(_create_filehandle, (obj.name, obj.mode, position,
-                                             obj.closed, open_, pickler._safe_file,
-                                             pickler._safeio, fdata), obj=obj)
+                                             obj.closed, open_, pickler._safeio,
+                                             pickler._file_mode, fdata), obj=obj)
     return
 
 
