@@ -38,14 +38,14 @@ def throws(op, args, exc):
         return False
 
 
-def test(safe_file, file_mode):
+def test(safeio, file_mode):
     # file exists, with same contents
     # read
 
     write_randomness()
 
     f = open(fname, "r")
-    _f = dill.loads(dill.dumps(f, safe_file=safe_file, file_mode=file_mode))
+    _f = dill.loads(dill.dumps(f, safeio=safeio, file_mode=file_mode))
     assert _f.mode == f.mode
     assert _f.tell() == f.tell()
     assert _f.read() == f.read()
@@ -56,7 +56,7 @@ def test(safe_file, file_mode):
 
     f = open(fname, "w")
     f.write("hello")
-    f_dumped = dill.dumps(f, safe_file=safe_file, file_mode=file_mode)
+    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
     fmode = f.mode
     ftell = f.tell()
     f.close()
@@ -89,7 +89,7 @@ def test(safe_file, file_mode):
 
     f = open(fname, "a")
     f.write("hello")
-    f_dumped = dill.dumps(f, safe_file=safe_file, file_mode=file_mode)
+    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
     fmode = f.mode
     ftell = f.tell()
     f.close()
@@ -119,14 +119,14 @@ def test(safe_file, file_mode):
 
     f = open(fname, "r")
     fstr = f.read()
-    f_dumped = dill.dumps(f, safe_file=safe_file, file_mode=file_mode)
+    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
     fmode = f.mode
     ftell = f.tell()
     f.close()
     _flen = 150
     _fstr = write_randomness(number=_flen)
 
-    if safe_file:  # throw error if ftell > EOF
+    if safeio:  # throw error if ftell > EOF
         assert throws(dill.loads, (f_dumped,), IOError)
     else:
         f2 = dill.loads(f_dumped)
@@ -157,7 +157,7 @@ def test(safe_file, file_mode):
 
     f = open(fname, "w")
     f.write("hello")
-    f_dumped = dill.dumps(f, safe_file=safe_file, file_mode=file_mode)
+    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
     fmode = f.mode
     ftell = f.tell()
     f.close()
@@ -168,7 +168,7 @@ def test(safe_file, file_mode):
     _ftell = f.tell()
     f.close()
 
-    if safe_file:  # throw error if ftell > EOF
+    if safeio:  # throw error if ftell > EOF
         assert throws(dill.loads, (f_dumped,), IOError)
     else:
         f2 = dill.loads(f_dumped)
@@ -198,7 +198,7 @@ def test(safe_file, file_mode):
 
     f = open(fname, "a")
     f.write("hello")
-    f_dumped = dill.dumps(f, safe_file=safe_file, file_mode=file_mode)
+    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
     fmode = f.mode
     ftell = f.tell()
     f.close()
@@ -209,7 +209,7 @@ def test(safe_file, file_mode):
     _ftell = f.tell()
     f.close()
 
-    if safe_file:  # throw error if ftell > EOF
+    if safeio:  # throw error if ftell > EOF
         assert throws(dill.loads, (f_dumped,), IOError)
     else:
         f2 = dill.loads(f_dumped)
@@ -239,14 +239,14 @@ def test(safe_file, file_mode):
 
     f = open(fname, "r")
     fstr = f.read()
-    f_dumped = dill.dumps(f, safe_file=safe_file, file_mode=file_mode)
+    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
     fmode = f.mode
     ftell = f.tell()
     f.close()
 
     os.remove(fname)
 
-    if safe_file:  # throw error if file DNE
+    if safeio:  # throw error if file DNE
         assert throws(dill.loads, (f_dumped,), IOError)
     else:
         f2 = dill.loads(f_dumped)
@@ -278,14 +278,14 @@ def test(safe_file, file_mode):
 
     f = open(fname, "w+")
     f.write("hello")
-    f_dumped = dill.dumps(f, safe_file=safe_file, file_mode=file_mode)
+    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
     ftell = f.tell()
     fmode = f.mode
     f.close()
 
     os.remove(fname)
 
-    if safe_file:  # throw error if file DNE
+    if safeio:  # throw error if file DNE
         assert throws(dill.loads, (f_dumped,), IOError)
     else:
         f2 = dill.loads(f_dumped)
@@ -314,14 +314,14 @@ def test(safe_file, file_mode):
 
     f = open(fname, "a")
     f.write("hello")
-    f_dumped = dill.dumps(f, safe_file=safe_file, file_mode=file_mode)
+    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
     ftell = f.tell()
     fmode = f.mode
     f.close()
 
     os.remove(fname)
 
-    if safe_file:  # throw error if file DNE
+    if safeio:  # throw error if file DNE
         assert throws(dill.loads, (f_dumped,), IOError)
     else:
         f2 = dill.loads(f_dumped)
@@ -349,7 +349,7 @@ def test(safe_file, file_mode):
 
     f = open(fname, "r")
     fstr = f.read()
-    f_dumped = dill.dumps(f, safe_file=safe_file, file_mode=file_mode)
+    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
     fmode = f.mode
     ftell = f.tell()
     f.close()
@@ -384,7 +384,7 @@ def test(safe_file, file_mode):
 
     f = open(fname, "w")
     f.write("hello")
-    f_dumped = dill.dumps(f, safe_file=safe_file, file_mode=file_mode)
+    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
     fmode = f.mode
     ftell = f.tell()
 
@@ -423,7 +423,7 @@ def test(safe_file, file_mode):
 
     f = open(fname, "a")
     f.write("hello")
-    f_dumped = dill.dumps(f, safe_file=safe_file, file_mode=file_mode)
+    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
     fmode = f.mode
     ftell = f.tell()
     fstr = open(fname).read()
@@ -454,13 +454,13 @@ def test(safe_file, file_mode):
     f2.close()
 
 
-test(safe_file=False, file_mode=dill.FMODE_NEWHANDLE)
-test(safe_file=False, file_mode=dill.FMODE_PRESERVEDATA)
-test(safe_file=False, file_mode=dill.FMODE_PICKLECONTENTS)
+test(safeio=False, file_mode=dill.FMODE_NEWHANDLE)
+test(safeio=False, file_mode=dill.FMODE_PRESERVEDATA)
+test(safeio=False, file_mode=dill.FMODE_PICKLECONTENTS)
 
-test(safe_file=True, file_mode=dill.FMODE_NEWHANDLE)
-test(safe_file=True, file_mode=dill.FMODE_PRESERVEDATA)
-test(safe_file=True, file_mode=dill.FMODE_PICKLECONTENTS)
+test(safeio=True, file_mode=dill.FMODE_NEWHANDLE)
+test(safeio=True, file_mode=dill.FMODE_PRESERVEDATA)
+test(safeio=True, file_mode=dill.FMODE_PICKLECONTENTS)
 
 if os.path.exists(fname):
     os.remove(fname)

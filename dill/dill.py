@@ -151,14 +151,14 @@ def copy(obj, *args, **kwds):
     """use pickling to 'copy' an object"""
     return loads(dumps(obj, *args, **kwds))
 
-def dump(obj, file, protocol=None, byref=False, file_mode=FMODE_NEWHANDLE, safe_file=False):
+def dump(obj, file, protocol=None, byref=False, file_mode=FMODE_NEWHANDLE, safeio=False):
     """pickle an object to a file"""
     if protocol is None: protocol = DEFAULT_PROTOCOL
     pik = Pickler(file, protocol)
     pik._main_module = _main_module
     _byref = pik._byref
     pik._byref = bool(byref)
-    pik._safe_file = safe_file
+    pik._safeio = safeio
     pik._file_mode = file_mode
     # hack to catch subclassed numpy array instances
     if NumpyArrayType and ndarrayinstance(obj):
@@ -174,10 +174,10 @@ def dump(obj, file, protocol=None, byref=False, file_mode=FMODE_NEWHANDLE, safe_
     pik._byref = _byref
     return
 
-def dumps(obj, protocol=None, byref=False, file_mode=FMODE_NEWHANDLE, safe_file=False):
+def dumps(obj, protocol=None, byref=False, file_mode=FMODE_NEWHANDLE, safeio=False):
     """pickle an object to a string"""
     file = StringIO()
-    dump(obj, file, protocol, byref, file_mode, safe_file)
+    dump(obj, file, protocol, byref, file_mode, safeio)
     return file.getvalue()
 
 def load(file):
@@ -372,7 +372,7 @@ def _create_lock(locked, *args):
             raise UnpicklingError("Cannot acquire lock")
     return lock
 
-def _create_filehandle(name, mode, position, closed, open, safe, file_mode, fdata): # buffering=0
+def _create_filehandle(name, mode, position, closed, open, safeio, file_mode, fdata): # buffering=0
     # only pickles the handle, not the file contents... good? or StringIO(data)?
     # (for file contents see: http://effbot.org/librarybook/copy-reg.htm)
     # NOTE: handle special cases first (are there more special cases?)
@@ -391,7 +391,7 @@ def _create_filehandle(name, mode, position, closed, open, safe, file_mode, fdat
                 raise IOError("invalid mode 'x'")
 
         if not os.path.exists(name):
-            if safe:
+            if safeio:
                 raise IOError("File '%s' does not exist" % name)
             elif "r" in mode and file_mode != FMODE_PICKLECONTENTS:
                 name = os.devnull
@@ -400,7 +400,7 @@ def _create_filehandle(name, mode, position, closed, open, safe, file_mode, fdat
             current_size = os.path.getsize(name)
 
         if position > current_size:
-            if safe:
+            if safeio:
                 raise IOError("File '%s' is too short" % name)
             elif file_mode == FMODE_PRESERVEDATA:
                 position = current_size
@@ -415,7 +415,7 @@ def _create_filehandle(name, mode, position, closed, open, safe, file_mode, fdat
                     f.close()
                     f = open(name, mode)
             elif file_mode == FMODE_PRESERVEDATA \
-               and "w" in mode or "x" in mode:
+               and ("w" in mode or "x" in mode):
                 # stop truncation when opening
                 flags = os.O_CREAT
                 if "+" in mode:
@@ -677,7 +677,7 @@ def _save_file(pickler, obj, open_):
         fdata = ""
     pickler.save_reduce(_create_filehandle, (obj.name, obj.mode, position,
                                              obj.closed, open_, pickler._safe_file,
-                                             pickler._file_mode, fdata), obj=obj)
+                                             pickler._safeio, fdata), obj=obj)
     return
 
 
