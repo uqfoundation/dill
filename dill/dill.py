@@ -805,7 +805,7 @@ def save_weakproxy(pickler, obj):
 def save_module(pickler, obj):
     # if a module file name starts with this, it should be a standard module,
     # so should be pickled as a reference
-    prefix = sys.base_prefix if PY3 else sys.prefix
+    prefix = getattr(sys, "base_prefix", sys.prefix)
     std_mod = getattr(obj, "__file__", prefix).startswith(prefix)
     if obj.__name__ not in ("builtins", "dill") \
        and not std_mod or is_dill(pickler) and obj is pickler._main_module:
