@@ -372,6 +372,7 @@ def _create_lock(locked, *args):
             raise UnpicklingError("Cannot acquire lock")
     return lock
 
+# thanks to matsjoyce for adding all the different file modes
 def _create_filehandle(name, mode, position, closed, open, safeio, file_mode, fdata): # buffering=0
     # only pickles the handle, not the file contents... good? or StringIO(data)?
     # (for file contents see: http://effbot.org/librarybook/copy-reg.htm)

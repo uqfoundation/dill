@@ -58,7 +58,7 @@ def children(obj, objtype, depth=1, ignore=()): #XXX: objtype=object ?
     depth: search depth (e.g. depth=2 is 'grandparents')
     ignore: an object or tuple of objects to ignore in the search
 
-    NOTE: a common thing to ignore is all globals, 'ignore=globals()'
+    NOTE: a common thing to ignore is all globals, 'ignore=(globals(),)'
 
     NOTE: repeated calls may yield different results, as python stores
     the last value in the special variable '_'; thus, it is often good
