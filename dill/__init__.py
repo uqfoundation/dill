@@ -26,7 +26,7 @@ __license__ = """
 from .dill import dump, dumps, load, loads, dump_session, load_session, \
     Pickler, Unpickler, register, copy, pickle, pickles, HIGHEST_PROTOCOL, \
     DEFAULT_PROTOCOL, PicklingError, UnpicklingError, \
-    _revert_extension as revert_extension, _extend as extend
+    FMODE_NEWHANDLE, FMODE_PRESERVEDATA, FMODE_PICKLECONTENTS
 from . import source, temp, detect
 
 # make sure "trace" is turned off
@@ -73,6 +73,13 @@ def load_types(pickleable=True, unpickleable=True):
                              if obj.find('Type') != -1]
     # add corresponding types from objects to types
     reload(types)
+
+def extend(use_dill=True):
+    '''add (or remove) dill types to/from pickle'''
+    from .dill import _revert_extension, _extend
+    if use_dill: _extend()
+    else: _revert_extension()
+    return
 
 extend()
 
