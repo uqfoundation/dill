@@ -24,8 +24,8 @@ __license__ = """
 """ + __license__
 
 from .dill import dump, dumps, load, loads, dump_session, load_session, \
-    Pickler, Unpickler, register, copy, pickle, pickles, HIGHEST_PROTOCOL, \
-    DEFAULT_PROTOCOL, PicklingError, UnpicklingError, \
+    Pickler, Unpickler, register, copy, pickle, pickles, use_diff, \
+    HIGHEST_PROTOCOL, DEFAULT_PROTOCOL, PicklingError, UnpicklingError, \
     FMODE_NEWHANDLE, FMODE_PRESERVEDATA, FMODE_PICKLECONTENTS
 from . import source, temp, detect
 
