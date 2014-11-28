@@ -155,14 +155,19 @@ def copy(obj, *args, **kwds):
     """use pickling to 'copy' an object"""
     return loads(dumps(obj, *args, **kwds))
 
-def dump(obj, file, protocol=None, byref=False, fmode=HANDLE_FMODE, strictio=False):
+def dump(obj, file, protocol=None, byref=False, fmode=HANDLE_FMODE):#, strictio=False):
     """pickle an object to a file"""
+    strictio = False #FIXME: strict=True needs cleanup
     if protocol is None: protocol = DEFAULT_PROTOCOL
     pik = Pickler(file, protocol)
     pik._main_module = _main_module
+    # save settings
     _byref = pik._byref
+    _strictio = pik._strictio
+    _fmode = pik._fmode
+    # apply kwd settings
     pik._byref = bool(byref)
-    pik._strictio = strictio
+    pik._strictio = bool(strictio)
     pik._fmode = fmode
     # hack to catch subclassed numpy array instances
     if NumpyArrayType and ndarrayinstance(obj):
@@ -175,13 +180,16 @@ def dump(obj, file, protocol=None, byref=False, fmode=HANDLE_FMODE, strictio=Fal
             return
     # end hack
     pik.dump(obj)
+    # return to saved settings
     pik._byref = _byref
+    pik._strictio = _strictio
+    pik._fmode = _fmode
     return
 
-def dumps(obj, protocol=None, byref=False, fmode=HANDLE_FMODE, strictio=False):
+def dumps(obj, protocol=None, byref=False, fmode=HANDLE_FMODE):#, strictio=False):
     """pickle an object to a string"""
     file = StringIO()
-    dump(obj, file, protocol, byref, fmode, strictio)
+    dump(obj, file, protocol, byref, fmode)#, strictio)
     return file.getvalue()
 
 def load(file):
@@ -250,7 +258,7 @@ class Pickler(StockPickler):
     _main_module = None
     _session = False
     _byref = False
-    _safe_file = False
+    _strictio = False
     _fmode = HANDLE_FMODE
     pass
 

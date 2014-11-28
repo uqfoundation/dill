@@ -50,7 +50,7 @@ def test(strictio, fmode):
     write_randomness()
 
     f = open(fname, "r")
-    _f = dill.loads(dill.dumps(f, strictio=strictio, fmode=fmode))
+    _f = dill.loads(dill.dumps(f, fmode=fmode))#, strictio=strictio))
     assert _f.mode == f.mode
     assert _f.tell() == f.tell()
     assert _f.read() == f.read()
@@ -61,7 +61,7 @@ def test(strictio, fmode):
 
     f = open(fname, "w")
     f.write("hello")
-    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f_dumped = dill.dumps(f, fmode=fmode)#, strictio=strictio)
     f1mode = f.mode
     ftell = f.tell()
     f.close()
@@ -94,7 +94,7 @@ def test(strictio, fmode):
 
     f = open(fname, "a")
     f.write("hello")
-    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f_dumped = dill.dumps(f, fmode=fmode)#, strictio=strictio)
     f1mode = f.mode
     ftell = f.tell()
     f.close()
@@ -124,7 +124,7 @@ def test(strictio, fmode):
 
     f = open(fname, "r")
     fstr = f.read()
-    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f_dumped = dill.dumps(f, fmode=fmode)#, strictio=strictio)
     f1mode = f.mode
     ftell = f.tell()
     f.close()
@@ -162,7 +162,7 @@ def test(strictio, fmode):
 
     f = open(fname, "w")
     f.write("hello")
-    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f_dumped = dill.dumps(f, fmode=fmode)#, strictio=strictio)
     f1mode = f.mode
     ftell = f.tell()
     f.close()
@@ -203,7 +203,7 @@ def test(strictio, fmode):
 
     f = open(fname, "a")
     f.write("hello")
-    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f_dumped = dill.dumps(f, fmode=fmode)#, strictio=strictio)
     f1mode = f.mode
     ftell = f.tell()
     f.close()
@@ -244,7 +244,7 @@ def test(strictio, fmode):
 
     f = open(fname, "r")
     fstr = f.read()
-    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f_dumped = dill.dumps(f, fmode=fmode)#, strictio=strictio)
     f1mode = f.mode
     ftell = f.tell()
     f.close()
@@ -283,7 +283,7 @@ def test(strictio, fmode):
 
     f = open(fname, "w+")
     f.write("hello")
-    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f_dumped = dill.dumps(f, fmode=fmode)#, strictio=strictio)
     ftell = f.tell()
     f1mode = f.mode
     f.close()
@@ -319,7 +319,7 @@ def test(strictio, fmode):
 
     f = open(fname, "a")
     f.write("hello")
-    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f_dumped = dill.dumps(f, fmode=fmode)#, strictio=strictio)
     ftell = f.tell()
     f1mode = f.mode
     f.close()
@@ -354,7 +354,7 @@ def test(strictio, fmode):
 
     f = open(fname, "r")
     fstr = f.read()
-    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f_dumped = dill.dumps(f, fmode=fmode)#, strictio=strictio)
     f1mode = f.mode
     ftell = f.tell()
     f.close()
@@ -389,7 +389,7 @@ def test(strictio, fmode):
 
     f = open(fname, "w")
     f.write("hello")
-    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f_dumped = dill.dumps(f, fmode=fmode)#, strictio=strictio)
     f1mode = f.mode
     ftell = f.tell()
 
@@ -428,7 +428,7 @@ def test(strictio, fmode):
 
     f = open(fname, "a")
     f.write("hello")
-    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f_dumped = dill.dumps(f, fmode=fmode)#, strictio=strictio)
     f1mode = f.mode
     ftell = f.tell()
     fstr = open(fname).read()
@@ -465,9 +465,9 @@ if __name__ == '__main__':
     test(strictio=False, fmode=dill.CONTENTS_FMODE)
     test(strictio=False, fmode=dill.FILE_FMODE)
 
-    test(strictio=True, fmode=dill.HANDLE_FMODE)
-    test(strictio=True, fmode=dill.CONTENTS_FMODE)
-    test(strictio=True, fmode=dill.FILE_FMODE)
+   #test(strictio=True, fmode=dill.HANDLE_FMODE)
+   #test(strictio=True, fmode=dill.CONTENTS_FMODE)
+   #test(strictio=True, fmode=dill.FILE_FMODE)
 
 if os.path.exists(fname):
     os.remove(fname)
