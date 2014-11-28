@@ -8,9 +8,30 @@
 import sys
 import dill
 import test_mixins as module
+import imp
 
 cached = (module.__cached__ if hasattr(module, "__cached__")
-          else module.__file__ + "c")
+          else module.__file__.split(".", 1)[0] + ".pyc")
+
+module.a = 1234
+
+pik_mod = dill.dumps(module)
+
+module.a = 0
+
+# remove module
+del sys.modules[module.__name__]
+del module
+
+module = dill.loads(pik_mod)
+assert hasattr(module, "a") and module.a == 1234
+assert module.double_add(1, 2, 3) == 2 * module.fx
+
+# Restart, and test use_diff
+
+imp.reload(module)
+
+dill.use_diff()
 
 module.a = 1234
 
@@ -29,5 +50,6 @@ assert module.double_add(1, 2, 3) == 2 * module.fx
 # clean up
 import os
 os.remove(cached)
-if os.path.exists("__pycache__") and not os.listdir("__pycache__"):
-    os.removedirs("__pycache__")
+pycache = os.path.join(os.path.dirname(module.__file__), "__pycache__")
+if os.path.exists(pycache) and not os.listdir(pycache):
+    os.removedirs(pycache)

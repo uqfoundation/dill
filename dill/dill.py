@@ -16,7 +16,7 @@ Test against CH16+ Std. Lib. ... TBD.
 """
 __all__ = ['dump','dumps','load','loads','dump_session','load_session',
            'Pickler','Unpickler','register','copy','pickle','pickles',
-           'HIGHEST_PROTOCOL','DEFAULT_PROTOCOL',
+           'use_diff', 'HIGHEST_PROTOCOL','DEFAULT_PROTOCOL',
            'PicklingError','UnpicklingError','FMODE_NEWHANDLE',
            'FMODE_PRESERVEDATA','FMODE_PICKLECONTENTS']
 
@@ -31,6 +31,8 @@ def _trace(boolean):
 
 import os
 import sys
+diff = None
+_use_diff = False
 PY3 = (hex(sys.hexversion) >= '0x30000f0')
 if PY3: #XXX: get types from dill.objtypes ?
     import builtins as __builtin__
@@ -253,6 +255,7 @@ class Pickler(StockPickler):
     def __init__(self, *args, **kwargs):
         StockPickler.__init__(self, *args, **kwargs)
         self._main_module = _main_module
+        self._diff_cashe = {}
 
 class Unpickler(StockUnpickler):
     """python's Unpickler extended to interpreter sessions and more types"""
@@ -294,6 +297,22 @@ def _revert_extension():
             del StockPickler.dispatch[type]
             if type in pickle_dispatch_copy:
                 StockPickler.dispatch[type] = pickle_dispatch_copy[type]
+
+def use_diff(on=True):
+    """
+    reduces size of pickles by only including object which have changed.
+    Decreases pickle size but increases CPU time needed.
+    Also helps avoid some unpicklable objects.
+    MUST be called at start of script, otherwise changes will not be recorded.
+    """
+    global _use_diff, diff
+    _use_diff = on
+    if _use_diff and diff is None:
+        try:
+            from . import diff as d
+        except:
+            import diff as d
+        diff = d
 
 def _create_typemap():
     import types
@@ -885,21 +904,38 @@ def save_weakproxy(pickler, obj):
 
 @register(ModuleType)
 def save_module(pickler, obj):
-    # if a module file name starts with this, it should be a standard module,
-    # so should be pickled as a reference
-    prefix = getattr(sys, "base_prefix", sys.prefix)
-    std_mod = getattr(obj, "__file__", prefix).startswith(prefix)
-    if obj.__name__ not in ("builtins", "dill") \
-       and not std_mod or is_dill(pickler) and obj is pickler._main_module:
-        log.info("M1: %s" % obj)
-        _main_dict = obj.__dict__.copy() #XXX: better no copy? option to copy?
-        [_main_dict.pop(item, None) for item in singletontypes
-         + ["__builtins__", "__loader__"]]
-        pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
-                            state=_main_dict)
-    else:
+    if _use_diff:
+        if obj.__name__ != "dill":
+            try:
+                changed = diff.whats_changed(obj, seen=pickler._diff_cashe)[0]
+            except RuntimeError:  # not memorised module, probably part of dill
+                pass
+            else:
+                log.info("M1: %s with diff" % obj)
+                log.info("Diff: %s", changed.keys())
+                pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
+                                    state=changed)
+                return
+
         log.info("M2: %s" % obj)
         pickler.save_reduce(_import_module, (obj.__name__,), obj=obj)
+    else:
+        # if a module file name starts with prefx, it should be a builtin
+        # module, so should be pickled as a reference
+        prefix = getattr(sys, "base_prefix", sys.prefix)
+        std_mod = getattr(obj, "__file__", prefix).startswith(prefix)
+        if obj.__name__ not in ("builtins", "dill") \
+           and not std_mod or is_dill(pickler) and obj is pickler._main_module:
+            log.info("M1: %s" % obj)
+            _main_dict = obj.__dict__.copy() #XXX: better no copy? option to copy?
+            [_main_dict.pop(item, None) for item in singletontypes
+                + ["__builtins__", "__loader__"]]
+            pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
+                                state=_main_dict)
+        else:
+            log.info("M2: %s" % obj)
+            pickler.save_reduce(_import_module, (obj.__name__,), obj=obj)
+        return
     return
 
 @register(TypeType)
