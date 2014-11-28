@@ -24,9 +24,9 @@ __license__ = """
 """ + __license__
 
 from .dill import dump, dumps, load, loads, dump_session, load_session, \
-    Pickler, Unpickler, register, copy, pickle, pickles, use_diff, \
+    Pickler, Unpickler, register, copy, pickle, pickles, \
     HIGHEST_PROTOCOL, DEFAULT_PROTOCOL, PicklingError, UnpicklingError, \
-    FMODE_NEWHANDLE, FMODE_PRESERVEDATA, FMODE_PICKLECONTENTS
+    HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE
 from . import source, temp, detect
 
 # make sure "trace" is turned off

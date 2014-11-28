@@ -28,9 +28,9 @@ except ImportError:
 memo = {}
 id_to_obj = {}
 # types that cannot have changing attributes
-builtins_types = {str, list, dict, set, frozenset, int}
-dont_memo = {id(i) for i in (memo, sys.modules, sys.path_importer_cache,
-             os.environ, id_to_obj)}
+builtins_types = set((str, list, dict, set, frozenset, int))
+dont_memo = set(id(i) for i in (memo, sys.modules, sys.path_importer_cache,
+             os.environ, id_to_obj))
 
 
 def get_attrs(obj):
@@ -46,7 +46,7 @@ def get_attrs(obj):
         return
 
 
-def get_seq(obj, cashe={str: False, frozenset: False, list: True, set: True,
+def get_seq(obj, cache={str: False, frozenset: False, list: True, set: True,
                         dict: True, tuple: True, type: False,
                         types.ModuleType: False, types.FunctionType: False,
                         types.BuiltinFunctionType: False}):
@@ -55,8 +55,8 @@ def get_seq(obj, cashe={str: False, frozenset: False, list: True, set: True,
     """
     o_type = type(obj)
     hsattr = hasattr
-    if o_type in cashe:
-        if cashe[o_type]:
+    if o_type in cache:
+        if cache[o_type]:
             if hsattr(obj, "copy"):
                 return obj.copy()
             return obj
@@ -68,12 +68,12 @@ def get_seq(obj, cashe={str: False, frozenset: False, list: True, set: True,
     elif hsattr(obj, "__contains__") and hsattr(obj, "__iter__") \
        and hsattr(obj, "__len__") and hsattr(o_type, "__contains__") \
        and hsattr(o_type, "__iter__") and hsattr(o_type, "__len__"):
-        cashe[o_type] = True
+        cache[o_type] = True
         if hsattr(obj, "copy"):
             return obj.copy()
         return obj
     else:
-        cashe[o_type] = False
+        cache[o_type] = False
         return None
 
 
@@ -91,13 +91,13 @@ def memorise(obj, force=False):
     if g is None:
         attrs_id = None
     else:
-        attrs_id = {key: id_(value) for key, value in g.items()}
+        attrs_id = dict((key,id_(value)) for key, value in g.items())
 
     s = get_seq(obj)
     if s is None:
         seq_id = None
     elif hasattr(s, "items"):
-        seq_id = {id_(key): id_(value) for key, value in s.items()}
+        seq_id = dict((id_(key),id_(value)) for key, value in s.items())
     else:
         seq_id = [id_(i) for i in s]
 
@@ -168,7 +168,7 @@ def whats_changed(obj, seen=None, simple=False, first=True):
     else:
         obj_attrs = memo[obj_id][0]
         obj_get = obj_attrs.get
-        changed = {key: None for key in obj_attrs if key not in attrs}
+        changed = dict((key,None) for key in obj_attrs if key not in attrs)
         for key, o in attrs.items():
             if id_(o) != obj_get(key, None) or chngd(o, seen, True, False):
                 changed[key] = o
@@ -199,19 +199,20 @@ def whats_changed(obj, seen=None, simple=False, first=True):
     return changed, seq_diff
 
 
-def has_changed(*args, **kwargs):
-    return whats_changed(*args, simple=True, **kwargs)
+def has_changed(*args, **kwds):
+    kwds['simple'] = True  # ignore simple if passed in
+    return whats_changed(*args, **kwds)
 
 __import__ = __import__
 
 
-def _imp(*args, **kwargs):
+def _imp(*args, **kwds):
     """
     Replaces the default __import__, to allow a module to be memorised
     before the user can change it
     """
     before = set(sys.modules.keys())
-    mod = __import__(*args, **kwargs)
+    mod = __import__(*args, **kwds)
     after = set(sys.modules.keys()).difference(before)
     for m in after:
         memorise(sys.modules[m])

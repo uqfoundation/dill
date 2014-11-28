@@ -16,9 +16,8 @@ Test against CH16+ Std. Lib. ... TBD.
 """
 __all__ = ['dump','dumps','load','loads','dump_session','load_session',
            'Pickler','Unpickler','register','copy','pickle','pickles',
-           'use_diff', 'HIGHEST_PROTOCOL','DEFAULT_PROTOCOL',
-           'PicklingError','UnpicklingError','FMODE_NEWHANDLE',
-           'FMODE_PRESERVEDATA','FMODE_PICKLECONTENTS']
+           'HIGHEST_PROTOCOL','DEFAULT_PROTOCOL','PicklingError',
+           'UnpicklingError','HANDLE_FMODE','CONTENTS_FMODE','FILE_FMODE']
 
 import logging
 log = logging.getLogger("dill")
@@ -33,7 +32,7 @@ import os
 import sys
 diff = None
 _use_diff = False
-PY3 = (hex(sys.hexversion) >= '0x30000f0')
+PY3 = (sys.hexversion >= 0x30000f0)
 if PY3: #XXX: get types from dill.objtypes ?
     import builtins as __builtin__
     from pickle import _Pickler as StockPickler, _Unpickler as StockUnpickler
@@ -71,8 +70,11 @@ from weakref import ReferenceType, ProxyType, CallableProxyType
 from functools import partial
 from operator import itemgetter, attrgetter
 # new in python2.5
-if hex(sys.hexversion) >= '0x20500f0':
+if sys.hexversion >= 0x20500f0:
     from types import MemberDescriptorType, GetSetDescriptorType
+# new in python3.3
+if sys.hexversion < 0x03030000:
+    FileNotFoundError = IOError
 try:
     import ctypes
     HAS_CTYPES = True
@@ -138,30 +140,30 @@ except NameError:
     singletontypes = []
 
 ### File modes
-# pickles the file handle, preserving mode, with position of the unpickled
-# object as for a new file handle.
-FMODE_NEWHANDLE = 0
-# preserves existing data or create file if is does not exist, with
-# position = min(pickled position, EOF), and mode which preserves behaviour
-FMODE_PRESERVEDATA = 1
-# pickles the file handle, preserving mode and position, as well as the file
-# contents
-FMODE_PICKLECONTENTS = 2
+# Pickles the file handle, preserving mode. The position of the unpickled
+# object is as for a new file handle.
+HANDLE_FMODE = 0
+# Pickles the file contents, creating a new file if on load the file does
+# not exist. The position = min(pickled position, EOF) and mode is chosen
+# as such that "best" preserves behavior of the original file.
+CONTENTS_FMODE = 1
+# Pickles the entire file (handle and contents), preserving mode and position.
+FILE_FMODE = 2
 
 ### Shorthands (modified from python2.5/lib/pickle.py)
 def copy(obj, *args, **kwds):
     """use pickling to 'copy' an object"""
     return loads(dumps(obj, *args, **kwds))
 
-def dump(obj, file, protocol=None, byref=False, file_mode=FMODE_NEWHANDLE, safeio=False):
+def dump(obj, file, protocol=None, byref=False, fmode=HANDLE_FMODE, strictio=False):
     """pickle an object to a file"""
     if protocol is None: protocol = DEFAULT_PROTOCOL
     pik = Pickler(file, protocol)
     pik._main_module = _main_module
     _byref = pik._byref
     pik._byref = bool(byref)
-    pik._safeio = safeio
-    pik._file_mode = file_mode
+    pik._strictio = strictio
+    pik._fmode = fmode
     # hack to catch subclassed numpy array instances
     if NumpyArrayType and ndarrayinstance(obj):
         @register(type(obj))
@@ -176,10 +178,10 @@ def dump(obj, file, protocol=None, byref=False, file_mode=FMODE_NEWHANDLE, safei
     pik._byref = _byref
     return
 
-def dumps(obj, protocol=None, byref=False, file_mode=FMODE_NEWHANDLE, safeio=False):
+def dumps(obj, protocol=None, byref=False, fmode=HANDLE_FMODE, strictio=False):
     """pickle an object to a string"""
     file = StringIO()
-    dump(obj, file, protocol, byref, file_mode, safeio)
+    dump(obj, file, protocol, byref, fmode, strictio)
     return file.getvalue()
 
 def load(file):
@@ -249,13 +251,13 @@ class Pickler(StockPickler):
     _session = False
     _byref = False
     _safe_file = False
-    _file_mode = FMODE_NEWHANDLE
+    _fmode = HANDLE_FMODE
     pass
 
     def __init__(self, *args, **kwargs):
         StockPickler.__init__(self, *args, **kwargs)
         self._main_module = _main_module
-        self._diff_cashe = {}
+        self._diff_cache = {}
 
 class Unpickler(StockUnpickler):
     """python's Unpickler extended to interpreter sessions and more types"""
@@ -392,7 +394,7 @@ def _create_lock(locked, *args):
     return lock
 
 # thanks to matsjoyce for adding all the different file modes
-def _create_filehandle(name, mode, position, closed, open, safeio, file_mode, fdata): # buffering=0
+def _create_filehandle(name, mode, position, closed, open, strictio, fmode, fdata): # buffering=0
     # only pickles the handle, not the file contents... good? or StringIO(data)?
     # (for file contents see: http://effbot.org/librarybook/copy-reg.htm)
     # NOTE: handle special cases first (are there more special cases?)
@@ -408,33 +410,33 @@ def _create_filehandle(name, mode, position, closed, open, safeio, file_mode, fd
     else:
         # treat x mode as w mode
         if "x" in mode and sys.hexversion < 0x03030000:
-                raise IOError("invalid mode 'x'")
+            raise ValueError("invalid mode: '%s'" % mode)
 
         if not os.path.exists(name):
-            if safeio:
-                raise IOError("File '%s' does not exist" % name)
-            elif "r" in mode and file_mode != FMODE_PICKLECONTENTS:
+            if strictio:
+                raise FileNotFoundError("[Errno 2] No such file or directory: '%s'" % name)
+            elif "r" in mode and fmode != FILE_FMODE:
                 name = os.devnull
             current_size = 0
         else:
             current_size = os.path.getsize(name)
 
         if position > current_size:
-            if safeio:
-                raise IOError("File '%s' is too short" % name)
-            elif file_mode == FMODE_PRESERVEDATA:
+            if strictio:
+                raise ValueError("invalid buffer size")
+            elif fmode == CONTENTS_FMODE:
                 position = current_size
         # try to open the file by name
         # NOTE: has different fileno
         try:
             #FIXME: missing: *buffering*, encoding, softspace
-            if file_mode == FMODE_PICKLECONTENTS:
+            if fmode == FILE_FMODE:
                 f = open(name, mode if "w" in mode else "w")
                 f.write(fdata)
                 if "w" not in mode:
                     f.close()
                     f = open(name, mode)
-            elif file_mode == FMODE_PRESERVEDATA \
+            elif fmode == CONTENTS_FMODE \
                and ("w" in mode or "x" in mode):
                 # stop truncation when opening
                 flags = os.O_CREAT
@@ -461,7 +463,7 @@ def _create_filehandle(name, mode, position, closed, open, safeio, file_mode, fd
                             ("ob_type", ctypes.py_object)
                             ]
                     if not HAS_CTYPES:
-                        raise RuntimeError("Need ctypes to set file name")
+                        raise ImportError("No module named 'ctypes'")
                     ctypes.cast(id(f), ctypes.POINTER(FILE)).contents.name = name
                     ctypes.cast(id(name), ctypes.POINTER(PyObject)).contents.ob_refcnt += 1
                 assert f.name == name
@@ -472,7 +474,7 @@ def _create_filehandle(name, mode, position, closed, open, safeio, file_mode, fd
             raise UnpicklingError(err)
     if closed:
         f.close()
-    elif position >= 0 and file_mode != FMODE_NEWHANDLE:
+    elif position >= 0 and fmode != HANDLE_FMODE:
         f.seek(position)
     return f
 
@@ -689,15 +691,17 @@ def _save_file(pickler, obj, open_):
             position = -1
         else:
             position = obj.tell()
-    if pickler._file_mode == FMODE_PICKLECONTENTS:
+    if pickler._fmode == FILE_FMODE:
         f = open_(obj.name, "r")
         fdata = f.read()
         f.close()
     else:
         fdata = ""
+    strictio = pickler._strictio
+    fmode = pickler._fmode
     pickler.save_reduce(_create_filehandle, (obj.name, obj.mode, position,
-                                             obj.closed, open_, pickler._safeio,
-                                             pickler._file_mode, fdata), obj=obj)
+                                             obj.closed, open_, strictio,
+                                             fmode, fdata), obj=obj)
     return
 
 
@@ -779,7 +783,7 @@ def save_instancemethod0(pickler, obj):# example: cStringIO.StringI
                                          obj.im_class), obj=obj)
     return
 
-if hex(sys.hexversion) >= '0x20500f0':
+if sys.hexversion >= 0x20500f0:
     @register(MemberDescriptorType)
     @register(GetSetDescriptorType)
     @register(MethodDescriptorType)
@@ -904,10 +908,10 @@ def save_weakproxy(pickler, obj):
 
 @register(ModuleType)
 def save_module(pickler, obj):
-    if _use_diff:
+    if False: #_use_diff:
         if obj.__name__ != "dill":
             try:
-                changed = diff.whats_changed(obj, seen=pickler._diff_cashe)[0]
+                changed = diff.whats_changed(obj, seen=pickler._diff_cache)[0]
             except RuntimeError:  # not memorised module, probably part of dill
                 pass
             else:
@@ -1013,5 +1017,7 @@ def _extend():
             log.info("skip: %s" % t)
         else: pass
     return
+
+del diff, _use_diff, use_diff
 
 # EOF

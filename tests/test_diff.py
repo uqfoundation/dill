@@ -5,7 +5,7 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
-from dill import diff
+from dill import __diff as diff
 
 
 class A:
@@ -50,16 +50,38 @@ changed = diff.whats_changed(c3)
 assert changed[0] == {}
 assert changed[1]
 
-import abc
-# make sure that the "_abc_invaldation_counter" does not cause the test to fail
-diff.memorise(abc.ABCMeta, force=True)
-assert not diff.has_changed(abc)
-abc.ABCMeta.zzz = 1
-assert diff.has_changed(abc)
-changed = diff.whats_changed(abc)
-assert list(changed[0].keys()) == ["ABCMeta"]
+try:
+    import abc
+    # make sure the "_abc_invaldation_counter" does not cause test to fail
+    diff.memorise(abc.ABCMeta, force=True)
+    assert not diff.has_changed(abc)
+    abc.ABCMeta.zzz = 1
+    assert diff.has_changed(abc)
+    changed = diff.whats_changed(abc)
+    assert list(changed[0].keys()) == ["ABCMeta"]
+    assert not changed[1]
+except ImportError:
+    pass
+
+'''
+import Queue
+diff.memorise(Queue, force=True)
+assert not diff.has_changed(Queue)
+Queue.Queue.zzz = 1
+assert diff.has_changed(Queue)
+changed = diff.whats_changed(Queue)
+assert list(changed[0].keys()) == ["Queue"]
 assert not changed[1]
 
+import math
+diff.memorise(math, force=True)
+assert not diff.has_changed(math)
+math.zzz = 1
+assert diff.has_changed(math)
+changed = diff.whats_changed(math)
+assert list(changed[0].keys()) == ["zzz"]
+assert not changed[1]
+'''
 
 a = A()
 b = A()

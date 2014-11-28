@@ -8,11 +8,16 @@
 import dill
 import random
 import os
+import sys
 import string
 
 fname = "_test_file.txt"
 rand_chars = list(string.ascii_letters) + ["\n"] * 40  # bias newline
 
+if sys.hexversion < 0x03030000:
+    FileNotFoundError = IOError
+buffer_error = ValueError("invalid buffer size")
+dne_error = FileNotFoundError("[Errno 2] No such file or directory: '%s'" % fname)
 
 def write_randomness(number=200):
     f = open(fname, "w")
@@ -32,20 +37,20 @@ def trunc_file():
 def throws(op, args, exc):
     try:
         op(*args)
-    except exc:
-        return True
+    except type(exc):
+        return sys.exc_info()[1].args == exc.args
     else:
         return False
 
 
-def test(safeio, file_mode):
+def test(strictio, fmode):
     # file exists, with same contents
     # read
 
     write_randomness()
 
     f = open(fname, "r")
-    _f = dill.loads(dill.dumps(f, safeio=safeio, file_mode=file_mode))
+    _f = dill.loads(dill.dumps(f, strictio=strictio, fmode=fmode))
     assert _f.mode == f.mode
     assert _f.tell() == f.tell()
     assert _f.read() == f.read()
@@ -56,8 +61,8 @@ def test(safeio, file_mode):
 
     f = open(fname, "w")
     f.write("hello")
-    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
-    fmode = f.mode
+    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f1mode = f.mode
     ftell = f.tell()
     f.close()
     f2 = dill.loads(f_dumped)
@@ -67,21 +72,21 @@ def test(safeio, file_mode):
     f2.write(" world!")
     f2.close()
 
-    if file_mode == dill.FMODE_NEWHANDLE:
+    if fmode == dill.HANDLE_FMODE:
         assert open(fname).read() == " world!"
-        assert f2mode == fmode
+        assert f2mode == f1mode
         assert f2tell == 0
-    elif file_mode == dill.FMODE_PRESERVEDATA:
+    elif fmode == dill.CONTENTS_FMODE:
         assert open(fname).read() == "hello world!"
-        assert f2mode == fmode
+        assert f2mode == f1mode
         assert f2tell == ftell
         assert f2name == fname
-    elif file_mode == dill.FMODE_PICKLECONTENTS:
+    elif fmode == dill.FILE_FMODE:
         assert open(fname).read() == "hello world!"
-        assert f2mode == fmode
+        assert f2mode == f1mode
         assert f2tell == ftell
     else:
-        raise RuntimeError("Uncovered file mode!")
+        raise RuntimeError("Unknown file mode '%s'" % fmode)
 
     # append
 
@@ -89,8 +94,8 @@ def test(safeio, file_mode):
 
     f = open(fname, "a")
     f.write("hello")
-    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
-    fmode = f.mode
+    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f1mode = f.mode
     ftell = f.tell()
     f.close()
     f2 = dill.loads(f_dumped)
@@ -99,18 +104,18 @@ def test(safeio, file_mode):
     f2.write(" world!")
     f2.close()
 
-    assert f2mode == fmode
-    if file_mode == dill.FMODE_PRESERVEDATA:
+    assert f2mode == f1mode
+    if fmode == dill.CONTENTS_FMODE:
         assert open(fname).read() == "hello world!"
         assert f2tell == ftell
-    elif file_mode == dill.FMODE_NEWHANDLE:
+    elif fmode == dill.HANDLE_FMODE:
         assert open(fname).read() == "hello world!"
         assert f2tell == ftell
-    elif file_mode == dill.FMODE_PICKLECONTENTS:
+    elif fmode == dill.FILE_FMODE:
         assert open(fname).read() == "hello world!"
         assert f2tell == ftell
     else:
-        raise RuntimeError("Uncovered file mode!")
+        raise RuntimeError("Unknown file mode '%s'" % fmode)
 
     # file exists, with different contents (smaller size)
     # read
@@ -119,36 +124,36 @@ def test(safeio, file_mode):
 
     f = open(fname, "r")
     fstr = f.read()
-    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
-    fmode = f.mode
+    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f1mode = f.mode
     ftell = f.tell()
     f.close()
     _flen = 150
     _fstr = write_randomness(number=_flen)
 
-    if safeio:  # throw error if ftell > EOF
-        assert throws(dill.loads, (f_dumped,), IOError)
+    if strictio:  # throw error if ftell > EOF
+        assert throws(dill.loads, (f_dumped,), buffer_error)
     else:
         f2 = dill.loads(f_dumped)
-        assert f2.mode == fmode
-        if file_mode == dill.FMODE_PRESERVEDATA:
+        assert f2.mode == f1mode
+        if fmode == dill.CONTENTS_FMODE:
             assert f2.tell() == _flen
             assert f2.read() == ""
             f2.seek(0)
             assert f2.read() == _fstr
             assert f2.tell() == _flen  # 150
-        elif file_mode == dill.FMODE_NEWHANDLE:
+        elif fmode == dill.HANDLE_FMODE:
             assert f2.tell() == 0
             assert f2.read() == _fstr
             assert f2.tell() == _flen  # 150
-        elif file_mode == dill.FMODE_PICKLECONTENTS:
+        elif fmode == dill.FILE_FMODE:
             assert f2.tell() == ftell  # 200
             assert f2.read() == ""
             f2.seek(0)
             assert f2.read() == fstr
             assert f2.tell() == ftell  # 200
         else:
-            raise RuntimeError("Uncovered file mode!")
+            raise RuntimeError("Unknown file mode '%s'" % fmode)
         f2.close()
 
     # write
@@ -157,8 +162,8 @@ def test(safeio, file_mode):
 
     f = open(fname, "w")
     f.write("hello")
-    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
-    fmode = f.mode
+    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f1mode = f.mode
     ftell = f.tell()
     f.close()
     fstr = open(fname).read()
@@ -168,28 +173,28 @@ def test(safeio, file_mode):
     _ftell = f.tell()
     f.close()
 
-    if safeio:  # throw error if ftell > EOF
-        assert throws(dill.loads, (f_dumped,), IOError)
+    if strictio:  # throw error if ftell > EOF
+        assert throws(dill.loads, (f_dumped,), buffer_error)
     else:
         f2 = dill.loads(f_dumped)
         f2mode = f2.mode
         f2tell = f2.tell()
         f2.write(" world!")
         f2.close()
-        if file_mode == dill.FMODE_PRESERVEDATA:
+        if fmode == dill.CONTENTS_FMODE:
             assert open(fname).read() == "h world!"
-            assert f2mode == fmode
+            assert f2mode == f1mode
             assert f2tell == _ftell
-        elif file_mode == dill.FMODE_NEWHANDLE:
+        elif fmode == dill.HANDLE_FMODE:
             assert open(fname).read() == " world!"
-            assert f2mode == fmode
+            assert f2mode == f1mode
             assert f2tell == 0
-        elif file_mode == dill.FMODE_PICKLECONTENTS:
+        elif fmode == dill.FILE_FMODE:
             assert open(fname).read() == "hello world!"
-            assert f2mode == fmode
+            assert f2mode == f1mode
             assert f2tell == ftell
         else:
-            raise RuntimeError("Uncovered file mode!")
+            raise RuntimeError("Unknown file mode '%s'" % fmode)
         f2.close()
 
     # append
@@ -198,8 +203,8 @@ def test(safeio, file_mode):
 
     f = open(fname, "a")
     f.write("hello")
-    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
-    fmode = f.mode
+    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f1mode = f.mode
     ftell = f.tell()
     f.close()
     fstr = open(fname).read()
@@ -209,27 +214,27 @@ def test(safeio, file_mode):
     _ftell = f.tell()
     f.close()
 
-    if safeio:  # throw error if ftell > EOF
-        assert throws(dill.loads, (f_dumped,), IOError)
+    if strictio:  # throw error if ftell > EOF
+        assert throws(dill.loads, (f_dumped,), buffer_error)
     else:
         f2 = dill.loads(f_dumped)
         f2mode = f2.mode
         f2tell = f2.tell()
         f2.write(" world!")
         f2.close()
-        assert f2mode == fmode
-        if file_mode == dill.FMODE_PRESERVEDATA:
+        assert f2mode == f1mode
+        if fmode == dill.CONTENTS_FMODE:
             # position of writes cannot be changed on some OSs
             assert open(fname).read() == "h world!"
             assert f2tell == _ftell
-        elif file_mode == dill.FMODE_NEWHANDLE:
+        elif fmode == dill.HANDLE_FMODE:
             assert open(fname).read() == "h world!"
             assert f2tell == _ftell
-        elif file_mode == dill.FMODE_PICKLECONTENTS:
+        elif fmode == dill.FILE_FMODE:
             assert open(fname).read() == "hello world!"
             assert f2tell == ftell
         else:
-            raise RuntimeError("Uncovered file mode!")
+            raise RuntimeError("Unknown file mode '%s'" % fmode)
         f2.close()
 
     # file does not exist
@@ -239,37 +244,37 @@ def test(safeio, file_mode):
 
     f = open(fname, "r")
     fstr = f.read()
-    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
-    fmode = f.mode
+    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f1mode = f.mode
     ftell = f.tell()
     f.close()
 
     os.remove(fname)
 
-    if safeio:  # throw error if file DNE
-        assert throws(dill.loads, (f_dumped,), IOError)
+    if strictio:  # throw error if file DNE
+        assert throws(dill.loads, (f_dumped,), dne_error)
     else:
         f2 = dill.loads(f_dumped)
-        assert f2.mode == fmode
-        if file_mode == dill.FMODE_PRESERVEDATA:
+        assert f2.mode == f1mode
+        if fmode == dill.CONTENTS_FMODE:
             # FIXME: this fails on systems where f2.tell() always returns 0
             # assert f2.tell() == ftell # 200
             assert f2.read() == ""
             f2.seek(0)
             assert f2.read() == ""
             assert f2.tell() == 0
-        elif file_mode == dill.FMODE_PICKLECONTENTS:
+        elif fmode == dill.FILE_FMODE:
             assert f2.tell() == ftell  # 200
             assert f2.read() == ""
             f2.seek(0)
             assert f2.read() == fstr
             assert f2.tell() == ftell  # 200
-        elif file_mode == dill.FMODE_NEWHANDLE:
+        elif fmode == dill.HANDLE_FMODE:
             assert f2.tell() == 0
             assert f2.read() == ""
             assert f2.tell() == 0
         else:
-            raise RuntimeError("Uncovered file mode!")
+            raise RuntimeError("Unknown file mode '%s'" % fmode)
         f2.close()
 
     # write
@@ -278,35 +283,35 @@ def test(safeio, file_mode):
 
     f = open(fname, "w+")
     f.write("hello")
-    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
+    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
     ftell = f.tell()
-    fmode = f.mode
+    f1mode = f.mode
     f.close()
 
     os.remove(fname)
 
-    if safeio:  # throw error if file DNE
-        assert throws(dill.loads, (f_dumped,), IOError)
+    if strictio:  # throw error if file DNE
+        assert throws(dill.loads, (f_dumped,), dne_error)
     else:
         f2 = dill.loads(f_dumped)
         f2mode = f2.mode
         f2tell = f2.tell()
         f2.write(" world!")
         f2.close()
-        if file_mode == dill.FMODE_PRESERVEDATA:
+        if fmode == dill.CONTENTS_FMODE:
             assert open(fname).read() == " world!"
             assert f2mode == 'w+'
             assert f2tell == 0
-        elif file_mode == dill.FMODE_NEWHANDLE:
+        elif fmode == dill.HANDLE_FMODE:
             assert open(fname).read() == " world!"
-            assert f2mode == fmode
+            assert f2mode == f1mode
             assert f2tell == 0
-        elif file_mode == dill.FMODE_PICKLECONTENTS:
+        elif fmode == dill.FILE_FMODE:
             assert open(fname).read() == "hello world!"
-            assert f2mode == fmode
+            assert f2mode == f1mode
             assert f2tell == ftell
         else:
-            raise RuntimeError("Uncovered file mode!")
+            raise RuntimeError("Unknown file mode '%s'" % fmode)
 
     # append
 
@@ -314,33 +319,33 @@ def test(safeio, file_mode):
 
     f = open(fname, "a")
     f.write("hello")
-    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
+    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
     ftell = f.tell()
-    fmode = f.mode
+    f1mode = f.mode
     f.close()
 
     os.remove(fname)
 
-    if safeio:  # throw error if file DNE
-        assert throws(dill.loads, (f_dumped,), IOError)
+    if strictio:  # throw error if file DNE
+        assert throws(dill.loads, (f_dumped,), dne_error)
     else:
         f2 = dill.loads(f_dumped)
         f2mode = f2.mode
         f2tell = f2.tell()
         f2.write(" world!")
         f2.close()
-        assert f2mode == fmode
-        if file_mode == dill.FMODE_PRESERVEDATA:
+        assert f2mode == f1mode
+        if fmode == dill.CONTENTS_FMODE:
             assert open(fname).read() == " world!"
             assert f2tell == 0
-        elif file_mode == dill.FMODE_NEWHANDLE:
+        elif fmode == dill.HANDLE_FMODE:
             assert open(fname).read() == " world!"
             assert f2tell == 0
-        elif file_mode == dill.FMODE_PICKLECONTENTS:
+        elif fmode == dill.FILE_FMODE:
             assert open(fname).read() == "hello world!"
             assert f2tell == ftell
         else:
-            raise RuntimeError("Uncovered file mode!")
+            raise RuntimeError("Unknown file mode '%s'" % fmode)
 
     # file exists, with different contents (larger size)
     # read
@@ -349,8 +354,8 @@ def test(safeio, file_mode):
 
     f = open(fname, "r")
     fstr = f.read()
-    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
-    fmode = f.mode
+    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f1mode = f.mode
     ftell = f.tell()
     f.close()
     _flen = 250
@@ -359,33 +364,33 @@ def test(safeio, file_mode):
     # XXX: no safe_file: no way to be 'safe'?
 
     f2 = dill.loads(f_dumped)
-    assert f2.mode == fmode
-    if file_mode == dill.FMODE_PRESERVEDATA:
+    assert f2.mode == f1mode
+    if fmode == dill.CONTENTS_FMODE:
         assert f2.tell() == ftell  # 200
         assert f2.read() == _fstr[ftell:]
         f2.seek(0)
         assert f2.read() == _fstr
         assert f2.tell() == _flen  # 250
-    elif file_mode == dill.FMODE_NEWHANDLE:
+    elif fmode == dill.HANDLE_FMODE:
         assert f2.tell() == 0
         assert f2.read() == _fstr
         assert f2.tell() == _flen  # 250
-    elif file_mode == dill.FMODE_PICKLECONTENTS:
+    elif fmode == dill.FILE_FMODE:
         assert f2.tell() == ftell  # 200
         assert f2.read() == ""
         f2.seek(0)
         assert f2.read() == fstr
         assert f2.tell() == ftell  # 200
     else:
-        raise RuntimeError("Uncovered file mode!")
+        raise RuntimeError("Unknown file mode '%s'" % fmode)
     f2.close()  # XXX: other alternatives?
 
     # write
 
     f = open(fname, "w")
     f.write("hello")
-    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
-    fmode = f.mode
+    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f1mode = f.mode
     ftell = f.tell()
 
     fstr = open(fname).read()
@@ -401,20 +406,20 @@ def test(safeio, file_mode):
     f2tell = f2.tell()
     f2.write(" world!")
     f2.close()
-    if file_mode == dill.FMODE_PRESERVEDATA:
+    if fmode == dill.CONTENTS_FMODE:
         assert open(fname).read() == "hello world!odbye!"
-        assert f2mode == fmode
+        assert f2mode == f1mode
         assert f2tell == ftell
-    elif file_mode == dill.FMODE_NEWHANDLE:
+    elif fmode == dill.HANDLE_FMODE:
         assert open(fname).read() == " world!"
-        assert f2mode == fmode
+        assert f2mode == f1mode
         assert f2tell == 0
-    elif file_mode == dill.FMODE_PICKLECONTENTS:
+    elif fmode == dill.FILE_FMODE:
         assert open(fname).read() == "hello world!"
-        assert f2mode == fmode
+        assert f2mode == f1mode
         assert f2tell == ftell
     else:
-        raise RuntimeError("Uncovered file mode!")
+        raise RuntimeError("Unknown file mode '%s'" % fmode)
     f2.close()
 
     # append
@@ -423,8 +428,8 @@ def test(safeio, file_mode):
 
     f = open(fname, "a")
     f.write("hello")
-    f_dumped = dill.dumps(f, safeio=safeio, file_mode=file_mode)
-    fmode = f.mode
+    f_dumped = dill.dumps(f, strictio=strictio, fmode=fmode)
+    f1mode = f.mode
     ftell = f.tell()
     fstr = open(fname).read()
 
@@ -439,28 +444,32 @@ def test(safeio, file_mode):
     f2tell = f2.tell()
     f2.write(" world!")
     f2.close()
-    assert f2mode == fmode
-    if file_mode == dill.FMODE_PRESERVEDATA:
+    assert f2mode == f1mode
+    if fmode == dill.CONTENTS_FMODE:
         assert open(fname).read() == "hello and goodbye! world!"
         assert f2tell == ftell
-    elif file_mode == dill.FMODE_NEWHANDLE:
+    elif fmode == dill.HANDLE_FMODE:
         assert open(fname).read() == "hello and goodbye! world!"
         assert f2tell == _ftell
-    elif file_mode == dill.FMODE_PICKLECONTENTS:
+    elif fmode == dill.FILE_FMODE:
         assert open(fname).read() == "hello world!"
         assert f2tell == ftell
     else:
-        raise RuntimeError("Uncovered file mode!")
+        raise RuntimeError("Unknown file mode '%s'" % fmode)
     f2.close()
 
 
-test(safeio=False, file_mode=dill.FMODE_NEWHANDLE)
-test(safeio=False, file_mode=dill.FMODE_PRESERVEDATA)
-test(safeio=False, file_mode=dill.FMODE_PICKLECONTENTS)
+if __name__ == '__main__':
 
-test(safeio=True, file_mode=dill.FMODE_NEWHANDLE)
-test(safeio=True, file_mode=dill.FMODE_PRESERVEDATA)
-test(safeio=True, file_mode=dill.FMODE_PICKLECONTENTS)
+    test(strictio=False, fmode=dill.HANDLE_FMODE)
+    test(strictio=False, fmode=dill.CONTENTS_FMODE)
+    test(strictio=False, fmode=dill.FILE_FMODE)
+
+    test(strictio=True, fmode=dill.HANDLE_FMODE)
+    test(strictio=True, fmode=dill.CONTENTS_FMODE)
+    test(strictio=True, fmode=dill.FILE_FMODE)
 
 if os.path.exists(fname):
     os.remove(fname)
+
+# EOF
