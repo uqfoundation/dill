@@ -424,8 +424,9 @@ def _create_filehandle(name, mode, position, closed, open, strictio, fmode, fdat
             if strictio:
                 raise FileNotFoundError("[Errno 2] No such file or directory: '%s'" % name)
             elif "r" in mode and fmode != FILE_FMODE:
+                #XXX: use tempfile.TemporaryFile instead?
                 name = os.devnull
-            current_size = 0
+            current_size = 0 #XXX: or maintain position?
         else:
             current_size = os.path.getsize(name)
 
@@ -477,7 +478,7 @@ def _create_filehandle(name, mode, position, closed, open, strictio, fmode, fdat
                 assert f.name == name
             else:
                 f = open(name, mode)
-        except IOError:
+        except (IOError, FileNotFoundError):
             err = sys.exc_info()[1]
             raise UnpicklingError(err)
     if closed:
