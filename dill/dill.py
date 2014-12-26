@@ -424,9 +424,8 @@ def _create_filehandle(name, mode, position, closed, open, strictio, fmode, fdat
             if strictio:
                 raise FileNotFoundError("[Errno 2] No such file or directory: '%s'" % name)
             elif "r" in mode and fmode != FILE_FMODE:
-                #XXX: use tempfile.TemporaryFile instead?
-                name = os.devnull
-            current_size = 0 #XXX: or maintain position?
+                name = '<fdopen>' # or os.devnull?
+            current_size = 0 # or maintain position?
         else:
             current_size = os.path.getsize(name)
 
@@ -445,6 +444,9 @@ def _create_filehandle(name, mode, position, closed, open, strictio, fmode, fdat
                 if "w" not in mode:
                     f.close()
                     f = open(name, mode)
+            elif name == '<fdopen>': # file did not exist
+                import tempfile
+                f = tempfile.TemporaryFile(mode)
             elif fmode == CONTENTS_FMODE \
                and ("w" in mode or "x" in mode):
                 # stop truncation when opening
