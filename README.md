@@ -26,11 +26,11 @@ secure against erroneously or maliciously constructed data. It is
 left to the user to decide whether the data they unpickle is from
 a trustworthy source.
 
-Dill is part of pathos, a python framework for heterogenous computing.
-Dill is in the early development stages, and any user feedback is
-highly appreciated. Contact Mike McKerns [mmckerns at caltech dot edu] with
-comments, suggestions, and any bugs you may find. A list of known issues
-is maintained at http://trac.mystic.cacr.caltech.edu/project/pathos/query.
+Dill is part of pathos, a python framework for heterogeneous computing.
+Dill is in active development, so any user feedback, bug reports, comments,
+or suggestions are highly appreciated.  A list of known issues is maintained
+at http://trac.mystic.cacr.caltech.edu/project/pathos/query, with a public
+ticket list at https://github.com/uqfoundation/dill/issues.
 
 
 Major Features
@@ -61,20 +61,48 @@ Dill also provides the capability to::
 * save and extract the source code from functions and classes
 * interactively diagnose pickling errors
 
+
 Current Release
 ---------------
-The latest released version of dill is available from::
-    http://dev.danse.us/trac/pathos
+The latest stable release of dill is available from::
+    http://trac.mystic.cacr.caltech.edu/project/pathos
+
+or::
+    https://github.com/uqfoundation/dill/releases
+
+or also::
+    https://pypi.python.org/pypi/dill
 
 Dill is distributed under a 3-clause BSD license.
 
-Development Release
--------------------
-You can get the latest development release with all the shiny new features at::
-    http://dev.danse.us/packages.
 
-or even better, fork us on our github mirror of the svn trunk::
+Development Version
+-------------------
+You can get the latest development version with all the shiny new features at::
     https://github.com/uqfoundation
+
+Feel free to fork the github mirror of our svn trunk.  If you have a new
+contribution, please submit a pull request.
+
+
+More Information
+----------------
+Probably the best way to get started is to look at the tests that are
+provide within dill. See `dill.tests` for a set of scripts that demonstrate
+dill's ability to serialize different python objects.  Since dill conforms
+to the 'pickle' interface, the examples and documentation at
+http://docs.python.org/library/pickle.html also apply to dill if one will
+`import dill as pickle`. The source code is also generally well documented,
+so further questions may be resolved by inspecting the code itself. Please
+also feel free to submit a ticket on github, or ask a question on
+stackoverflow (@Mike McKerns).
+
+Dill is an active research tool. There are a growing number of publications
+and presentations that discuss real-world examples and new features of dill
+in greater detail than presented in the user's guide.  If you would like to
+share how you use dill in your work, please post a link or send an email
+(to mmckerns at caltech dot edu).
+
 
 Citation
 --------
@@ -90,18 +118,6 @@ acknowledge use of dill by citing the following in your publication::
     "pathos: a framework for heterogeneous computing", 2010- ;
     http://dev.danse.us/trac/pathos
 
-More Information
-----------------
-Probably the best way to get started is to look at the tests
-that are provide within dill. See `dill.tests` for a set of scripts
-that test dill's ability to serialize different python objects.
-Since dill conforms to the 'pickle' interface, the examples and
-documentation at http://docs.python.org/library/pickle.html also
-apply to dill if one will `import dill as pickle`. Dill's source code is also generally well documented,
-so further questions may be resolved by inspecting the code itself, or through 
-browsing the reference manual. For those who like to leap before
-they look, you can jump right to the installation instructions. If the aforementioned documents do not adequately address your needs, please send us feedback.
+Please see http://trac.mystic.cacr.caltech.edu/project/pathos or
+http://arxiv.org/pdf/1202.1056 for further information.
 
-Dill is an active research tool. There are a growing number of publications and presentations that
-discuss real-world examples and new features of dill in greater detail than presented in the user's guide. 
-If you would like to share how you use dill in your work, please send us a link.
