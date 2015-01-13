@@ -78,8 +78,10 @@ if sys.hexversion < 0x03030000:
 try:
     import ctypes
     HAS_CTYPES = True
+    HAS_PYTHONAPI = True
 except ImportError:
     HAS_CTYPES = False
+    HAS_PYTHONAPI = False
 try:
     from numpy import ufunc as NumpyUfuncType
     from numpy import ndarray as NumpyArrayType
@@ -524,12 +526,16 @@ class _attrgetter_helper(object):
             attrs[index] = ".".join([attrs[index], attr])
         return type(self)(attrs, index)
 
-if HAS_CTYPES:
-    ctypes.pythonapi.PyCell_New.restype = ctypes.py_object
-    ctypes.pythonapi.PyCell_New.argtypes = [ctypes.py_object]
-    # thanks to Paul Kienzle for cleaning the ctypes CellType logic
-    def _create_cell(contents):
-        return ctypes.pythonapi.PyCell_New(contents)
+if HAS_CTYPES and HAS_PYTHONAPI:
+    try: # if using `pypi`, pythonapi is not found
+        ctypes.pythonapi.PyCell_New.restype = ctypes.py_object
+        ctypes.pythonapi.PyCell_New.argtypes = [ctypes.py_object]
+        # thanks to Paul Kienzle for cleaning the ctypes CellType logic
+        def _create_cell(contents):
+            return ctypes.pythonapi.PyCell_New(contents)
+
+    except AttributeError:
+        HAS_PYTHONAPI = False
 
 def _create_weakref(obj, *args):
     from weakref import ref
@@ -819,7 +825,7 @@ else:
                                        obj.__repr__()), obj=obj)
         return
 
-if HAS_CTYPES:
+if HAS_CTYPES and HAS_PYTHONAPI:
     @register(CellType)
     def save_cell(pickler, obj):
         log.info("Ce: %s" % obj)
