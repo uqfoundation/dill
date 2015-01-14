@@ -78,10 +78,10 @@ if sys.hexversion < 0x03030000:
 try:
     import ctypes
     HAS_CTYPES = True
-    HAS_PYTHONAPI = True
+    IS_PYPY = True
 except ImportError:
     HAS_CTYPES = False
-    HAS_PYTHONAPI = False
+    IS_PYPY = False
 try:
     from numpy import ufunc as NumpyUfuncType
     from numpy import ndarray as NumpyArrayType
@@ -526,7 +526,7 @@ class _attrgetter_helper(object):
             attrs[index] = ".".join([attrs[index], attr])
         return type(self)(attrs, index)
 
-if HAS_CTYPES and HAS_PYTHONAPI:
+if HAS_CTYPES and IS_PYPY:
     try: # if using `pypi`, pythonapi is not found
         ctypes.pythonapi.PyCell_New.restype = ctypes.py_object
         ctypes.pythonapi.PyCell_New.argtypes = [ctypes.py_object]
@@ -535,7 +535,7 @@ if HAS_CTYPES and HAS_PYTHONAPI:
             return ctypes.pythonapi.PyCell_New(contents)
 
     except AttributeError:
-        HAS_PYTHONAPI = False
+        IS_PYPY = False
 
 def _create_weakref(obj, *args):
     from weakref import ref
@@ -825,7 +825,7 @@ else:
                                        obj.__repr__()), obj=obj)
         return
 
-if HAS_CTYPES and HAS_PYTHONAPI:
+if HAS_CTYPES and IS_PYPY:
     @register(CellType)
     def save_cell(pickler, obj):
         log.info("Ce: %s" % obj)
@@ -835,18 +835,19 @@ if HAS_CTYPES and HAS_PYTHONAPI:
 # The following function is based on 'saveDictProxy' from spickle
 # Copyright (c) 2011 by science+computing ag
 # License: http://www.apache.org/licenses/LICENSE-2.0
-@register(DictProxyType)
-def save_dictproxy(pickler, obj):
-    log.info("Dp: %s" % obj)
-    attr = obj.get('__dict__')
-   #pickler.save_reduce(_create_dictproxy, (attr,'nested'), obj=obj)
-    if type(attr) == GetSetDescriptorType and attr.__name__ == "__dict__" \
-    and getattr(attr.__objclass__, "__dict__", None) == obj:
-        pickler.save_reduce(getattr, (attr.__objclass__, "__dict__"), obj=obj)
-        return
-    # all bad below... so throw ReferenceError or TypeError
-    from weakref import ReferenceError
-    raise ReferenceError("%s does not reference a class __dict__" % obj)
+if IS_PYPY:
+    @register(DictProxyType)
+    def save_dictproxy(pickler, obj):
+        log.info("Dp: %s" % obj)
+        attr = obj.get('__dict__')
+       #pickler.save_reduce(_create_dictproxy, (attr,'nested'), obj=obj)
+        if type(attr) == GetSetDescriptorType and attr.__name__ == "__dict__" \
+        and getattr(attr.__objclass__, "__dict__", None) == obj:
+            pickler.save_reduce(getattr, (attr.__objclass__,"__dict__"),obj=obj)
+            return
+        # all bad below... so throw ReferenceError or TypeError
+        from weakref import ReferenceError
+        raise ReferenceError("%s does not reference a class __dict__" % obj)
 
 @register(SliceType)
 def save_slice(pickler, obj):
