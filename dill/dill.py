@@ -605,7 +605,7 @@ def _import_module(import_name, safe=False):
         raise
 
 def _locate_function(obj, session=False):
-    if obj.__module__ == '__main__': # and session:
+    if obj.__module__ in ['__main__', None]: # and session:
         return False
     found = _import_module(obj.__module__ + '.' + obj.__name__, safe=True)
     return found is obj

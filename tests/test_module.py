@@ -58,3 +58,17 @@ os.remove(cached)
 pycache = os.path.join(os.path.dirname(module.__file__), "__pycache__")
 if os.path.exists(pycache) and not os.listdir(pycache):
     os.removedirs(pycache)
+
+
+# test when module is None
+import math
+
+def get_lambda(str, **kwarg):
+    return eval(str, kwarg, None)
+
+obj = get_lambda('lambda x: math.exp(x)', math=math)
+assert obj.__module__ is None
+assert dill.copy(obj)(3) == obj(3)
+
+
+# EOF
