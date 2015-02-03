@@ -35,7 +35,7 @@ elif stable_version == target_version:
     this_version = target_version
 else:
     # we are building a distribution
-    this_version = target_version + '.dev'
+    this_version = target_version + '.dev0'
     if is_release:
         from datetime import date
         today = "".join(date.isoformat(date.today()).split('-'))
