@@ -6,19 +6,21 @@
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
 import dill
+import sys
 
 
 class Foo(object):
     def __init__(self):
         self._data = 1
 
-    @property
-    def data(self):
+    def _get_data(self):
         return self._data
 
-    @data.setter
-    def data(self, x):
+    def _set_data(self, x):
         self._data = x
+
+    data = property(_get_data, _set_data)
+
 
 FooS = dill.copy(Foo)
 
@@ -28,7 +30,8 @@ assert FooS.data.fdel is None
 
 try:
     res = FooS().data
-except Exception as e:
+except Exception:
+    e = sys.exc_info()[1]
     raise AssertionError(str(e))
 else:
     assert res == 1
@@ -37,7 +40,8 @@ try:
     f = FooS()
     f.data = 1024
     res = f.data
-except Exception as e:
+except Exception:
+    e = sys.exc_info()[1]
     raise AssertionError(str(e))
 else:
     assert res == 1024
