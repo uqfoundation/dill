@@ -1000,6 +1000,12 @@ def save_type(pickler, obj):
         StockPickler.save_global(pickler, obj)
     return
 
+@register(property)
+def save_property(pickler, obj):
+    log.info("Pr: %s" % obj)
+    pickler.save_reduce(property, (obj.fget, obj.fset, obj.fdel, obj.__doc__),
+                        obj=obj)
+
 # quick sanity checking
 def pickles(obj,exact=False,safe=False,**kwds):
     """quick check if object pickles with dill"""
