@@ -618,16 +618,18 @@ def save_code(pickler, obj):
 
 @register(FunctionType)
 def save_function(pickler, obj):
+    from .detect import globalvars
     if not _locate_function(obj): #, pickler._session):
         log.info("F1: %s" % obj)
+        globs = globalvars(obj)
         if PY3:
-            pickler.save_reduce(_create_function, (obj.__code__, 
-                                obj.__globals__, obj.__name__,
+            pickler.save_reduce(_create_function, (obj.__code__,
+                                globs, obj.__name__,
                                 obj.__defaults__, obj.__closure__,
                                 obj.__dict__), obj=obj)
         else:
             pickler.save_reduce(_create_function, (obj.func_code,
-                                obj.func_globals, obj.func_name,
+                                globs, obj.func_name,
                                 obj.func_defaults, obj.func_closure,
                                 obj.__dict__), obj=obj)
     else:

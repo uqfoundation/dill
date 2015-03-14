@@ -9,11 +9,18 @@ Methods for detecting objects leading to pickling failures.
 """
 
 from __future__ import absolute_import
+import sys
+import dis
 from inspect import ismethod, isfunction, istraceback, isframe, iscode
 from .pointers import parent, reference, at, parents, children
 
 from .dill import _trace as trace
 from .dill import PY3
+
+if PY3:
+    from io import StringIO
+else:
+    from StringIO import StringIO
 
 def outermost(func): # is analogous to getsource(func,enclosing=True)
     """get outermost enclosing object (i.e. the outer function in a closure)
@@ -139,6 +146,26 @@ def freevars(func):
         return {}
     return dict((name,c.cell_contents) for (name,c) in zip(func,closures))
 
+def capture_output(f):
+    stdout = sys.stdout
+    sys.stdout = StringIO()
+    f()
+    out = sys.stdout.getvalue()
+    sys.stdout = stdout
+    return out
+
+def find_globals(code):
+    out = capture_output(lambda: dis.dis(code))
+    names = set()
+    for line in out.split('\n'):
+        if '_GLOBAL' in line:
+            name = line.split('(')[-1].split(')')[0]
+            names.add(name)
+    for co in code.co_consts:
+        if co and iscode(co):
+            names |= find_globals(co)
+    return names
+
 def globalvars(func):
     """get objects defined in global scope that are referred to by func
 
@@ -154,7 +181,7 @@ def globalvars(func):
     if ismethod(func): func = getattr(func, im_func)
     if isfunction(func):
         globs = getattr(func, func_globals) or {}
-        func = getattr(func, func_code).co_names # get names
+        func = find_globals(getattr(func, func_code))
     else:
         return {}
     #NOTE: if name not in func_globals, then we skip it...
