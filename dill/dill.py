@@ -253,10 +253,24 @@ def load_session(filename='/tmp/session.pkl', main_module=_main_module):
 
 ### End: Pickle the Interpreter
 
+class MetaCatchingDict(dict):
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __missing__(self, key):
+        if issubclass(key, type):
+            return save_type
+        else:
+            raise KeyError()
+
+
 ### Extend the Picklers
 class Pickler(StockPickler):
     """python's Pickler extended to interpreter sessions"""
-    dispatch = StockPickler.dispatch.copy()
+    dispatch = MetaCatchingDict(StockPickler.dispatch.copy())
     _main_module = None
     _session = False
     _byref = False
@@ -973,7 +987,7 @@ def save_type(pickler, obj):
             StockPickler.save_global(pickler, obj)
             return
         except AttributeError: pass
-        if type(obj) == type:
+        if issubclass(type(obj), type):
         #   try: # used when pickling the class as code (or the interpreter)
             if is_dill(pickler) and not pickler._byref:
                 # thanks to Tom Stepleton pointing out pickler._session unneeded
