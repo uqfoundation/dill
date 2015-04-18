@@ -52,6 +52,13 @@ n = _newclass()
 nc = _newclass2()
 m = _mclass()
 
+# test pickles for class instances
+assert dill.pickles(o)
+assert dill.pickles(oc)
+assert dill.pickles(n)
+assert dill.pickles(nc)
+assert dill.pickles(m)
+
 clslist = [_class,_class2,_newclass,_newclass2,_mclass]
 objlist = [o,oc,n,nc,m]
 _clslist = [dill.dumps(obj) for obj in clslist]

@@ -679,7 +679,7 @@ def save_module_dict(pickler, obj):
     return
 
 @register(ClassType)
-def save_classobj(pickler, obj):
+def save_classobj(pickler, obj): #FIXME: enable pickler._byref
     if obj.__module__ == '__main__': #XXX: use _main_module.__name__ everywhere?
         log.info("C1: %s" % obj)
         pickler.save_reduce(ClassType, (obj.__name__, obj.__bases__,
@@ -1034,7 +1034,10 @@ def pickles(obj,exact=False,safe=False,**kwds):
             result = pik == obj
         if result: return True
         if not exact:
-            return type(pik) == type(obj)
+            result = type(pik) == type(obj)
+            if result: return result
+            # class instances might have been dumped with byref=False
+            return repr(type(pik)) == repr(type(obj)) #XXX: InstanceType?
         return False
     except exceptions:
         return False
