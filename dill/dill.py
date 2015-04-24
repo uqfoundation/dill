@@ -944,8 +944,10 @@ def save_module(pickler, obj):
     else:
         # if a module file name starts with prefx, it should be a builtin
         # module, so should be pickled as a reference
-        prefix = getattr(sys, "base_prefix", sys.prefix)
-        std_mod = getattr(obj, "__file__", prefix).startswith(prefix)
+        base_prefix = getattr(sys, "base_prefix", sys.prefix)
+        real_prefix = getattr(sys, "real_prefix", base_prefix)
+        std_mod = (getattr(obj, "__file__", base_prefix).startswith(base_prefix)
+                   or getattr(obj, "__file__", real_prefix).startswith(real_prefix))
         if obj.__name__ not in ("builtins", "dill") \
            and not std_mod or is_dill(pickler) and obj is pickler._main_module:
             log.info("M1: %s" % obj)
