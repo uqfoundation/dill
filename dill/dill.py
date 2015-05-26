@@ -944,12 +944,15 @@ def save_module(pickler, obj):
     else:
         # if a module file name starts with prefx, it should be a builtin
         # module, so should be pickled as a reference
-        base_prefix = getattr(sys, "base_prefix", sys.prefix)
-        real_prefix = getattr(sys, "real_prefix", base_prefix)
-        std_mod = (getattr(obj, "__file__", base_prefix).startswith(base_prefix)
-                   or getattr(obj, "__file__", real_prefix).startswith(real_prefix))
+        if hasattr(obj, "__file__"):
+            names = ["base_prefix", "base_exec_prefix", "exec_prefix",
+                     "prefix", "real_prefix"]
+            builtin_mod = any([obj.__file__.startswith(getattr(sys, name))
+                           for name in names if hasattr(sys, name)])
+        else:
+            builtin_mod = True
         if obj.__name__ not in ("builtins", "dill") \
-           and not std_mod or is_dill(pickler) and obj is pickler._main_module:
+           and not builtin_mod or is_dill(pickler) and obj is pickler._main_module:
             log.info("M1: %s" % obj)
             _main_dict = obj.__dict__.copy() #XXX: better no copy? option to copy?
             [_main_dict.pop(item, None) for item in singletontypes
