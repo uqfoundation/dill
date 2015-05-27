@@ -6,6 +6,7 @@
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
 import dill
+import sys
 
 # test classdefs
 class _class:
@@ -32,13 +33,34 @@ class _newclass2(object):
     def ok(self):
         return True
 
+class _meta(type):
+    pass
+
+def __call__(self):
+    pass
+def ok(self):
+    return True
+
+_mclass = _meta("_mclass", (object,), {"__call__": __call__, "ok": ok})
+
+del __call__
+del ok
+
 o = _class()
 oc = _class2()
 n = _newclass()
 nc = _newclass2()
+m = _mclass()
 
-clslist = [_class,_class2,_newclass,_newclass2]
-objlist = [o,oc,n,nc]
+# test pickles for class instances
+assert dill.pickles(o)
+assert dill.pickles(oc)
+assert dill.pickles(n)
+assert dill.pickles(nc)
+assert dill.pickles(m)
+
+clslist = [_class,_class2,_newclass,_newclass2,_mclass]
+objlist = [o,oc,n,nc,m]
 _clslist = [dill.dumps(obj) for obj in clslist]
 _objlist = [dill.dumps(obj) for obj in objlist]
 
@@ -55,9 +77,10 @@ for obj,cls in zip(_objlist,_clslist):
     _obj = dill.loads(obj)
     assert _obj.ok()
     assert _cls.ok(_cls())
+    if _cls.__name__ == "_mclass":
+        assert type(_cls).__name__ == "_meta"
 
 # test namedtuple
-import sys
 if hex(sys.hexversion) >= '0x20600f0':
     from collections import namedtuple
 

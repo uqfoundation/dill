@@ -253,10 +253,24 @@ def load_session(filename='/tmp/session.pkl', main_module=_main_module):
 
 ### End: Pickle the Interpreter
 
+class MetaCatchingDict(dict):
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __missing__(self, key):
+        if issubclass(key, type):
+            return save_type
+        else:
+            raise KeyError()
+
+
 ### Extend the Picklers
 class Pickler(StockPickler):
     """python's Pickler extended to interpreter sessions"""
-    dispatch = StockPickler.dispatch.copy()
+    dispatch = MetaCatchingDict(StockPickler.dispatch.copy())
     _main_module = None
     _session = False
     _byref = False
@@ -665,7 +679,7 @@ def save_module_dict(pickler, obj):
     return
 
 @register(ClassType)
-def save_classobj(pickler, obj):
+def save_classobj(pickler, obj): #FIXME: enable pickler._byref
     if obj.__module__ == '__main__': #XXX: use _main_module.__name__ everywhere?
         log.info("C1: %s" % obj)
         pickler.save_reduce(ClassType, (obj.__name__, obj.__bases__,
@@ -978,7 +992,7 @@ def save_type(pickler, obj):
             StockPickler.save_global(pickler, obj)
             return
         except AttributeError: pass
-        if type(obj) == type:
+        if issubclass(type(obj), type):
         #   try: # used when pickling the class as code (or the interpreter)
             if is_dill(pickler) and not pickler._byref:
                 # thanks to Tom Stepleton pointing out pickler._session unneeded
@@ -1025,7 +1039,10 @@ def pickles(obj,exact=False,safe=False,**kwds):
             result = pik == obj
         if result: return True
         if not exact:
-            return type(pik) == type(obj)
+            result = type(pik) == type(obj)
+            if result: return result
+            # class instances might have been dumped with byref=False
+            return repr(type(pik)) == repr(type(obj)) #XXX: InstanceType?
         return False
     except exceptions:
         return False
