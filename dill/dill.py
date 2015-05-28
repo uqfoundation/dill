@@ -174,6 +174,7 @@ def dump(obj, file, protocol=None, byref=False, fmode=HANDLE_FMODE):#, strictio=
     # hack to catch subclassed numpy array instances
     if NumpyArrayType and ndarrayinstance(obj):
         @register(type(obj))
+        @register(NumpyArrayType)
         def save_numpy_array(pickler, obj):
             log.info("Nu: (%s, %s)" % (obj.shape,obj.dtype))
             npdict = getattr(obj, '__dict__', None)
