@@ -85,9 +85,10 @@ except ImportError:
 try:
     from numpy import ufunc as NumpyUfuncType
     from numpy import ndarray as NumpyArrayType
-    def ndarrayinstance(obj):
-        try:
-            if not isinstance(obj, NumpyArrayType): return False
+    def ndarraysubclassinstance(obj):
+        try: # check if is ndarray, and elif is subclass of ndarray
+            if getattr(obj, '__class__', type) is NumpyArrayType: return False
+            elif not isinstance(obj, NumpyArrayType): return False
         except ReferenceError: return False # handle 'R3' weakref in 3.x
         # verify that __reduce__ has not been overridden
         NumpyInstance = NumpyArrayType((0,),'int8')
@@ -97,7 +98,7 @@ try:
 except ImportError:
     NumpyUfuncType = None
     NumpyArrayType = None
-    def ndarrayinstance(obj): return False
+    def ndarraysubclassinstance(obj): return False
 
 # make sure to add these 'hand-built' types to _typemap
 if PY3:
@@ -172,9 +173,8 @@ def dump(obj, file, protocol=None, byref=False, fmode=HANDLE_FMODE):#, strictio=
     pik._strictio = bool(strictio)
     pik._fmode = fmode
     # hack to catch subclassed numpy array instances
-    if NumpyArrayType and ndarrayinstance(obj):
+    if NumpyArrayType and ndarraysubclassinstance(obj):
         @register(type(obj))
-        @register(NumpyArrayType)
         def save_numpy_array(pickler, obj):
             log.info("Nu: (%s, %s)" % (obj.shape,obj.dtype))
             npdict = getattr(obj, '__dict__', None)
