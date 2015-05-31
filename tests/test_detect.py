@@ -5,7 +5,7 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
-from dill.detect import baditems, badobjects, badtypes, errors, parent, at
+from dill.detect import baditems, badobjects, badtypes, errors, parent, at, globalvars
 
 import inspect
 
@@ -29,3 +29,11 @@ assert obj is x
 assert parent(obj, int) is x[-1]
 assert at(id(at)) is at
 
+def f():
+    a
+    def g():
+        b
+        def h():
+            c
+a, b, c = 1, 2, 3
+assert globalvars(f) == dict(a=1, b=2, c=3)
