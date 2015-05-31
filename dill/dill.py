@@ -15,9 +15,10 @@ Test against "all" python types (Std. Lib. CH 1-15 @ 2.7) by mmckerns.
 Test against CH16+ Std. Lib. ... TBD.
 """
 __all__ = ['dump','dumps','load','loads','dump_session','load_session',
-           'Pickler','Unpickler','register','copy','pickle','pickles',
-           'HIGHEST_PROTOCOL','DEFAULT_PROTOCOL','PicklingError',
-           'UnpicklingError','HANDLE_FMODE','CONTENTS_FMODE','FILE_FMODE']
+           'dump_ipython','load_ipython','Pickler','Unpickler','register',
+           'copy','pickle','pickles','HIGHEST_PROTOCOL','DEFAULT_PROTOCOL',
+           'PicklingError','UnpicklingError',
+           'HANDLE_FMODE','CONTENTS_FMODE','FILE_FMODE']
 
 import logging
 log = logging.getLogger("dill")
@@ -306,6 +307,22 @@ def load_session(filename='/tmp/session.pkl', main_module=_main_module):
     finally:
         f.close()
     return
+
+def dump_ipython(filename='/tmp/session.pkl'):
+    import IPython
+    user_ns_hidden = IPython.get_ipython().user_ns_hidden
+    byref_filter = lambda name: name in user_ns_hidden
+    _main_module.__dill_user_ns_hidden = user_ns_hidden.keys()
+    dump_session(filename, byref=True, byref_filter=byref_filter, byref_discard_missing=True)
+
+def load_ipython(filename='/tmp/session.pkl'):
+    load_session(filename)
+    if '__dill_user_ns_hidden' in _main_module.__dict__:
+        import IPython
+        user_ns_hidden = IPython.get_ipython().user_ns_hidden
+        for name in _main_module.__dict__.pop('__dill_user_ns_hidden'):
+            if name in _main_module.__dict__:
+                user_ns_hidden[name] = _main_module.__dict__[name]
 
 ### End: Pickle the Interpreter
 
