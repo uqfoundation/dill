@@ -6,6 +6,7 @@
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
 from dill.detect import baditems, badobjects, badtypes, errors, parent, at, globalvars
+from dill import settings
 
 import inspect
 
@@ -86,7 +87,8 @@ from math import sin, pi
 def sinc(x):
     return sin(x)/x
 
-_sinc = dumps(sinc, recurse=True)
+settings['recurse'] = True
+_sinc = dumps(sinc)
 del sin
 sinc_ = loads(_sinc) # no NameError... pickling preserves 'sin'
 res = sinc_(1)

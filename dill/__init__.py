@@ -29,6 +29,9 @@ from .dill import dump, dumps, load, loads, dump_session, load_session, \
     HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE
 from . import source, temp, detect
 
+# get global settings
+from .settings import settings
+
 # make sure "trace" is turned off
 detect.trace(False)
 

@@ -10,6 +10,7 @@ import random
 import os
 import sys
 import string
+dill.settings['recurse'] = True
 
 fname = "_test_file.txt"
 rand_chars = list(string.ascii_letters) + ["\n"] * 40  # bias newline

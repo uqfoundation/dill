@@ -10,6 +10,7 @@ test pickling of all Python Standard Library objects (currently: CH 1-14 @ 2.7)
 """
 
 import dill as pickle
+pickle.settings['recurse'] = True
 #pickle.debug.trace(True)
 #import pickle
 

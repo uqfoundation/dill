@@ -6,6 +6,7 @@
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
 import dill
+dill.settings['recurse'] = True
 import weakref
 
 class _class:

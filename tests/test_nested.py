@@ -9,6 +9,7 @@ test dill's ability to handle nested functions
 """
 
 import dill as pickle
+pickle.settings['recurse'] = False #True
 import math
 #import pickle
 

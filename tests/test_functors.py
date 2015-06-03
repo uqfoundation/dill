@@ -7,6 +7,7 @@
 
 import functools
 import dill
+dill.settings['recurse'] = True
 
 def f(a, b, c):  # without keywords
     pass

@@ -158,17 +158,16 @@ def copy(obj, *args, **kwds):
     """use pickling to 'copy' an object"""
     return loads(dumps(obj, *args, **kwds))
 
-def dump(obj, file, protocol=None, byref=False, fmode=HANDLE_FMODE, recurse=False):#, strictio=False):
+def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None):#, strictio=None):
     """pickle an object to a file"""
+    from .settings import settings
     strictio = False #FIXME: strict=True needs cleanup
-    if protocol is None: protocol = DEFAULT_PROTOCOL
+    if protocol is None: protocol = settings['protocol']
+    if byref is None: byref = settings['byref']
+    if fmode is None: fmode = settings['fmode']
+    if recurse is None: recurse = settings['recurse']
     pik = Pickler(file, protocol)
     pik._main_module = _main_module
-    # save settings
-    _byref = pik._byref
-    _strictio = pik._strictio
-    _fmode = pik._fmode
-    _recurse = pik._recurse
     # apply kwd settings
     pik._byref = bool(byref)
     pik._strictio = bool(strictio)
@@ -185,14 +184,9 @@ def dump(obj, file, protocol=None, byref=False, fmode=HANDLE_FMODE, recurse=Fals
             return
     # end hack
     pik.dump(obj)
-    # return to saved settings
-    pik._byref = _byref
-    pik._strictio = _strictio
-    pik._fmode = _fmode
-    pik._recurse = _recurse
     return
 
-def dumps(obj, protocol=None, byref=False, fmode=HANDLE_FMODE, recurse=False):#, strictio=False):
+def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None):#, strictio=None):
     """pickle an object to a string"""
     file = StringIO()
     dump(obj, file, protocol, byref, fmode, recurse)#, strictio)
@@ -268,23 +262,20 @@ def _restore_module_imports(main_module):
     for module, name in imports:
         exec("from %s import %s" % (module, name), main_module.__dict__)
 
-def dump_session(filename='/tmp/session.pkl', main_module=_main_module, byref=False):
+def dump_session(filename='/tmp/session.pkl', main_module=_main_module, byref=False): #FIXME: rename main_module to main, byref to ?
     """pickle the current state of __main__ to a file"""
+    from .settings import settings
+    protocol = settings['protocol']
     f = open(filename, 'wb')
     try:
         if byref:
             main_module = _split_module_imports(main_module)
-        pickler = Pickler(f, 2)
+        pickler = Pickler(f, protocol)
         pickler._main_module = main_module
-        _byref = pickler._byref
-        _recurse = pickler._recurse
         pickler._byref = False   # disable pickling by name reference
         pickler._recurse = False # disable pickling recursion for globals
         pickler._session = True  # is best indicator of when pickling a session
         pickler.dump(main_module)
-        pickler._session = False
-        pickler._byref = _byref
-        pickler._recurse = _recurse
     finally:
         f.close()
     return
@@ -326,16 +317,25 @@ class Pickler(StockPickler):
     dispatch = MetaCatchingDict(StockPickler.dispatch.copy())
     _main_module = None
     _session = False
-    _byref = False
+    from .settings import settings
+    _byref = settings['byref']
     _strictio = False
-    _fmode = HANDLE_FMODE
-    _recurse = False
-    pass
+    _fmode = settings['fmode']
+    _recurse = settings['recurse']
 
-    def __init__(self, *args, **kwargs):
-        StockPickler.__init__(self, *args, **kwargs)
+    def __init__(self, *args, **kwds):
+        _byref = kwds.pop('byref', Pickler._byref)
+       #_strictio = kwds.pop('strictio', Pickler._strictio)
+        _fmode = kwds.pop('fmode', Pickler._fmode)
+        _recurse = kwds.pop('recurse', Pickler._recurse)
+        StockPickler.__init__(self, *args, **kwds)
         self._main_module = _main_module
         self._diff_cache = {}
+        self._byref = _byref
+       #self._strictio = _strictio
+        self._fmode = _fmode
+        self._recurse = _recurse
+    pass
 
 class Unpickler(StockUnpickler):
     """python's Unpickler extended to interpreter sessions and more types"""
@@ -346,11 +346,11 @@ class Unpickler(StockUnpickler):
         if (module, name) == ('__builtin__', '__main__'):
             return self._main_module.__dict__ #XXX: above set w/save_module_dict
         return StockUnpickler.find_class(self, module, name)
-    pass
 
-    def __init__(self, *args, **kwargs):
-        StockUnpickler.__init__(self, *args, **kwargs)
+    def __init__(self, *args, **kwds):
+        StockUnpickler.__init__(self, *args, **kwds)
         self._main_module = _main_module
+    pass
 
 '''
 def dispatch_table():
