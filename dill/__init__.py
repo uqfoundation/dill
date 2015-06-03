@@ -24,6 +24,7 @@ __license__ = """
 """ + __license__
 
 from .dill import dump, dumps, load, loads, dump_session, load_session, \
+    dump_ipython, load_ipython, \
     Pickler, Unpickler, register, copy, pickle, pickles, \
     HIGHEST_PROTOCOL, DEFAULT_PROTOCOL, PicklingError, UnpicklingError, \
     HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE

@@ -15,9 +15,10 @@ Test against "all" python types (Std. Lib. CH 1-15 @ 2.7) by mmckerns.
 Test against CH16+ Std. Lib. ... TBD.
 """
 __all__ = ['dump','dumps','load','loads','dump_session','load_session',
-           'Pickler','Unpickler','register','copy','pickle','pickles',
-           'HIGHEST_PROTOCOL','DEFAULT_PROTOCOL','PicklingError',
-           'UnpicklingError','HANDLE_FMODE','CONTENTS_FMODE','FILE_FMODE']
+           'dump_ipython','load_ipython','Pickler','Unpickler','register',
+           'copy','pickle','pickles','HIGHEST_PROTOCOL','DEFAULT_PROTOCOL',
+           'PicklingError','UnpicklingError',
+           'HANDLE_FMODE','CONTENTS_FMODE','FILE_FMODE']
 
 import logging
 log = logging.getLogger("dill")
@@ -241,17 +242,26 @@ def _find_source_module(modmap, name, obj, main_module):
         if modobj is obj and modname != main_module.__name__:
             return modname
 
-def _split_module_imports(main_module):
+def _split_module_imports(main_module, byref_filter, discard_missing):
     modmap = _module_map()
+    if byref_filter is None:
+        byref_filter = lambda name: True
+
     imported = []
     original = {}
     items = 'items' if PY3 else 'iteritems'
     for name, obj in getattr(main_module.__dict__, items)():
+        if not byref_filter(name):
+            original[name] = obj
+            continue
         source_module = _find_source_module(modmap, name, obj, main_module)
         if source_module:
             imported.append((source_module, name))
         else:
-            original[name] = obj
+            if discard_missing and byref_filter(name):
+                pass    # if the caller wants it byref and we can't find it anywhere
+            else:
+                original[name] = obj
     if len(imported):
         import types
         newmod = types.ModuleType(main_module.__name__)
@@ -268,12 +278,12 @@ def _restore_module_imports(main_module):
     for module, name in imports:
         exec("from %s import %s" % (module, name), main_module.__dict__)
 
-def dump_session(filename='/tmp/session.pkl', main_module=_main_module, byref=False):
+def dump_session(filename='/tmp/session.pkl', main_module=_main_module, byref=False, byref_filter=None, byref_discard_missing=False):
     """pickle the current state of __main__ to a file"""
     f = open(filename, 'wb')
     try:
         if byref:
-            main_module = _split_module_imports(main_module)
+            main_module = _split_module_imports(main_module, byref_filter, byref_discard_missing)
         pickler = Pickler(f, 2)
         pickler._main_module = main_module
         _byref = pickler._byref
@@ -303,6 +313,22 @@ def load_session(filename='/tmp/session.pkl', main_module=_main_module):
     finally:
         f.close()
     return
+
+def dump_ipython(filename='/tmp/session.pkl'):
+    import IPython
+    user_ns_hidden = IPython.get_ipython().user_ns_hidden
+    byref_filter = lambda name: name in user_ns_hidden
+    _main_module.__dill_user_ns_hidden = user_ns_hidden.keys()
+    dump_session(filename, byref=True, byref_filter=byref_filter, byref_discard_missing=True)
+
+def load_ipython(filename='/tmp/session.pkl'):
+    load_session(filename)
+    if '__dill_user_ns_hidden' in _main_module.__dict__:
+        import IPython
+        user_ns_hidden = IPython.get_ipython().user_ns_hidden
+        for name in _main_module.__dict__.pop('__dill_user_ns_hidden'):
+            if name in _main_module.__dict__:
+                user_ns_hidden[name] = _main_module.__dict__[name]
 
 ### End: Pickle the Interpreter
 
