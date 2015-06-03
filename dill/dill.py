@@ -167,7 +167,7 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None):#, stri
     if fmode is None: fmode = settings['fmode']
     if recurse is None: recurse = settings['recurse']
     pik = Pickler(file, protocol)
-    pik._main_module = _main_module
+    pik._main = _main_module
     # apply kwd settings
     pik._byref = bool(byref)
     pik._strictio = bool(strictio)
@@ -195,10 +195,10 @@ def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None):#, strictio=
 def load(file):
     """unpickle an object from a file"""
     pik = Unpickler(file)
-    pik._main_module = _main_module
+    pik._main = _main_module
     obj = pik.load()
     if type(obj).__module__ == _main_module.__name__: # point obj class to main
-        try: obj.__class__ == getattr(pik._main_module, type(obj).__name__)
+        try: obj.__class__ == getattr(pik._main, type(obj).__name__)
         except AttributeError: pass # defined in a file
    #_main_module.__dict__.update(obj.__dict__) #XXX: should update globals ?
     return obj
@@ -220,6 +220,7 @@ def loads(str):
 
 ### Pickle the Interpreter Session
 def _module_map():
+    """get map of imported modules"""
     from collections import defaultdict
     modmap = defaultdict(list)
     items = 'items' if PY3 else 'iteritems'
@@ -230,18 +231,19 @@ def _module_map():
             modmap[objname].append((obj, name))
     return modmap
 
-def _find_source_module(modmap, name, obj, main_module):
+def _lookup_module(modmap, name, obj, main_module): #FIXME: needs work
+    """lookup name if module is imported"""
     for modobj, modname in modmap[name]:
         if modobj is obj and modname != main_module.__name__:
             return modname
 
-def _split_module_imports(main_module):
+def _stash_modules(main_module):
     modmap = _module_map()
     imported = []
     original = {}
     items = 'items' if PY3 else 'iteritems'
     for name, obj in getattr(main_module.__dict__, items)():
-        source_module = _find_source_module(modmap, name, obj, main_module)
+        source_module = _lookup_module(modmap, name, obj, main_module)
         if source_module:
             imported.append((source_module, name))
         else:
@@ -255,42 +257,45 @@ def _split_module_imports(main_module):
     else:
         return original
 
-def _restore_module_imports(main_module):
+def _restore_modules(main_module):
     if '__dill_imported' not in main_module.__dict__:
         return
     imports = main_module.__dict__.pop('__dill_imported')
     for module, name in imports:
         exec("from %s import %s" % (module, name), main_module.__dict__)
 
-def dump_session(filename='/tmp/session.pkl', main_module=_main_module, byref=False): #FIXME: rename main_module to main, byref to ?
+#NOTE: 06/03/15 renamed main_module to main
+def dump_session(filename='/tmp/session.pkl', main=None, byref=False):
     """pickle the current state of __main__ to a file"""
     from .settings import settings
     protocol = settings['protocol']
+    if main is None: main = _main_module
     f = open(filename, 'wb')
     try:
         if byref:
-            main_module = _split_module_imports(main_module)
+            main = _stash_modules(main)
         pickler = Pickler(f, protocol)
-        pickler._main_module = main_module
+        pickler._main = main
         pickler._byref = False   # disable pickling by name reference
         pickler._recurse = False # disable pickling recursion for globals
         pickler._session = True  # is best indicator of when pickling a session
-        pickler.dump(main_module)
+        pickler.dump(main)
     finally:
         f.close()
     return
 
-def load_session(filename='/tmp/session.pkl', main_module=_main_module):
+def load_session(filename='/tmp/session.pkl', main=None):
     """update the __main__ module with the state from the session file"""
+    if main is None: main = _main_module
     f = open(filename, 'rb')
     try:
         unpickler = Unpickler(f)
-        unpickler._main_module = main_module
+        unpickler._main = main
         unpickler._session = True
         module = unpickler.load()
         unpickler._session = False
-        main_module.__dict__.update(module.__dict__)
-        _restore_module_imports(main_module)
+        main.__dict__.update(module.__dict__)
+        _restore_modules(main)
     finally:
         f.close()
     return
@@ -315,7 +320,7 @@ class MetaCatchingDict(dict):
 class Pickler(StockPickler):
     """python's Pickler extended to interpreter sessions"""
     dispatch = MetaCatchingDict(StockPickler.dispatch.copy())
-    _main_module = None
+    _main = None
     _session = False
     from .settings import settings
     _byref = settings['byref']
@@ -329,7 +334,7 @@ class Pickler(StockPickler):
         _fmode = kwds.pop('fmode', Pickler._fmode)
         _recurse = kwds.pop('recurse', Pickler._recurse)
         StockPickler.__init__(self, *args, **kwds)
-        self._main_module = _main_module
+        self._main = _main_module
         self._diff_cache = {}
         self._byref = _byref
        #self._strictio = _strictio
@@ -339,17 +344,17 @@ class Pickler(StockPickler):
 
 class Unpickler(StockUnpickler):
     """python's Unpickler extended to interpreter sessions and more types"""
-    _main_module = None
+    _main = None
     _session = False
 
     def find_class(self, module, name):
         if (module, name) == ('__builtin__', '__main__'):
-            return self._main_module.__dict__ #XXX: above set w/save_module_dict
+            return self._main.__dict__ #XXX: above set w/save_module_dict
         return StockUnpickler.find_class(self, module, name)
 
     def __init__(self, *args, **kwds):
         StockUnpickler.__init__(self, *args, **kwds)
-        self._main_module = _main_module
+        self._main = _main_module
     pass
 
 '''
@@ -710,7 +715,7 @@ def save_function(pickler, obj):
 
 @register(dict)
 def save_module_dict(pickler, obj):
-    if is_dill(pickler) and obj == pickler._main_module.__dict__ and not pickler._session:
+    if is_dill(pickler) and obj == pickler._main.__dict__ and not pickler._session:
         log.info("D1: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if PY3:
             pickler.write(bytes('c__builtin__\n__main__\n', 'UTF-8'))
@@ -1025,7 +1030,7 @@ def save_module(pickler, obj):
         else:
             builtin_mod = True
         if obj.__name__ not in ("builtins", "dill") \
-           and not builtin_mod or is_dill(pickler) and obj is pickler._main_module:
+           and not builtin_mod or is_dill(pickler) and obj is pickler._main:
             log.info("M1: %s" % obj)
             _main_dict = obj.__dict__.copy() #XXX: better no copy? option to copy?
             [_main_dict.pop(item, None) for item in singletontypes
@@ -1110,7 +1115,7 @@ def pickles(obj,exact=False,safe=False,**kwds):
 def is_dill(pickler):
     "check the dill-ness of your pickler"
     return 'dill' in pickler.__module__
-   #return hasattr(pickler,'_main_module')
+   #return hasattr(pickler,'_main')
 
 def _extend():
     """extend pickle with all of dill's registered types"""
