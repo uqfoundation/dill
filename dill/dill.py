@@ -158,7 +158,7 @@ def copy(obj, *args, **kwds):
     """use pickling to 'copy' an object"""
     return loads(dumps(obj, *args, **kwds))
 
-def dump(obj, file, protocol=None, byref=False, fmode=HANDLE_FMODE):#, strictio=False):
+def dump(obj, file, protocol=None, byref=False, fmode=HANDLE_FMODE, recurse=False):#, strictio=False):
     """pickle an object to a file"""
     strictio = False #FIXME: strict=True needs cleanup
     if protocol is None: protocol = DEFAULT_PROTOCOL
@@ -168,10 +168,12 @@ def dump(obj, file, protocol=None, byref=False, fmode=HANDLE_FMODE):#, strictio=
     _byref = pik._byref
     _strictio = pik._strictio
     _fmode = pik._fmode
+    _recurse = pik._recurse
     # apply kwd settings
     pik._byref = bool(byref)
     pik._strictio = bool(strictio)
     pik._fmode = fmode
+    pik._recurse = bool(recurse)
     # hack to catch subclassed numpy array instances
     if NumpyArrayType and ndarraysubclassinstance(obj):
         @register(type(obj))
@@ -187,12 +189,13 @@ def dump(obj, file, protocol=None, byref=False, fmode=HANDLE_FMODE):#, strictio=
     pik._byref = _byref
     pik._strictio = _strictio
     pik._fmode = _fmode
+    pik._recurse = _recurse
     return
 
-def dumps(obj, protocol=None, byref=False, fmode=HANDLE_FMODE):#, strictio=False):
+def dumps(obj, protocol=None, byref=False, fmode=HANDLE_FMODE, recurse=False):#, strictio=False):
     """pickle an object to a string"""
     file = StringIO()
-    dump(obj, file, protocol, byref, fmode)#, strictio)
+    dump(obj, file, protocol, byref, fmode, recurse)#, strictio)
     return file.getvalue()
 
 def load(file):
@@ -274,11 +277,14 @@ def dump_session(filename='/tmp/session.pkl', main_module=_main_module, byref=Fa
         pickler = Pickler(f, 2)
         pickler._main_module = main_module
         _byref = pickler._byref
-        pickler._byref = False  # disable pickling by name reference
-        pickler._session = True # is best indicator of when pickling a session
+        _recurse = pickler._recurse
+        pickler._byref = False   # disable pickling by name reference
+        pickler._recurse = False # disable pickling recursion for globals
+        pickler._session = True  # is best indicator of when pickling a session
         pickler.dump(main_module)
         pickler._session = False
         pickler._byref = _byref
+        pickler._recurse = _recurse
     finally:
         f.close()
     return
@@ -323,6 +329,7 @@ class Pickler(StockPickler):
     _byref = False
     _strictio = False
     _fmode = HANDLE_FMODE
+    _recurse = False
     pass
 
     def __init__(self, *args, **kwargs):
@@ -681,14 +688,19 @@ def save_code(pickler, obj):
 def save_function(pickler, obj):
     if not _locate_function(obj): #, pickler._session):
         log.info("F1: %s" % obj)
+        if pickler._recurse: # recurse to get all globals referred to by obj
+            from .detect import globalvars
+            globs = globalvars(obj, recurse=True)
+        else:
+            globs = obj.__globals__ if PY3 else obj.func_globals
         if PY3:
-            pickler.save_reduce(_create_function, (obj.__code__, 
-                                obj.__globals__, obj.__name__,
+            pickler.save_reduce(_create_function, (obj.__code__,
+                                globs, obj.__name__,
                                 obj.__defaults__, obj.__closure__,
                                 obj.__dict__), obj=obj)
         else:
             pickler.save_reduce(_create_function, (obj.func_code,
-                                obj.func_globals, obj.func_name,
+                                globs, obj.func_name,
                                 obj.func_defaults, obj.func_closure,
                                 obj.__dict__), obj=obj)
     else:

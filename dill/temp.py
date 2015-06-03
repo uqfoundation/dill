@@ -13,9 +13,36 @@ and file-like objects.
 
 from __future__ import absolute_import
 __all__ = ['dump_source', 'dump', 'dumpIO_source', 'dumpIO',\
-           'load_source', 'load', 'loadIO_source', 'loadIO']
+           'load_source', 'load', 'loadIO_source', 'loadIO',\
+           'capture']
 
+import contextlib
 from .dill import PY3
+
+
+@contextlib.contextmanager
+def capture(stream='stdout'):
+    """builds a context that temporarily replaces the given stream name
+
+    >>> with capture('stdout') as out:
+    ...   print "foo!"
+    ... 
+    >>> print out.getvalue()
+    foo!
+
+    """
+    import sys
+    if PY3:
+        from io import StringIO
+    else:
+        from StringIO import StringIO
+    orig = getattr(sys, stream)
+    setattr(sys, stream, StringIO())
+    try:
+        yield getattr(sys, stream)
+    finally:
+        setattr(sys, stream, orig)
+
 
 def b(x): # deal with b'foo' versus 'foo'
     import codecs
@@ -230,7 +257,7 @@ Optional kwds:
     return file
 
 
-del absolute_import
+del absolute_import, contextlib
 
 
 # EOF
