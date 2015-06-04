@@ -47,6 +47,12 @@ def foo(x):
     return squared(x)+y
   return bar
 
+class _class:
+    def _method(self):
+        pass
+    def ok(self):
+        return True
+
 res = globalvars(foo, recurse=True)
 assert set(res) == set(['squared', 'a'])
 res = globalvars(foo, recurse=False)
@@ -59,7 +65,15 @@ assert set(res) == set(['squared'])
 del zap
 res = globalvars(squared)
 assert set(res) == set(['a'])
-
+# FIXME: should find referenced __builtins__
+#res = globalvars(_class, recurse=True)
+#assert set(res) == set(['True'])
+#res = globalvars(_class, recurse=False)
+#assert res == {}
+#res = globalvars(_class.ok, recurse=True)
+#assert set(res) == set(['True'])
+#res = globalvars(_class.ok, recurse=False)
+#assert set(res) == set(['True'])
 
 
 #98 dill ignores __getstate__ in interactive lambdas

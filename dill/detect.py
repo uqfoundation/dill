@@ -11,6 +11,7 @@ Methods for detecting objects leading to pickling failures.
 from __future__ import absolute_import, with_statement
 import dis
 from inspect import ismethod, isfunction, istraceback, isframe, iscode
+from inspect import getmodule
 from .pointers import parent, reference, at, parents, children
 
 from .dill import _trace as trace
@@ -147,10 +148,10 @@ def freevars(func):
 # thanks to Davies Liu for recursion of globals
 def nestedglobals(func, recurse=True):
     """get the names of any globals found within func"""
-    names = set()
     func = code(func)
-    if func is None: return names
+    if func is None: return list()
     from .temp import capture
+    names = set()
     with capture('stdout') as out:
         dis.dis(func) #XXX: dis.dis(None) disassembles last traceback
     for line in out.getvalue().splitlines():
@@ -159,8 +160,8 @@ def nestedglobals(func, recurse=True):
             names.add(name)
     for co in getattr(func, 'co_consts', tuple()):
         if co and recurse and iscode(co):
-            names |= nestedglobals(co, recurse=True)
-    return names
+            names.update(nestedglobals(co, recurse=True))
+    return list(names)
 
 def referredglobals(func, recurse=True):
     """get the names of objects in the global scope referred to by func"""
@@ -180,13 +181,14 @@ def globalvars(func, recurse=True):
         func_globals = 'func_globals'
     if ismethod(func): func = getattr(func, im_func)
     if isfunction(func):
-        globs = getattr(func, func_globals) or {}
+        globs = {} #FIXME: vars(getmodule(object)) # get dict of __builtins__
+        globs.update(getattr(func, func_globals) or {})
         if not recurse:
             func = getattr(func, func_code).co_names # get names
         else:
-            func = nestedglobals(getattr(func, func_code)) #, depth=None)
+            func = set(nestedglobals(getattr(func, func_code)))
             # find globals for all entries of func
-            for key in func.copy(): #XXX: unnecessary...? bad idea...?
+            for key in func.copy(): #XXX: unnecessary...?
                 func.update(globalvars(globs.get(key), recurse=True).keys())
     else:
         return {}
