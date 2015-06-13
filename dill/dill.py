@@ -693,7 +693,8 @@ def save_code(pickler, obj):
 def save_function(pickler, obj):
     if not _locate_function(obj): #, pickler._session):
         log.info("F1: %s" % obj)
-        if pickler._recurse: # recurse to get all globals referred to by obj
+        if getattr(pickler, '_recurse', False):
+            # recurse to get all globals referred to by obj
             from .detect import globalvars
             globs = globalvars(obj, recurse=True)
         else:
@@ -786,14 +787,18 @@ def _save_file(pickler, obj, open_):
             position = -1
         else:
             position = obj.tell()
-    if pickler._fmode == FILE_FMODE:
+    if is_dill(pickler) and pickler._fmode == FILE_FMODE:
         f = open_(obj.name, "r")
         fdata = f.read()
         f.close()
     else:
         fdata = ""
-    strictio = pickler._strictio
-    fmode = pickler._fmode
+    if is_dill(pickler):
+        strictio = pickler._strictio
+        fmode = pickler._fmode
+    else:
+        strictio = False
+        fmode = 0 # HANDLE_FMODE
     pickler.save_reduce(_create_filehandle, (obj.name, obj.mode, position,
                                              obj.closed, open_, strictio,
                                              fmode, fdata), obj=obj)
