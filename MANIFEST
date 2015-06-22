@@ -12,6 +12,7 @@ dill/dill.py
 dill/info.py
 dill/objtypes.py
 dill/pointers.py
+dill/settings.py
 dill/source.py
 dill/temp.py
 dill.egg-info/PKG-INFO
@@ -33,6 +34,7 @@ tests/test_module.py
 tests/test_moduledict.py
 tests/test_nested.py
 tests/test_objects.py
+tests/test_properties.py
 tests/test_source.py
 tests/test_temp.py
 tests/test_weakref.py
