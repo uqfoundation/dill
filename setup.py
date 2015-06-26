@@ -265,8 +265,8 @@ setup(name='dill',
 
 # add dependencies
 ctypes_version = '>=1.0.1'
-objgraph = '>=1.7.2'
-pyreadline = '>=1.7.1'
+objgraph_version = '>=1.7.2'
+pyreadline_version = '>=1.7.1'
 import sys
 if has_setuptools:
     setup_code += """
