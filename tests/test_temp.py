@@ -5,17 +5,20 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
+import sys
 from dill.temp import dump, dump_source, dumpIO, dumpIO_source
 from dill.temp import load, load_source, loadIO, loadIO_source
+WINDOWS = sys.platform[:3] == 'win'
 
 
 f = lambda x: x**2
 x = [1,2,3,4,5]
 
 # source code to tempfile
-pyfile = dump_source(f, alias='_f')
-_f = load_source(pyfile)
-assert _f(4) == f(4)
+if not WINDOWS:  #see: https://bugs.python.org/issue14243
+    pyfile = dump_source(f, alias='_f')
+    _f = load_source(pyfile)
+    assert _f(4) == f(4)
 
 # source code to stream
 pyfile = dumpIO_source(f, alias='_f')
@@ -23,9 +26,10 @@ _f = loadIO_source(pyfile)
 assert _f(4) == f(4)
 
 # pickle to tempfile
-dumpfile = dump(x)
-_x = load(dumpfile)
-assert _x == x
+if not WINDOWS:  #see: https://bugs.python.org/issue14243
+    dumpfile = dump(x)
+    _x = load(dumpfile)
+    assert _x == x
 
 # pickle to stream
 dumpfile = dumpIO(x)

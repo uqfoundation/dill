@@ -173,6 +173,7 @@ Requirements
 Dill requires::
 
     - python2, version >= 2.5  *or*  python3, version >= 3.1
+    - pyreadline, version >= 1.7.1  (on windows)
 
 Optional requirements::
 
@@ -265,12 +266,18 @@ setup(name='dill',
 # add dependencies
 ctypes_version = '>=1.0.1'
 objgraph = '>=1.7.2'
+pyreadline = '>=1.7.1'
 import sys
 if has_setuptools:
     setup_code += """
       zip_safe=False,
 """
-    if hex(sys.hexversion) < '0x20500f0':
+    if sys.platform[:3] == 'win':
+        setup_code += """
+      install_requires = ['pyreadline%s'],
+""" % (pyreadline_version)
+    # verrrry unlikely that this is still relevant
+    elif hex(sys.hexversion) < '0x20500f0':
         setup_code += """
       install_requires = ['ctypes%s'],
 """ % (ctypes_version)
@@ -286,10 +293,13 @@ exec(setup_code)
 # if dependencies are missing, print a warning
 try:
     import ctypes
+    import readline
 except ImportError:
     print ("\n***********************************************************")
     print ("WARNING: One of the following dependencies is unresolved:")
     print ("    ctypes %s" % ctypes_version)
+    if sys.platform[:3] == 'win':
+        print ("    readline %s" % pyreadline_version)
     print ("***********************************************************\n")
 
 
