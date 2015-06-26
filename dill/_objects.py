@@ -109,7 +109,6 @@ if HAS_CTYPES:
         pass
     _Struct._fields_ = [("_field", ctypes.c_int),("next", ctypes.POINTER(_Struct))]
 _filedescrip, _tempfile = tempfile.mkstemp('r') # deleted in cleanup
-os.close(_filedescrip)
 _tmpf = tempfile.TemporaryFile('w')
 
 # put the objects in order, if possible
@@ -536,6 +535,8 @@ else:
 
 # -- cleanup ----------------------------------------------------------------
 a.update(d) # registered also succeed
+
+os.close(_filedescrip) # required on win32
 os.remove(_tempfile)
 
 

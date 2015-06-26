@@ -265,8 +265,8 @@ setup(name='dill',
 
 # add dependencies
 ctypes_version = '>=1.0.1'
-objgraph = '>=1.7.2'
-pyreadline = '>=1.7.1'
+objgraph_version = '>=1.7.2'
+pyreadline_version = '>=1.7.1'
 import sys
 if has_setuptools:
     setup_code += """
@@ -275,7 +275,7 @@ if has_setuptools:
     if sys.platform[:3] == 'win':
         setup_code += """
       install_requires = ['pyreadline%s'],
-""" % (pyreadline)
+""" % (pyreadline_version)
     # verrrry unlikely that this is still relevant
     elif hex(sys.hexversion) < '0x20500f0':
         setup_code += """
