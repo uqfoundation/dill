@@ -275,7 +275,7 @@ if has_setuptools:
     if sys.platform[:3] == 'win':
         setup_code += """
       install_requires = ['pyreadline%s'],
-""" % (pyreadline_version)
+""" % (pyreadline)
     # verrrry unlikely that this is still relevant
     elif hex(sys.hexversion) < '0x20500f0':
         setup_code += """
