@@ -69,6 +69,12 @@ try:
 except ImportError: # Ubuntu
     HAS_ALL = False
 try:
+    #import curses
+    #from curses import textpad, panel
+    HAS_CURSES = True
+except ImportError: # Windows
+    HAS_CURSES = False
+try:
     import ctypes
     HAS_CTYPES = True
 except ImportError: # MacPorts
@@ -470,20 +476,15 @@ x['CSVDictWriterType'] = csv.DictWriter(_cstrO,{})
 x['HashType'] = hashlib.md5()
 x['HMACType'] = hmac.new(_in)
 # generic operating system services (CH 15)
-try:
-    import curses
-    from curses import textpad, panel
+if HAS_CURSES: pass
     #x['CursesWindowType'] = _curwin = curses.initscr() #FIXME: messes up tty
     #x['CursesTextPadType'] = textpad.Textbox(_curwin)
     #x['CursesPanelType'] = panel.new_panel(_curwin)
-except ImportError:
-    pass
-    
 if HAS_CTYPES:
     x['CCharPType'] = ctypes.c_char_p()
     x['CWCharPType'] = ctypes.c_wchar_p()
     x['CVoidPType'] = ctypes.c_void_p()
-    if sys.platform == 'win32':
+    if sys.platform[:3] == 'win':
         x['CDLLType'] = _cdll = ctypes.cdll.msvcrt
     else:
         x['CDLLType'] = _cdll = ctypes.CDLL(None)
@@ -535,8 +536,8 @@ else:
 
 # -- cleanup ----------------------------------------------------------------
 a.update(d) # registered also succeed
-
-os.close(_filedescrip) # required on win32
+if sys.platform[:3] == 'win':
+    os.close(_filedescrip) # required on win32
 os.remove(_tempfile)
 
 
