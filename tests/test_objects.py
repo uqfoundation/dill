@@ -15,15 +15,15 @@ pickle.settings['recurse'] = True
 #import pickle
 
 # get all objects for testing
-from dill import load_types
+from dill import load_types, objects
 load_types(pickleable=True,unpickleable=False)
 #load_types(pickleable=True,unpickleable=True)
-from dill import objects
 
 # helper objects
 class _class:
     def _method(self):
         pass
+        
 # objects that *fail* if imported
 special = {}
 special['LambdaType'] = _lambda = lambda x: lambda y: x

@@ -56,7 +56,6 @@ import hmac
 import os
 import logging
 import optparse
-import curses
 #import __hello__
 import threading
 import socket
@@ -74,7 +73,6 @@ try:
     HAS_CTYPES = True
 except ImportError: # MacPorts
     HAS_CTYPES = False
-from curses import textpad, panel
 
 # helper objects
 class _class:
@@ -287,16 +285,20 @@ d['MethodDescriptorType'] = type.__dict__['mro']
 d['WrapperDescriptorType'] = type.__repr__
 a['WrapperDescriptorType2'] = type.__dict__['__module__']
 # built-in functions (CH 2)
-if PY3: _methodwrap = (1).__lt__
-else: _methodwrap = (1).__cmp__
+if PY3: 
+    _methodwrap = (1).__lt__
+else: 
+    _methodwrap = (1).__cmp__
 d['MethodWrapperType'] = _methodwrap
 a['StaticMethodType'] = staticmethod(_method)
 a['ClassMethodType'] = classmethod(_method)
 a['PropertyType'] = property()
 d['SuperType'] = super(Exception, _exception)
 # string services (CH 7)
-if PY3: _in = _bytes
-else: _in = _str
+if PY3: 
+    _in = _bytes
+else: 
+    _in = _str
 a['InputType'] = _cstrI = StringIO(_in)
 a['OutputType'] = _cstrO = StringIO()
 # data types (CH 8)
@@ -468,14 +470,23 @@ x['CSVDictWriterType'] = csv.DictWriter(_cstrO,{})
 x['HashType'] = hashlib.md5()
 x['HMACType'] = hmac.new(_in)
 # generic operating system services (CH 15)
-#x['CursesWindowType'] = _curwin = curses.initscr() #FIXME: messes up tty
-#x['CursesTextPadType'] = textpad.Textbox(_curwin)
-#x['CursesPanelType'] = panel.new_panel(_curwin)
+try:
+    import curses
+    from curses import textpad, panel
+    #x['CursesWindowType'] = _curwin = curses.initscr() #FIXME: messes up tty
+    #x['CursesTextPadType'] = textpad.Textbox(_curwin)
+    #x['CursesPanelType'] = panel.new_panel(_curwin)
+except ImportError:
+    pass
+    
 if HAS_CTYPES:
     x['CCharPType'] = ctypes.c_char_p()
     x['CWCharPType'] = ctypes.c_wchar_p()
     x['CVoidPType'] = ctypes.c_void_p()
-    x['CDLLType'] = _cdll = ctypes.CDLL(None)
+    if sys.platform == 'win32':
+        x['CDLLType'] = _cdll = ctypes.cdll.msvcrt
+    else:
+        x['CDLLType'] = _cdll = ctypes.CDLL(None)
     x['PyDLLType'] = _pydll = ctypes.pythonapi
     x['FuncPtrType'] = _cdll._FuncPtr()
     x['CCharArrayType'] = ctypes.create_string_buffer(1)
@@ -524,6 +535,8 @@ else:
 
 # -- cleanup ----------------------------------------------------------------
 a.update(d) # registered also succeed
+
+os.close(_filedescrip) # required on win32
 os.remove(_tempfile)
 
 
