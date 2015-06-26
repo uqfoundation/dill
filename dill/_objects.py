@@ -56,7 +56,6 @@ import hmac
 import os
 import logging
 import optparse
-import curses
 #import __hello__
 import threading
 import socket
@@ -69,12 +68,8 @@ try:
     HAS_ALL = True
 except ImportError: # Ubuntu
     HAS_ALL = False
-try:
-    import ctypes
-    HAS_CTYPES = True
-except ImportError: # MacPorts
-    HAS_CTYPES = False
-from curses import textpad, panel
+
+import ctypes
 
 # helper objects
 class _class:
@@ -106,11 +101,11 @@ def _function2():
         from sys import exc_info
         e, er, tb = exc_info()
         return er, tb
-if HAS_CTYPES:
-    class _Struct(ctypes.Structure):
-        pass
-    _Struct._fields_ = [("_field", ctypes.c_int),("next", ctypes.POINTER(_Struct))]
+class _Struct(ctypes.Structure):
+    pass
+_Struct._fields_ = [("_field", ctypes.c_int),("next", ctypes.POINTER(_Struct))]
 _filedescrip, _tempfile = tempfile.mkstemp('r') # deleted in cleanup
+os.close(_filedescrip)
 _tmpf = tempfile.TemporaryFile('w')
 
 # put the objects in order, if possible
@@ -188,25 +183,24 @@ a['LogRecordType'] = logging.makeLogRecord(_dict) # pickle ok
 a['OptionParserType'] = _oparser = optparse.OptionParser() # pickle ok
 a['OptionGroupType'] = optparse.OptionGroup(_oparser,"foo") # pickle ok
 a['OptionType'] = optparse.Option('--foo') # pickle ok
-if HAS_CTYPES:
-    a['CCharType'] = _cchar = ctypes.c_char()
-    a['CWCharType'] = ctypes.c_wchar() # fail == 2.6
-    a['CByteType'] = ctypes.c_byte()
-    a['CUByteType'] = ctypes.c_ubyte()
-    a['CShortType'] = ctypes.c_short()
-    a['CUShortType'] = ctypes.c_ushort()
-    a['CIntType'] = ctypes.c_int()
-    a['CUIntType'] = ctypes.c_uint()
-    a['CLongType'] = ctypes.c_long()
-    a['CULongType'] = ctypes.c_ulong()
-    a['CLongLongType'] = ctypes.c_longlong()
-    a['CULongLongType'] = ctypes.c_ulonglong()
-    a['CFloatType'] = ctypes.c_float()
-    a['CDoubleType'] = ctypes.c_double()
-    a['CSizeTType'] = ctypes.c_size_t()
-    a['CLibraryLoaderType'] = ctypes.cdll
-    a['StructureType'] = _Struct
-    a['BigEndianStructureType'] = ctypes.BigEndianStructure()
+a['CCharType'] = _cchar = ctypes.c_char()
+a['CWCharType'] = ctypes.c_wchar() # fail == 2.6
+a['CByteType'] = ctypes.c_byte()
+a['CUByteType'] = ctypes.c_ubyte()
+a['CShortType'] = ctypes.c_short()
+a['CUShortType'] = ctypes.c_ushort()
+a['CIntType'] = ctypes.c_int()
+a['CUIntType'] = ctypes.c_uint()
+a['CLongType'] = ctypes.c_long()
+a['CULongType'] = ctypes.c_ulong()
+a['CLongLongType'] = ctypes.c_longlong()
+a['CULongLongType'] = ctypes.c_ulonglong()
+a['CFloatType'] = ctypes.c_float()
+a['CDoubleType'] = ctypes.c_double()
+a['CSizeTType'] = ctypes.c_size_t()
+a['CLibraryLoaderType'] = ctypes.cdll
+a['StructureType'] = _Struct
+a['BigEndianStructureType'] = ctypes.BigEndianStructure()
 #NOTE: also LittleEndianStructureType and UnionType... abstract classes
 #NOTE: remember for ctypesobj.contents creates a new python object
 #NOTE: ctypes.c_int._objects is memberdescriptor for object's __dict__
@@ -229,9 +223,8 @@ try: # python 2.6
     a['BufferedIOBaseType'] = io.BufferedIOBase()
     a['UnicodeIOType'] = TextIO() # the new StringIO
     a['LoggingAdapterType'] = logging.LoggingAdapter(_logger,_dict) # pickle ok
-    if HAS_CTYPES:
-        a['CBoolType'] = ctypes.c_bool(1)
-        a['CLongDoubleType'] = ctypes.c_longdouble()
+    a['CBoolType'] = ctypes.c_bool(1)
+    a['CLongDoubleType'] = ctypes.c_longdouble()
 except ImportError:
     pass
 try: # python 2.7
@@ -239,8 +232,7 @@ try: # python 2.7
     # data types (CH 8)
     a['OrderedDictType'] = collections.OrderedDict(_dict)
     a['CounterType'] = collections.Counter(_dict)
-    if HAS_CTYPES:
-        a['CSSizeTType'] = ctypes.c_ssize_t()
+    a['CSSizeTType'] = ctypes.c_ssize_t()
     # generic operating system services (CH 15)
     a['NullHandlerType'] = logging.NullHandler() # pickle ok  # new 2.7
     a['ArgParseFileType'] = argparse.FileType() # pickle ok
@@ -287,16 +279,20 @@ d['MethodDescriptorType'] = type.__dict__['mro']
 d['WrapperDescriptorType'] = type.__repr__
 a['WrapperDescriptorType2'] = type.__dict__['__module__']
 # built-in functions (CH 2)
-if PY3: _methodwrap = (1).__lt__
-else: _methodwrap = (1).__cmp__
+if PY3: 
+    _methodwrap = (1).__lt__
+else: 
+    _methodwrap = (1).__cmp__
 d['MethodWrapperType'] = _methodwrap
 a['StaticMethodType'] = staticmethod(_method)
 a['ClassMethodType'] = classmethod(_method)
 a['PropertyType'] = property()
 d['SuperType'] = super(Exception, _exception)
 # string services (CH 7)
-if PY3: _in = _bytes
-else: _in = _str
+if PY3: 
+    _in = _bytes
+else: 
+    _in = _str
 a['InputType'] = _cstrI = StringIO(_in)
 a['OutputType'] = _cstrO = StringIO()
 # data types (CH 8)
@@ -468,27 +464,35 @@ x['CSVDictWriterType'] = csv.DictWriter(_cstrO,{})
 x['HashType'] = hashlib.md5()
 x['HMACType'] = hmac.new(_in)
 # generic operating system services (CH 15)
-#x['CursesWindowType'] = _curwin = curses.initscr() #FIXME: messes up tty
-#x['CursesTextPadType'] = textpad.Textbox(_curwin)
-#x['CursesPanelType'] = panel.new_panel(_curwin)
-if HAS_CTYPES:
-    x['CCharPType'] = ctypes.c_char_p()
-    x['CWCharPType'] = ctypes.c_wchar_p()
-    x['CVoidPType'] = ctypes.c_void_p()
+try:
+    import curses
+    from curses import textpad, panel
+    #x['CursesWindowType'] = _curwin = curses.initscr() #FIXME: messes up tty
+    #x['CursesTextPadType'] = textpad.Textbox(_curwin)
+    #x['CursesPanelType'] = panel.new_panel(_curwin)
+except ImportError:
+    pass
+
+x['CCharPType'] = ctypes.c_char_p()
+x['CWCharPType'] = ctypes.c_wchar_p()
+x['CVoidPType'] = ctypes.c_void_p()
+if sys.platform == 'win32':
+    x['CDLLType'] = _cdll = ctypes.cdll.msvcrt
+else:
     x['CDLLType'] = _cdll = ctypes.CDLL(None)
-    x['PyDLLType'] = _pydll = ctypes.pythonapi
-    x['FuncPtrType'] = _cdll._FuncPtr()
-    x['CCharArrayType'] = ctypes.create_string_buffer(1)
-    x['CWCharArrayType'] = ctypes.create_unicode_buffer(1)
-    x['CParamType'] = ctypes.byref(_cchar)
-    x['LPCCharType'] = ctypes.pointer(_cchar)
-    x['LPCCharObjType'] = _lpchar = ctypes.POINTER(ctypes.c_char)
-    x['NullPtrType'] = _lpchar()
-    x['NullPyObjectType'] = ctypes.py_object()
-    x['PyObjectType'] = ctypes.py_object(1)
-    x['FieldType'] = _field = _Struct._field
-    x['CFUNCTYPEType'] = _cfunc = ctypes.CFUNCTYPE(ctypes.c_char)
-    x['CFunctionType'] = _cfunc(str)
+x['PyDLLType'] = _pydll = ctypes.pythonapi
+x['FuncPtrType'] = _cdll._FuncPtr()
+x['CCharArrayType'] = ctypes.create_string_buffer(1)
+x['CWCharArrayType'] = ctypes.create_unicode_buffer(1)
+x['CParamType'] = ctypes.byref(_cchar)
+x['LPCCharType'] = ctypes.pointer(_cchar)
+x['LPCCharObjType'] = _lpchar = ctypes.POINTER(ctypes.c_char)
+x['NullPtrType'] = _lpchar()
+x['NullPyObjectType'] = ctypes.py_object()
+x['PyObjectType'] = ctypes.py_object(1)
+x['FieldType'] = _field = _Struct._field
+x['CFUNCTYPEType'] = _cfunc = ctypes.CFUNCTYPE(ctypes.c_char)
+x['CFunctionType'] = _cfunc(str)
 try: # python 2.6
     # numeric and mathematical types (CH 9)
     x['MethodCallerType'] = operator.methodcaller('mro') # 2.6
