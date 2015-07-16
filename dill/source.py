@@ -593,8 +593,9 @@ def dumpsource(object, alias='', new=False, enclose=True):
     return code #XXX: better 'dumpsourcelines', returning list of lines?
 
 
-def getname(obj, force=False): #XXX: allow 'throw'(?) to raise error on fail?
+def getname(obj, force=False, fqn=False): #XXX: throw(?) to raise error on fail?
     """get the name of the object. for lambdas, get the name of the pointer """
+    if fqn: return '.'.join(_namespace(obj))
     module = getmodule(obj)
     if not module: # things like "None" and "1"
         if not force: return None
