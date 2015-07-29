@@ -11,12 +11,22 @@ Methods for detecting objects leading to pickling failures.
 from __future__ import absolute_import, with_statement
 import dis
 from inspect import ismethod, isfunction, istraceback, isframe, iscode
-from inspect import getmodule
 from .pointers import parent, reference, at, parents, children
 
 from .dill import _trace as trace
 from .dill import PY3
 
+def getmodule(object, _filename=None, force=False):
+    """get the module of the object"""
+    from inspect import getmodule as getmod
+    module = getmod(object, _filename)
+    if module or not force: return module
+    if PY3: builtins = 'builtins'
+    else: builtins = '__builtin__'
+    builtins = __import__(builtins)
+    from .source import getname
+    name = getname(object, force=True)
+    return builtins if name in vars(builtins).keys() else None
 
 def outermost(func): # is analogous to getsource(func,enclosing=True)
     """get outermost enclosing object (i.e. the outer function in a closure)
@@ -163,11 +173,11 @@ def nestedglobals(func, recurse=True):
             names.update(nestedglobals(co, recurse=True))
     return list(names)
 
-def referredglobals(func, recurse=True):
+def referredglobals(func, recurse=True, builtins=False):
     """get the names of objects in the global scope referred to by func"""
-    return globalvars(func, recurse).keys()
+    return globalvars(func, recurse, builtins).keys()
 
-def globalvars(func, recurse=True):
+def globalvars(func, recurse=True, builtins=False):
     """get objects defined in global scope that are referred to by func
 
     return a dict of {name:object}"""
@@ -181,7 +191,7 @@ def globalvars(func, recurse=True):
         func_globals = 'func_globals'
     if ismethod(func): func = getattr(func, im_func)
     if isfunction(func):
-        globs = {} #FIXME: vars(getmodule(object)) # get dict of __builtins__
+        globs = vars(getmodule(sum)) if builtins else {}
         globs.update(getattr(func, func_globals) or {})
         if not recurse:
             func = getattr(func, func_code).co_names # get names
@@ -189,7 +199,7 @@ def globalvars(func, recurse=True):
             func = set(nestedglobals(getattr(func, func_code)))
             # find globals for all entries of func
             for key in func.copy(): #XXX: unnecessary...?
-                func.update(globalvars(globs.get(key), recurse=True).keys())
+                func.update(globalvars(globs.get(key), True, builtins).keys())
     else:
         return {}
     #NOTE: if name not in func_globals, then we skip it...

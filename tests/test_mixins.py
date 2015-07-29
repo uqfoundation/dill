@@ -6,7 +6,7 @@
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
 import dill
-dill.settings['recurse'] = False #True
+dill.settings['recurse'] = True
 
 def wtf(x,y,z):
   def zzz():
