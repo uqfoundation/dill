@@ -173,11 +173,11 @@ def nestedglobals(func, recurse=True):
             names.update(nestedglobals(co, recurse=True))
     return list(names)
 
-def referredglobals(func, recurse=True, builtins=False):
+def referredglobals(func, recurse=True, builtin=False):
     """get the names of objects in the global scope referred to by func"""
-    return globalvars(func, recurse, builtins).keys()
+    return globalvars(func, recurse, builtin).keys()
 
-def globalvars(func, recurse=True, builtins=False):
+def globalvars(func, recurse=True, builtin=False):
     """get objects defined in global scope that are referred to by func
 
     return a dict of {name:object}"""
@@ -191,7 +191,7 @@ def globalvars(func, recurse=True, builtins=False):
         func_globals = 'func_globals'
     if ismethod(func): func = getattr(func, im_func)
     if isfunction(func):
-        globs = vars(getmodule(sum)) if builtins else {}
+        globs = vars(getmodule(sum)) if builtin else {}
         globs.update(getattr(func, func_globals) or {})
         if not recurse:
             func = getattr(func, func_code).co_names # get names
@@ -204,7 +204,7 @@ def globalvars(func, recurse=True, builtins=False):
                 if nested_func == orig_func:
                    #func.remove(key) if key in func else None
                     continue  #XXX: globalvars(func, False)?
-                func.update(globalvars(nested_func, True, builtins).keys())
+                func.update(globalvars(nested_func, True, builtin).keys())
     else:
         return {}
     #NOTE: if name not in func_globals, then we skip it...
