@@ -700,6 +700,8 @@ def save_function(pickler, obj):
             # recurse to get all globals referred to by obj
             from .detect import globalvars
             globs = globalvars(obj, recurse=True)
+            if obj in globs.values(): #ABORT: use _recurse=False
+                globs = obj.__globals__ if PY3 else obj.func_globals
         else:
             globs = obj.__globals__ if PY3 else obj.func_globals
         if PY3:
