@@ -494,8 +494,11 @@ def _create_filehandle(name, mode, position, closed, open, strictio, fmode, fdat
         # treat x mode as w mode
         if "x" in mode and sys.hexversion < 0x03030000:
             raise ValueError("invalid mode: '%s'" % mode)
-
-        if not os.path.exists(name):
+        try:
+            exists = os.path.exists(name)
+        except:
+            exists = False
+        if not exists:
             if strictio:
                 raise FileNotFoundError("[Errno 2] No such file or directory: '%s'" % name)
             elif "r" in mode and fmode != FILE_FMODE:
@@ -537,6 +540,8 @@ def _create_filehandle(name, mode, position, closed, open, strictio, fmode, fdat
                     r = getattr(r, "raw", r)
                     r.name = name
                 else:
+                    if not HAS_CTYPES:
+                        raise ImportError("No module named 'ctypes'")
                     class FILE(ctypes.Structure):
                         _fields_ = [("refcount", ctypes.c_long),
                                     ("type_obj", ctypes.py_object),
@@ -548,8 +553,6 @@ def _create_filehandle(name, mode, position, closed, open, strictio, fmode, fdat
                             ("ob_refcnt", ctypes.c_int),
                             ("ob_type", ctypes.py_object)
                             ]
-                    if not HAS_CTYPES:
-                        raise ImportError("No module named 'ctypes'")
                     ctypes.cast(id(f), ctypes.POINTER(FILE)).contents.name = name
                     ctypes.cast(id(name), ctypes.POINTER(PyObject)).contents.ob_refcnt += 1
                 assert f.name == name
