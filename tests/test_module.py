@@ -10,7 +10,7 @@ import dill
 import test_mixins as module
 try: from imp import reload
 except ImportError: pass
-dill.settings['recurse'] = True
+dill.settings['recurse'] = False #True
 
 cached = (module.__cached__ if hasattr(module, "__cached__")
           else module.__file__.split(".", 1)[0] + ".pyc")

@@ -91,7 +91,7 @@ class Foo(object):
 f = Foo()
 from dill import dumps, loads
 dumps(f)
-dumps(lambda: f) # doesn't call __getstate__
+dumps(lambda: f, recurse=False) # doesn't call __getstate__
 dumps(lambda: f, recurse=True) # calls __getstate__
 assert bar[0] == 2
 
