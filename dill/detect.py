@@ -185,26 +185,50 @@ def globalvars(func, recurse=True, builtin=False):
         im_func = '__func__'
         func_code = '__code__'
         func_globals = '__globals__'
+        func_closure = '__closure__'
     else:
         im_func = 'im_func'
         func_code = 'func_code'
         func_globals = 'func_globals'
+        func_closure = 'func_closure'
     if ismethod(func): func = getattr(func, im_func)
     if isfunction(func):
         globs = vars(getmodule(sum)) if builtin else {}
-        globs.update(getattr(func, func_globals) or {})
+        # get references from within closure
+        orig_func, func = func, set()
+        for obj in getattr(orig_func, func_closure) or {}:
+            _vars = globalvars(obj.cell_contents, recurse, builtin) or {}
+            func.update(_vars) #XXX: (above) be wary of infinte recursion?
+            globs.update(_vars)
+        # get globals
+        globs.update(getattr(orig_func, func_globals) or {})
+        # get names of references
         if not recurse:
-            func = getattr(func, func_code).co_names # get names
+            func.update(getattr(orig_func, func_code).co_names)
         else:
-            orig_func = func #XXX: better way to stop infinite recursion?
-            func = set(nestedglobals(getattr(func, func_code)))
+            func.update(nestedglobals(getattr(orig_func, func_code)))
             # find globals for all entries of func
             for key in func.copy(): #XXX: unnecessary...?
                 nested_func = globs.get(key)
                 if nested_func == orig_func:
                    #func.remove(key) if key in func else None
                     continue  #XXX: globalvars(func, False)?
-                func.update(globalvars(nested_func, True, builtin).keys())
+                func.update(globalvars(nested_func, True, builtin))
+    elif iscode(func):
+        globs = vars(getmodule(sum)) if builtin else {}
+       #globs.update(globals())
+        if not recurse:
+            func = func.co_names # get names
+        else:
+            orig_func = func.co_name # to stop infinite recursion
+            func = set(nestedglobals(func))
+            # find globals for all entries of func
+            for key in func.copy(): #XXX: unnecessary...?
+                if key == orig_func:
+                   #func.remove(key) if key in func else None
+                    continue  #XXX: globalvars(func, False)?
+                nested_func = globs.get(key)
+                func.update(globalvars(nested_func, True, builtin))
     else:
         return {}
     #NOTE: if name not in func_globals, then we skip it...

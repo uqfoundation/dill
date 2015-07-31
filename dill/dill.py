@@ -658,7 +658,7 @@ def _getattr(objclass, name, repr_str):
 
 def _get_attr(self, name):
     # stop recursive pickling
-    return getattr(self, name)
+    return getattr(self, name, None) or getattr(__builtin__, name)
 
 def _dict_from_dictproxy(dictproxy):
     _dict = dictproxy.copy() # convert dictproxy to dict
