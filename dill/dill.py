@@ -742,6 +742,7 @@ def save_module_dict(pickler, obj):
             pickler.write('c%s\n__dict__\n' % obj['__name__'])
     else:
         log.info("D2: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
+        log.info("D1: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if is_dill(pickler) and pickler._session:
             # we only care about session the first pass thru
             pickler._session = False 
@@ -872,7 +873,10 @@ def save_functor(pickler, obj):
 def save_builtin_method(pickler, obj):
     if obj.__self__ is not None:
         log.info("B1: %s" % obj)
+        _recurse = pickler._recurse
+        pickler._recurse = False
         pickler.save_reduce(_get_attr, (obj.__self__, obj.__name__), obj=obj)
+        pickler._recurse = _recurse
     else:
         log.info("B2: %s" % obj)
         StockPickler.save_global(pickler, obj)
