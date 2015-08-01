@@ -980,8 +980,8 @@ def importable(obj, alias='', source=None, builtin=True):
                 src = '\n'.join(_src)
             # get source code of objects referred to by obj in global scope
             from dill.detect import globalvars
-            obj = globalvars(obj) #XXX: don't worry about alias?
-            obj = list(getsource(_obj,name,force=True) for (name,_obj) in obj.items())
+            obj = globalvars(obj) #XXX: don't worry about alias? recurse? etc?
+            obj = list(getsource(_obj,name,force=True) for (name,_obj) in obj.items() if not isbuiltin(_obj))
             obj = '\n'.join(obj) if obj else ''
             # combine all referred-to source (global then enclosing)
             if not obj: return src

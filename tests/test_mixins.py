@@ -28,6 +28,7 @@ def quad(a=1, b=1, c=0):
       return a*x**2 + b*x + c
     func.__wrapped__ = f
     func.invert = invert
+    func.inverted = inverted
     return func
   return dec
 
@@ -78,6 +79,10 @@ if __name__ == '__main__':
 
   assert _d.__wrapped__(1,2,3) == fx
 
+  # XXX: issue or feature? in python3.4, inverted is linked through copy
+  if not double_add.inverted[0]:
+      double_add.invert()
+
   # test some stuff from source and pointers
   ds = dill.source
   dd = dill.detect
@@ -99,7 +104,7 @@ if __name__ == '__main__':
   assert set([a,b,c]) == set(['a = 1', 'c = 0', 'b = 1'])
   result = ds.importable(double_add, source=True)
   a,b,c,d,_,result = result.split('\n',5)
-  assert result == 'def quad(a=1, b=1, c=0):\n  inverted = [False]\n  def invert():\n    inverted[0] = not inverted[0]\n  def dec(f):\n    def func(*args, **kwds):\n      x = f(*args, **kwds)\n      if inverted[0]: x = -x\n      return a*x**2 + b*x + c\n    func.__wrapped__ = f\n    func.invert = invert\n    return func\n  return dec\n\n@quad(a=0,b=2)\ndef double_add(*args):\n  return sum(args)\n'
+  assert result == 'def quad(a=1, b=1, c=0):\n  inverted = [False]\n  def invert():\n    inverted[0] = not inverted[0]\n  def dec(f):\n    def func(*args, **kwds):\n      x = f(*args, **kwds)\n      if inverted[0]: x = -x\n      return a*x**2 + b*x + c\n    func.__wrapped__ = f\n    func.invert = invert\n    func.inverted = inverted\n    return func\n  return dec\n\n@quad(a=0,b=2)\ndef double_add(*args):\n  return sum(args)\n'
   assert set([a,b,c,d]) == set(['a = 0', 'c = 0', 'b = 2', 'inverted = [True]'])
   #*****
 
