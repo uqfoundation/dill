@@ -1045,6 +1045,7 @@ def save_module(pickler, obj):
                      "prefix", "real_prefix"]
             builtin_mod = any([obj.__file__.startswith(getattr(sys, name))
                            for name in names if hasattr(sys, name)])
+            builtin_mod = builtin_mod or 'site-packages' in obj.__file__
         else:
             builtin_mod = True
         if obj.__name__ not in ("builtins", "dill") \
