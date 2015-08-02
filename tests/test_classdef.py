@@ -7,7 +7,7 @@
 
 import dill
 import sys
-dill.settings['recurse'] = True #False #True
+dill.settings['recurse'] = True
 
 # test classdefs
 class _class:
