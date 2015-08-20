@@ -1112,12 +1112,13 @@ def save_property(pickler, obj):
 @register(classmethod)
 def save_classmethod(pickler, obj):
     log.info("Cm: %s" % obj)
+    im_func = '__func__' if PY3 else 'im_func'
     try:
-        orig_func = obj.__func__
+        orig_func = getattr(obj, im_func)
     except AttributeError:  # Python 2.6
         orig_func = obj.__get__(None, object)
         if isinstance(obj, classmethod):
-            orig_func = orig_func.__func__  # Unbind
+            orig_func = getattr(orig_func, im_func) # Unbind
     pickler.save_reduce(type(obj), (orig_func,), obj=obj)
 
 # quick sanity checking
