@@ -1108,6 +1108,18 @@ def save_property(pickler, obj):
     pickler.save_reduce(property, (obj.fget, obj.fset, obj.fdel, obj.__doc__),
                         obj=obj)
 
+@register(staticmethod)
+@register(classmethod)
+def save_classmethod(pickler, obj):
+    log.info("Cm: %s" % obj)
+    try:
+        orig_func = obj.__func__
+    except AttributeError:  # Python 2.6
+        orig_func = obj.__get__(None, object)
+        if isinstance(obj, classmethod):
+            orig_func = orig_func.__func__  # Unbind
+    pickler.save_reduce(type(obj), (orig_func,), obj=obj)
+
 # quick sanity checking
 def pickles(obj,exact=False,safe=False,**kwds):
     """quick check if object pickles with dill"""
