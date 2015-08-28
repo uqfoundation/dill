@@ -432,7 +432,30 @@ _reverse_typemap.update({
     'PyBufferedReaderType': PyBufferedReaderType,
     'PyBufferedWriterType': PyBufferedWriterType,
     'PyTextWrapperType': PyTextWrapperType,
+    "TupleIterType": type(iter(())),
+    "ListIterType": type(iter([])),
 })
+
+if PY3:
+    _reverse_typemap.update({
+        "DictKeysType": type({}.keys()),
+        "DictValuesType": type({}.values()),
+        "DictItemsType": type({}.items()),
+        "StrIterType": type(iter("")),
+        "BytesIterType": type(iter(bytes())),
+        "SetIterType": type(iter(set())),
+        "BytearrayIterType": type(iter(bytearray())),
+        "DictIterKeysType": type(iter({}.keys())),
+        "DictIterValuesType": type(iter({}.values())),
+        "DictIterItemsType": type(iter({}.items())),
+        "ListReverseIterType": type(iter(reversed([]))),
+        "RangeIterType": type(iter(range(1)))
+    })
+else:
+    _reverse_typemap.update({
+        "RangeIterType": type(iter(xrange(1)))
+    })
+
 if ExitType:
     _reverse_typemap['ExitType'] = ExitType
 if InputType:
@@ -1099,7 +1122,34 @@ def save_type(pickler, obj):
        #print (obj.__dict__)
        #print ("%s\n%s" % (type(obj), obj.__name__))
        #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
-        StockPickler.save_global(pickler, obj)
+
+        # if the type does not have a __dict__, or it restores its own state,
+        # take default action
+        # touching anything from _frozen_importlib leads to interesting errors
+        if not hasattr(obj, "__dict__") or hasattr(obj, "__setstate__") \
+           or obj.__module__ == '_frozen_importlib':
+            return StockPickler.save_global(pickler, obj)
+        else:
+            state = {}
+            for key, item in obj.__dict__.items():
+                if key not in ("__init__", "__new__"):
+                    # check if settable. In py2, some are not
+                    try:
+                        setattr(obj, key, item)
+                    except (AttributeError, TypeError):
+                        pass
+                    else:
+                        state[key] = item
+
+        # fix problem with cyclic reference in py2 for logging
+        if not PY3 and obj.__module__ + "." + obj.__name__ == "logging.Logger":
+            state.pop("manager", None)
+
+        # use the slotnames for state, as this works for proxies
+        kwargs = {"state": ({}, state)} if state else {}
+        pickler.save_reduce(_import_module,
+                            (obj.__module__ + '.' + obj.__name__,),
+                            obj=obj, **kwargs)
     return
 
 @register(property)
