@@ -28,6 +28,8 @@ def _trace(boolean):
     else: log.setLevel(logging.WARN)
     return
 
+stack = set()  # record of 'recursion-sensitive' pickled objects
+
 import os
 import sys
 diff = None
@@ -166,6 +168,7 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None):#, stri
     if byref is None: byref = settings['byref']
     if fmode is None: fmode = settings['fmode']
     if recurse is None: recurse = settings['recurse']
+    stack.clear()  # clear record of 'recursion-sensitive' pickled objects
     pik = Pickler(file, protocol)
     pik._main = _main_module
     # apply kwd settings
@@ -181,9 +184,11 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None):#, stri
             npdict = getattr(obj, '__dict__', None)
             f, args, state = obj.__reduce__()
             pik.save_reduce(_create_array, (f, args, state, npdict), obj=obj)
+            log.info("# Nu")
             return
     # end hack
     pik.dump(obj)
+    stack.clear()  # clear record of 'recursion-sensitive' pickled objects
     return
 
 def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None):#, strictio=None):
@@ -690,6 +695,7 @@ def _locate_function(obj, session=False):
 def save_code(pickler, obj):
     log.info("Co: %s" % obj)
     pickler.save_reduce(_unmarshal, (marshal.dumps(obj),), obj=obj)
+    log.info("# Co")
     return
 
 @register(FunctionType)
@@ -700,10 +706,17 @@ def save_function(pickler, obj):
             # recurse to get all globals referred to by obj
             from .detect import globalvars
             globs = globalvars(obj, recurse=True, builtin=True)
-            if obj in globs.values(): #ABORT: use _recurse=False
+            # remove objects that have already been serialized
+           #stacktypes = (ClassType, TypeType, FunctionType)
+           #for key,value in list(globs.items()):
+           #    if isinstance(value, stacktypes) and value in stack:
+           #        del globs[key]
+            # ABORT: if self-references, use _recurse=False
+            if obj in globs.values(): # or obj in stack:
                 globs = obj.__globals__ if PY3 else obj.func_globals
         else:
             globs = obj.__globals__ if PY3 else obj.func_globals
+       #stack.add(obj)
         if PY3:
             pickler.save_reduce(_create_function, (obj.__code__,
                                 globs, obj.__name__,
@@ -714,9 +727,11 @@ def save_function(pickler, obj):
                                 globs, obj.func_name,
                                 obj.func_defaults, obj.func_closure,
                                 obj.__dict__), obj=obj)
+        log.info("# F1")
     else:
         log.info("F2: %s" % obj)
         StockPickler.save_global(pickler, obj) #NOTE: also takes name=...
+        log.info("# F2")
     return
 
 @register(dict)
@@ -727,12 +742,14 @@ def save_module_dict(pickler, obj):
             pickler.write(bytes('c__builtin__\n__main__\n', 'UTF-8'))
         else:
             pickler.write('c__builtin__\n__main__\n')
+        log.info("# D1")
     elif not is_dill(pickler) and obj == _main_module.__dict__:
         log.info("D3: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if PY3:
             pickler.write(bytes('c__main__\n__dict__\n', 'UTF-8'))
         else:
             pickler.write('c__main__\n__dict__\n')   #XXX: works in general?
+        log.info("# D3")
     elif '__name__' in obj and obj != _main_module.__dict__ \
     and obj is getattr(_import_module(obj['__name__'],True), '__dict__', None):
         log.info("D4: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
@@ -740,30 +757,36 @@ def save_module_dict(pickler, obj):
             pickler.write(bytes('c%s\n__dict__\n' % obj['__name__'], 'UTF-8'))
         else:
             pickler.write('c%s\n__dict__\n' % obj['__name__'])
+        log.info("# D4")
     else:
         log.info("D2: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if is_dill(pickler) and pickler._session:
             # we only care about session the first pass thru
             pickler._session = False 
         StockPickler.save_dict(pickler, obj)
+        log.info("# D2")
     return
 
 @register(ClassType)
 def save_classobj(pickler, obj): #FIXME: enable pickler._byref
+   #stack.add(obj)
     if obj.__module__ == '__main__': #XXX: use _main_module.__name__ everywhere?
         log.info("C1: %s" % obj)
         pickler.save_reduce(ClassType, (obj.__name__, obj.__bases__,
                                         obj.__dict__), obj=obj)
                                        #XXX: or obj.__dict__.copy()), obj=obj) ?
+        log.info("# C1")
     else:
         log.info("C2: %s" % obj)
         StockPickler.save_global(pickler, obj)
+        log.info("# C2")
     return
 
 @register(LockType)
 def save_lock(pickler, obj):
     log.info("Lo: %s" % obj)
     pickler.save_reduce(_create_lock, (obj.locked(),), obj=obj)
+    log.info("# Lo")
     return
 
 @register(ItemGetterType)
@@ -772,6 +795,7 @@ def save_itemgetter(pickler, obj):
     helper = _itemgetter_helper()
     obj(helper)
     pickler.save_reduce(type(obj), tuple(helper.items), obj=obj)
+    log.info("# Ig")
     return
 
 @register(AttrGetterType)
@@ -781,6 +805,7 @@ def save_attrgetter(pickler, obj):
     helper = _attrgetter_helper(attrs)
     obj(helper)
     pickler.save_reduce(type(obj), tuple(attrs), obj=obj)
+    log.info("# Ag")
     return
 
 def _save_file(pickler, obj, open_):
@@ -817,7 +842,9 @@ def _save_file(pickler, obj, open_):
 @register(TextWrapperType)
 def save_file(pickler, obj):
     log.info("Fi: %s" % obj)
-    return _save_file(pickler, obj, open)
+    f = _save_file(pickler, obj, open)
+    log.info("# Fi")
+    return f
 
 if PyTextWrapperType:
     @register(PyBufferedRandomType)
@@ -826,7 +853,9 @@ if PyTextWrapperType:
     @register(PyTextWrapperType)
     def save_file(pickler, obj):
         log.info("Fi: %s" % obj)
-        return _save_file(pickler, obj, _open)
+        f = _save_file(pickler, obj, _open)
+        log.info("# Fi")
+        return f
 
 # The following two functions are based on 'saveCStringIoInput'
 # and 'saveCStringIoOutput' from spickle
@@ -842,6 +871,7 @@ if InputType:
             value = obj.getvalue(); position = obj.tell()
         pickler.save_reduce(_create_stringi, (value, position, \
                                               obj.closed), obj=obj)
+        log.info("# Io")
         return
 
     @register(OutputType)
@@ -853,6 +883,7 @@ if InputType:
             value = obj.getvalue(); position = obj.tell()
         pickler.save_reduce(_create_stringo, (value, position, \
                                               obj.closed), obj=obj)
+        log.info("# Io")
         return
 
 @register(PartialType)
@@ -860,12 +891,14 @@ def save_functor(pickler, obj):
     log.info("Fu: %s" % obj)
     pickler.save_reduce(_create_ftype, (type(obj), obj.func, obj.args,
                                         obj.keywords), obj=obj)
+    log.info("# Fu")
     return
 
 @register(SuperType)
 def save_functor(pickler, obj):
     log.info("Su: %s" % obj)
     pickler.save_reduce(super, (obj.__thisclass__, obj.__self__), obj=obj)
+    log.info("# Su")
     return
 
 @register(BuiltinMethodType)
@@ -873,17 +906,21 @@ def save_builtin_method(pickler, obj):
     if obj.__self__ is not None:
         if obj.__self__ is __builtin__:
             module = 'builtins' if PY3 else '__builtin__'
-            log.info("B1: %s" % obj)
+            _t = "B1"
+            log.info("%s: %s" % (_t, obj))
         else:
             module = obj.__self__
-            log.info("B3: %s" % obj)
+            _t = "B3"
+            log.info("%s: %s" % (_t, obj))
         _recurse = pickler._recurse
         pickler._recurse = False
         pickler.save_reduce(_get_attr, (module, obj.__name__), obj=obj)
         pickler._recurse = _recurse
+        log.info("# %s" % _t)
     else:
         log.info("B2: %s" % obj)
         StockPickler.save_global(pickler, obj)
+        log.info("# B2")
     return
 
 @register(MethodType) #FIXME: fails for 'hidden' or 'name-mangled' classes
@@ -894,6 +931,7 @@ def save_instancemethod0(pickler, obj):# example: cStringIO.StringI
     else:
         pickler.save_reduce(MethodType, (obj.im_func, obj.im_self,
                                          obj.im_class), obj=obj)
+    log.info("# Me")
     return
 
 if sys.hexversion >= 0x20500f0:
@@ -905,12 +943,14 @@ if sys.hexversion >= 0x20500f0:
         log.info("Wr: %s" % obj)
         pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
                                        obj.__repr__()), obj=obj)
+        log.info("# Wr")
         return
 
     @register(MethodWrapperType)
     def save_instancemethod(pickler, obj):
         log.info("Mw: %s" % obj)
         pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
+        log.info("# Mw")
         return
 else:
     @register(MethodDescriptorType)
@@ -919,6 +959,7 @@ else:
         log.info("Wr: %s" % obj)
         pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
                                        obj.__repr__()), obj=obj)
+        log.info("# Wr")
         return
 
 if HAS_CTYPES and IS_PYPY:
@@ -926,6 +967,7 @@ if HAS_CTYPES and IS_PYPY:
     def save_cell(pickler, obj):
         log.info("Ce: %s" % obj)
         pickler.save_reduce(_create_cell, (obj.cell_contents,), obj=obj)
+        log.info("# Ce")
         return
  
 # The following function is based on 'saveDictProxy' from spickle
@@ -940,6 +982,7 @@ if IS_PYPY:
         if type(attr) == GetSetDescriptorType and attr.__name__ == "__dict__" \
         and getattr(attr.__objclass__, "__dict__", None) == obj:
             pickler.save_reduce(getattr, (attr.__objclass__,"__dict__"),obj=obj)
+            log.info("# Dp")
             return
         # all bad below... so throw ReferenceError or TypeError
         from weakref import ReferenceError
@@ -949,6 +992,7 @@ if IS_PYPY:
 def save_slice(pickler, obj):
     log.info("Sl: %s" % obj)
     pickler.save_reduce(slice, (obj.start, obj.stop, obj.step), obj=obj)
+    log.info("# Sl")
     return
 
 @register(XRangeType)
@@ -957,6 +1001,7 @@ def save_slice(pickler, obj):
 def save_singleton(pickler, obj):
     log.info("Si: %s" % obj)
     pickler.save_reduce(_eval_repr, (obj.__repr__(),), obj=obj)
+    log.info("# Si")
     return
 
 # thanks to Paul Kienzle for pointing out ufuncs didn't pickle
@@ -965,6 +1010,7 @@ if NumpyArrayType:
     def save_numpy_ufunc(pickler, obj):
         log.info("Nu: %s" % obj)
         StockPickler.save_global(pickler, obj)
+        log.info("# Nu")
         return
 # NOTE: the above 'save' performs like:
 #   import copy_reg
@@ -1006,18 +1052,24 @@ def save_weakref(pickler, obj):
     log.info("R1: %s" % obj)
    #refobj = ctypes.pythonapi.PyWeakref_GetObject(obj) # dead returns "None"
     pickler.save_reduce(_create_weakref, (refobj,), obj=obj)
+    log.info("# R1")
     return
 
 @register(ProxyType)
 @register(CallableProxyType)
 def save_weakproxy(pickler, obj):
     refobj = _locate_object(_proxy_helper(obj))
-    try: log.info("R2: %s" % obj)
-    except ReferenceError: log.info("R3: %s" % sys.exc_info()[1])
+    try:
+        _t = "R2"
+        log.info("%s: %s" % (_t, obj))
+    except ReferenceError:
+        _t = "R3"
+        log.info("%s: %s" % (_t, sys.exc_info()[1]))
    #callable = bool(getattr(refobj, '__call__', None))
     if type(obj) is CallableProxyType: callable = True
     else: callable = False
     pickler.save_reduce(_create_weakproxy, (refobj, callable), obj=obj)
+    log.info("# %s" % _t)
     return
 
 @register(ModuleType)
@@ -1033,10 +1085,12 @@ def save_module(pickler, obj):
                 log.info("Diff: %s", changed.keys())
                 pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
                                     state=changed)
+                log.info("# M1")
                 return
 
         log.info("M2: %s" % obj)
         pickler.save_reduce(_import_module, (obj.__name__,), obj=obj)
+        log.info("# M2")
     else:
         # if a module file name starts with prefx, it should be a builtin
         # module, so should be pickled as a reference
@@ -1056,50 +1110,60 @@ def save_module(pickler, obj):
                 + ["__builtins__", "__loader__"]]
             pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
                                 state=_main_dict)
+            log.info("# M1")
         else:
             log.info("M2: %s" % obj)
             pickler.save_reduce(_import_module, (obj.__name__,), obj=obj)
+            log.info("# M2")
         return
     return
 
 @register(TypeType)
 def save_type(pickler, obj):
+   #stack.add(obj) #XXX: probably don't need object from all cases below
     if obj in _typemap:
         log.info("T1: %s" % obj)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
+        log.info("# T1")
     elif obj.__module__ == '__main__':
         try: # use StockPickler for special cases [namedtuple,]
             [getattr(obj, attr) for attr in ('_fields','_asdict',
                                              '_make','_replace')]
             log.info("T6: %s" % obj)
             StockPickler.save_global(pickler, obj)
+            log.info("# T6")
             return
         except AttributeError: pass
         if issubclass(type(obj), type):
         #   try: # used when pickling the class as code (or the interpreter)
             if is_dill(pickler) and not pickler._byref:
                 # thanks to Tom Stepleton pointing out pickler._session unneeded
-                log.info("T2: %s" % obj)
+                _t = 'T2'
+                log.info("%s: %s" % (_t, obj))
                 _dict = _dict_from_dictproxy(obj.__dict__)
         #   except: # punt to StockPickler (pickle by class reference)
             else:
                 log.info("T5: %s" % obj)
                 StockPickler.save_global(pickler, obj)
+                log.info("# T5")
                 return
         else:
-            log.info("T3: %s" % obj)
+            _t = 'T3'
+            log.info("%s: %s" % (_t, obj))
             _dict = obj.__dict__
        #print (_dict)
        #print ("%s\n%s" % (type(obj), obj.__name__))
        #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
         pickler.save_reduce(_create_type, (type(obj), obj.__name__,
                                            obj.__bases__, _dict), obj=obj)
+        log.info("# %s" % _t)
     else:
         log.info("T4: %s" % obj)
        #print (obj.__dict__)
        #print ("%s\n%s" % (type(obj), obj.__name__))
        #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
         StockPickler.save_global(pickler, obj)
+        log.info("# T4")
     return
 
 @register(property)
@@ -1107,6 +1171,7 @@ def save_property(pickler, obj):
     log.info("Pr: %s" % obj)
     pickler.save_reduce(property, (obj.fget, obj.fset, obj.fdel, obj.__doc__),
                         obj=obj)
+    log.info("# Pr")
 
 @register(staticmethod)
 @register(classmethod)
@@ -1120,6 +1185,7 @@ def save_classmethod(pickler, obj):
         if isinstance(obj, classmethod):
             orig_func = getattr(orig_func, im_func) # Unbind
     pickler.save_reduce(type(obj), (orig_func,), obj=obj)
+    log.info("# Cm")
 
 # quick sanity checking
 def pickles(obj,exact=False,safe=False,**kwds):
