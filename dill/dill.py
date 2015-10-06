@@ -914,10 +914,12 @@ def save_builtin_method(pickler, obj):
             module = obj.__self__
             _t = "B3"
             log.info("%s: %s" % (_t, obj))
-        _recurse = pickler._recurse
-        pickler._recurse = False
+        if is_dill(pickler):
+            _recurse = pickler._recurse
+            pickler._recurse = False
         pickler.save_reduce(_get_attr, (module, obj.__name__), obj=obj)
-        pickler._recurse = _recurse
+        if is_dill(pickler):
+            pickler._recurse = _recurse
         log.info("# %s" % _t)
     else:
         log.info("B2: %s" % obj)
