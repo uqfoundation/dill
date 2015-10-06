@@ -355,6 +355,8 @@ class Unpickler(StockUnpickler):
     def find_class(self, module, name):
         if (module, name) == ('__builtin__', '__main__'):
             return self._main.__dict__ #XXX: above set w/save_module_dict
+        elif (module, name) == ('__builtin__', 'NoneType'):
+            return type(None) #XXX: special case: NoneType missing
         return StockUnpickler.find_class(self, module, name)
 
     def __init__(self, *args, **kwds):
@@ -1157,6 +1159,14 @@ def save_type(pickler, obj):
         pickler.save_reduce(_create_type, (type(obj), obj.__name__,
                                            obj.__bases__, _dict), obj=obj)
         log.info("# %s" % _t)
+    # special cases: NoneType
+    elif obj is type(None):
+        log.info("T7: %s" % obj)
+        if PY3:
+            pickler.write(bytes('c__builtin__\nNoneType\n', 'UTF-8'))
+        else:
+            pickler.write('c__builtin__\nNoneType\n')
+        log.info("# T7")
     else:
         log.info("T4: %s" % obj)
        #print (obj.__dict__)

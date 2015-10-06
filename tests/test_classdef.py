@@ -81,6 +81,9 @@ for obj,cls in zip(_objlist,_clslist):
     if _cls.__name__ == "_mclass":
         assert type(_cls).__name__ == "_meta"
 
+# test NoneType
+assert dill.pickles(type(None))
+
 # test namedtuple
 if hex(sys.hexversion) >= '0x20600f0':
     from collections import namedtuple
