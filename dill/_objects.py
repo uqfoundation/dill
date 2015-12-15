@@ -371,7 +371,7 @@ except NameError:
     # built-in constants (CH 4)
     a['QuitterType'] = quit
     d['ExitType'] = a['QuitterType']
-try: # numpy
+try: # numpy #FIXME: slow... 0.05 to 0.1 sec to import numpy
     from numpy import ufunc as _numpy_ufunc
     from numpy import array as _numpy_array
     from numpy import int32 as _numpy_int32

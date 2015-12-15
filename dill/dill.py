@@ -85,22 +85,53 @@ except ImportError:
     HAS_CTYPES = False
     IS_PYPY = False
 try:
+    import imp
+    imp.find_module('numpy')
+    NumpyUfuncType = True
+    NumpyArrayType = True
+except ImportError:
+    NumpyUfuncType = None
+    NumpyArrayType = None
+def __hook__():
+    global NumpyArrayType, NumpyUfuncType
     from numpy import ufunc as NumpyUfuncType
     from numpy import ndarray as NumpyArrayType
+    return True
+if NumpyArrayType: # then has numpy
     def ndarraysubclassinstance(obj):
+        if type(obj) in (TypeType, ClassType):
+            return False # all classes return False
         try: # check if is ndarray, and elif is subclass of ndarray
-            if getattr(obj, '__class__', type) is NumpyArrayType: return False
-            elif not isinstance(obj, NumpyArrayType): return False
+            cls = getattr(obj, '__class__', None)
+            if cls is None: return False
+            elif cls is TypeType: return False
+            elif 'numpy.ndarray' not in str(getattr(cls, 'mro', int.mro)()):
+                return False 
         except ReferenceError: return False # handle 'R3' weakref in 3.x
+        except TypeError: return False
+        # anything below here is a numpy array (or subclass) instance
+        __hook__() # import numpy (so the following works!!!)
         # verify that __reduce__ has not been overridden
         NumpyInstance = NumpyArrayType((0,),'int8')
         if id(obj.__reduce_ex__) == id(NumpyInstance.__reduce_ex__) and \
            id(obj.__reduce__) == id(NumpyInstance.__reduce__): return True
         return False
-except ImportError:
-    NumpyUfuncType = None
-    NumpyArrayType = None
+    def numpyufunc(obj):
+        if type(obj) in (TypeType, ClassType):
+            return False # all classes return False
+        try: # check if is ufunc
+            cls = getattr(obj, '__class__', None)
+            if cls is None: return False
+            elif cls is TypeType: return False
+            if 'numpy.ufunc' not in str(getattr(cls, 'mro', int.mro)()):
+                return False 
+        except ReferenceError: return False # handle 'R3' weakref in 3.x
+        except TypeError: return False
+        # anything below here is a numpy ufunc
+        return True
+else:
     def ndarraysubclassinstance(obj): return False
+    def numpyufunc(obj): return False
 
 # make sure to add these 'hand-built' types to _typemap
 if PY3:
@@ -176,7 +207,21 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None):#, stri
     pik._strictio = bool(strictio)
     pik._fmode = fmode
     pik._recurse = bool(recurse)
-    # hack to catch subclassed numpy array instances
+    # register if the object is a numpy ufunc
+    # thanks to Paul Kienzle for pointing out ufuncs didn't pickle
+    if NumpyUfuncType and numpyufunc(obj):
+        @register(type(obj))
+        def save_numpy_ufunc(pickler, obj):
+            log.info("Nu: %s" % obj)
+            StockPickler.save_global(pickler, obj)
+            log.info("# Nu")
+            return
+        # NOTE: the above 'save' performs like:
+        #   import copy_reg
+        #   def udump(f): return f.__name__
+        #   def uload(name): return getattr(numpy, name)
+        #   copy_reg.pickle(NumpyUfuncType, udump, uload)
+    # register if the object is a subclassed numpy array instance
     if NumpyArrayType and ndarraysubclassinstance(obj):
         @register(type(obj))
         def save_numpy_array(pickler, obj):
@@ -1007,20 +1052,6 @@ def save_singleton(pickler, obj):
     pickler.save_reduce(_eval_repr, (obj.__repr__(),), obj=obj)
     log.info("# Si")
     return
-
-# thanks to Paul Kienzle for pointing out ufuncs didn't pickle
-if NumpyArrayType:
-    @register(NumpyUfuncType)
-    def save_numpy_ufunc(pickler, obj):
-        log.info("Nu: %s" % obj)
-        StockPickler.save_global(pickler, obj)
-        log.info("# Nu")
-        return
-# NOTE: the above 'save' performs like:
-#   import copy_reg
-#   def udump(f): return f.__name__
-#   def uload(name): return getattr(numpy, name)
-#   copy_reg.pickle(NumpyUfuncType, udump, uload)
 
 def _proxy_helper(obj): # a dead proxy returns a reference to None
     """get memory address of proxy's reference object"""
