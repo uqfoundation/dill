@@ -738,10 +738,35 @@ def _locate_function(obj, session=False):
     found = _import_module(obj.__module__ + '.' + obj.__name__, safe=True)
     return found is obj
 
+#@register(CodeType)
+#def save_code(pickler, obj):
+#    log.info("Co: %s" % obj)
+#    pickler.save_reduce(_unmarshal, (marshal.dumps(obj),), obj=obj)
+#    log.info("# Co")
+#    return
+
+# The following function is based on 'save_codeobject' from 'cloudpickle'
+# Copyright (c) 2012, Regents of the University of California.
+# Copyright (c) 2009 `PiCloud, Inc. <http://www.picloud.com>`_.
+# License: https://github.com/cloudpipe/cloudpickle/blob/master/LICENSE
 @register(CodeType)
 def save_code(pickler, obj):
     log.info("Co: %s" % obj)
-    pickler.save_reduce(_unmarshal, (marshal.dumps(obj),), obj=obj)
+    if PY3:
+        args = (
+            obj.co_argcount, obj.co_kwonlyargcount, obj.co_nlocals,
+            obj.co_stacksize, obj.co_flags, obj.co_code, obj.co_consts,
+            obj.co_names, obj.co_varnames, obj.co_filename, obj.co_name,
+            obj.co_firstlineno, obj.co_lnotab, obj.co_freevars, obj.co_cellvars
+        )
+    else:
+        args = (
+            obj.co_argcount, obj.co_nlocals, obj.co_stacksize, obj.co_flags,
+            obj.co_code, obj.co_consts, obj.co_names, obj.co_varnames,
+            obj.co_filename, obj.co_name, obj.co_firstlineno, obj.co_lnotab,
+            obj.co_freevars, obj.co_cellvars
+        )
+    pickler.save_reduce(CodeType, args, obj=obj)
     log.info("# Co")
     return
 
