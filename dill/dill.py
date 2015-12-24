@@ -881,10 +881,10 @@ def save_attrgetter(pickler, obj):
     return
 
 def _save_file(pickler, obj, open_):
-    obj.flush()
     if obj.closed:
         position = None
     else:
+        obj.flush()
         if obj in (sys.__stdout__, sys.__stderr__, sys.__stdin__):
             position = -1
         else:
