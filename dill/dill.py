@@ -35,7 +35,7 @@ import sys
 diff = None
 _use_diff = False
 PY3 = (sys.hexversion >= 0x30000f0)
-if PY3: #XXX: get types from dill.objtypes ?
+if PY3: #XXX: get types from .objtypes ?
     import builtins as __builtin__
     from pickle import _Pickler as StockPickler, _Unpickler as StockUnpickler
     from _thread import LockType
@@ -106,7 +106,7 @@ if NumpyArrayType: # then has numpy
             if cls is None: return False
             elif cls is TypeType: return False
             elif 'numpy.ndarray' not in str(getattr(cls, 'mro', int.mro)()):
-                return False 
+                return False
         except ReferenceError: return False # handle 'R3' weakref in 3.x
         except TypeError: return False
         # anything below here is a numpy array (or subclass) instance
@@ -124,7 +124,7 @@ if NumpyArrayType: # then has numpy
             if cls is None: return False
             elif cls is TypeType: return False
             if 'numpy.ufunc' not in str(getattr(cls, 'mro', int.mro)()):
-                return False 
+                return False
         except ReferenceError: return False # handle 'R3' weakref in 3.x
         except TypeError: return False
         # anything below here is a numpy ufunc
@@ -834,7 +834,7 @@ def save_module_dict(pickler, obj):
         log.info("D2: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if is_dill(pickler) and pickler._session:
             # we only care about session the first pass thru
-            pickler._session = False 
+            pickler._session = False
         StockPickler.save_dict(pickler, obj)
         log.info("# D2")
     return
@@ -1043,7 +1043,7 @@ if HAS_CTYPES and IS_PYPY:
         pickler.save_reduce(_create_cell, (obj.cell_contents,), obj=obj)
         log.info("# Ce")
         return
- 
+
 # The following function is based on 'saveDictProxy' from spickle
 # Copyright (c) 2011 by science+computing ag
 # License: http://www.apache.org/licenses/LICENSE-2.0
