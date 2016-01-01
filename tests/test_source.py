@@ -1,3 +1,10 @@
+#!/usr/bin/env python
+#
+# Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
+# Copyright (c) 2008-2016 California Institute of Technology.
+# License: 3-clause BSD.  The full license text is available at:
+#  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
+
 from dill.source import getsource, getname, _wrap, likely_import
 from dill.source import getimportable
 
