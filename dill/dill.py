@@ -665,6 +665,10 @@ if HAS_CTYPES and IS_PYPY:
     except AttributeError:
         IS_PYPY = False
 
+else:
+    def _create_cell(contents):
+        return (lambda x: lambda: x)(contents).func_closure[0]
+
 def _create_weakref(obj, *args):
     from weakref import ref
     if obj is None: # it's dead
@@ -1036,13 +1040,12 @@ else:
         log.info("# Wr")
         return
 
-if HAS_CTYPES and IS_PYPY:
-    @register(CellType)
-    def save_cell(pickler, obj):
-        log.info("Ce: %s" % obj)
-        pickler.save_reduce(_create_cell, (obj.cell_contents,), obj=obj)
-        log.info("# Ce")
-        return
+@register(CellType)
+def save_cell(pickler, obj):
+    log.info("Ce: %s" % obj)
+    pickler.save_reduce(_create_cell, (obj.cell_contents,), obj=obj)
+    log.info("# Ce")
+    return
 
 # The following function is based on 'saveDictProxy' from spickle
 # Copyright (c) 2011 by science+computing ag
