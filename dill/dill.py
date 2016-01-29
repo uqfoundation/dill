@@ -133,11 +133,15 @@ else:
     def ndarraysubclassinstance(obj): return False
     def numpyufunc(obj): return False
 
-# make sure to add these 'hand-built' types to _typemap
 if PY3:
-    CellType = type((lambda x: lambda y: x)(0).__closure__[0])
+    def _create_cell(contents):
+        return (lambda: contents).__closure__[0]
 else:
-    CellType = type((lambda x: lambda y: x)(0).func_closure[0])
+    def _create_cell(contents):
+        return (lambda: contents).func_closure[0]
+
+# make sure to add these 'hand-built' types to _typemap
+CellType = type(_create_cell(0))
 WrapperDescriptorType = type(type.__repr__)
 MethodDescriptorType = type(type.__dict__['mro'])
 MethodWrapperType = type([].__repr__)
@@ -664,10 +668,6 @@ if HAS_CTYPES and IS_PYPY:
 
     except AttributeError:
         IS_PYPY = False
-
-else:
-    def _create_cell(contents):
-        return (lambda x: lambda: x)(contents).func_closure[0]
 
 def _create_weakref(obj, *args):
     from weakref import ref
