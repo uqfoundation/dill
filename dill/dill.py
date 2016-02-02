@@ -80,7 +80,8 @@ if sys.hexversion < 0x03030000:
 try:
     import ctypes
     HAS_CTYPES = True
-    IS_PYPY = True
+    # if using `pypi`, pythonapi is not found
+    IS_PYPY = hasattr(ctypes, 'pythonapi')
 except ImportError:
     HAS_CTYPES = False
     IS_PYPY = False
@@ -133,15 +134,11 @@ else:
     def ndarraysubclassinstance(obj): return False
     def numpyufunc(obj): return False
 
-if PY3:
-    def _create_cell(contents):
-        return (lambda: contents).__closure__[0]
-else:
-    def _create_cell(contents):
-        return (lambda: contents).func_closure[0]
-
 # make sure to add these 'hand-built' types to _typemap
-CellType = type(_create_cell(0))
+if PY3:
+    CellType = type((lambda x: lambda y: x)(0).__closure__[0])
+else:
+    CellType = type((lambda x: lambda y: x)(0).func_closure[0])
 WrapperDescriptorType = type(type.__repr__)
 MethodDescriptorType = type(type.__dict__['mro'])
 MethodWrapperType = type([].__repr__)
@@ -658,16 +655,12 @@ class _attrgetter_helper(object):
             attrs[index] = ".".join([attrs[index], attr])
         return type(self)(attrs, index)
 
-if HAS_CTYPES and IS_PYPY:
-    try: # if using `pypi`, pythonapi is not found
-        ctypes.pythonapi.PyCell_New.restype = ctypes.py_object
-        ctypes.pythonapi.PyCell_New.argtypes = [ctypes.py_object]
-        # thanks to Paul Kienzle for cleaning the ctypes CellType logic
-        def _create_cell(contents):
-            return ctypes.pythonapi.PyCell_New(contents)
-
-    except AttributeError:
-        IS_PYPY = False
+if PY3:
+    def _create_cell(contents):
+        return (lambda y: contents).__closure__[0]
+else:
+    def _create_cell(contents):
+        return (lambda y: contents).func_closure[0]
 
 def _create_weakref(obj, *args):
     from weakref import ref
