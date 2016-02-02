@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
-# Copyright (c) 2008-2016 California Institute of Technology.
+# Copyright (c) 2008-2015 California Institute of Technology.
 # License: 3-clause BSD.  The full license text is available at:
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 """
@@ -133,11 +133,15 @@ else:
     def ndarraysubclassinstance(obj): return False
     def numpyufunc(obj): return False
 
-# make sure to add these 'hand-built' types to _typemap
 if PY3:
-    CellType = type((lambda x: lambda y: x)(0).__closure__[0])
+    def _create_cell(contents):
+        return (lambda: contents).__closure__[0]
 else:
-    CellType = type((lambda x: lambda y: x)(0).func_closure[0])
+    def _create_cell(contents):
+        return (lambda: contents).func_closure[0]
+
+# make sure to add these 'hand-built' types to _typemap
+CellType = type(_create_cell(0))
 WrapperDescriptorType = type(type.__repr__)
 MethodDescriptorType = type(type.__dict__['mro'])
 MethodWrapperType = type([].__repr__)
@@ -1036,13 +1040,12 @@ else:
         log.info("# Wr")
         return
 
-if HAS_CTYPES and IS_PYPY:
-    @register(CellType)
-    def save_cell(pickler, obj):
-        log.info("Ce: %s" % obj)
-        pickler.save_reduce(_create_cell, (obj.cell_contents,), obj=obj)
-        log.info("# Ce")
-        return
+@register(CellType)
+def save_cell(pickler, obj):
+    log.info("Ce: %s" % obj)
+    pickler.save_reduce(_create_cell, (obj.cell_contents,), obj=obj)
+    log.info("# Ce")
+    return
 
 # The following function is based on 'saveDictProxy' from spickle
 # Copyright (c) 2011 by science+computing ag
