@@ -1214,6 +1214,8 @@ def save_type(pickler, obj):
        #print (_dict)
        #print ("%s\n%s" % (type(obj), obj.__name__))
        #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
+        for name in _dict.get("__slots__", []):
+            del _dict[name]
         pickler.save_reduce(_create_type, (type(obj), obj.__name__,
                                            obj.__bases__, _dict), obj=obj)
         log.info("# %s" % _t)
