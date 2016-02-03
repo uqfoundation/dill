@@ -146,4 +146,15 @@ new_obj = dill.loads(res)
 new_obj.__class__.test()
 
 
+# test slots
+class X(object):
+  __slots__ = ['x']
+
+x = X()
+
+assert dill.pickles(X)
+assert dill.pickles(x)
+assert dill.pickles(X.x)
+
+
 # EOF
