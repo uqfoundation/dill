@@ -149,12 +149,15 @@ new_obj.__class__.test()
 # test slots
 class X(object):
   __slots__ = ['x']
+  def __init__(self, x):
+    self.x = x
 
-x = X()
+value = 123
+x = X(value)
 
 assert dill.pickles(X)
 assert dill.pickles(x)
 assert dill.pickles(X.x)
-
+assert dill.copy(x).x == value
 
 # EOF
