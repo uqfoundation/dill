@@ -767,42 +767,6 @@ def save_code(pickler, obj):
     log.info("# Co")
     return
 
-@register(FunctionType)
-def save_function(pickler, obj):
-    if not _locate_function(obj): #, pickler._session):
-        log.info("F1: %s" % obj)
-        if getattr(pickler, '_recurse', False):
-            # recurse to get all globals referred to by obj
-            from .detect import globalvars
-            globs = globalvars(obj, recurse=True, builtin=True)
-            # remove objects that have already been serialized
-           #stacktypes = (ClassType, TypeType, FunctionType)
-           #for key,value in list(globs.items()):
-           #    if isinstance(value, stacktypes) and value in stack:
-           #        del globs[key]
-            # ABORT: if self-references, use _recurse=False
-            if obj in globs.values(): # or obj in stack:
-                globs = obj.__globals__ if PY3 else obj.func_globals
-        else:
-            globs = obj.__globals__ if PY3 else obj.func_globals
-       #stack.add(obj)
-        if PY3:
-            pickler.save_reduce(_create_function, (obj.__code__,
-                                globs, obj.__name__,
-                                obj.__defaults__, obj.__closure__,
-                                obj.__dict__), obj=obj)
-        else:
-            pickler.save_reduce(_create_function, (obj.func_code,
-                                globs, obj.func_name,
-                                obj.func_defaults, obj.func_closure,
-                                obj.__dict__), obj=obj)
-        log.info("# F1")
-    else:
-        log.info("F2: %s" % obj)
-        StockPickler.save_global(pickler, obj) #NOTE: also takes name=...
-        log.info("# F2")
-    return
-
 @register(dict)
 def save_module_dict(pickler, obj):
     if is_dill(pickler) and obj == pickler._main.__dict__ and not pickler._session:
@@ -1252,6 +1216,42 @@ def save_classmethod(pickler, obj):
             orig_func = getattr(orig_func, im_func) # Unbind
     pickler.save_reduce(type(obj), (orig_func,), obj=obj)
     log.info("# Cm")
+
+@register(FunctionType)
+def save_function(pickler, obj):
+    if not _locate_function(obj): #, pickler._session):
+        log.info("F1: %s" % obj)
+        if getattr(pickler, '_recurse', False):
+            # recurse to get all globals referred to by obj
+            from .detect import globalvars
+            globs = globalvars(obj, recurse=True, builtin=True)
+            # remove objects that have already been serialized
+           #stacktypes = (ClassType, TypeType, FunctionType)
+           #for key,value in list(globs.items()):
+           #    if isinstance(value, stacktypes) and value in stack:
+           #        del globs[key]
+            # ABORT: if self-references, use _recurse=False
+            if obj in globs.values(): # or obj in stack:
+                globs = obj.__globals__ if PY3 else obj.func_globals
+        else:
+            globs = obj.__globals__ if PY3 else obj.func_globals
+       #stack.add(obj)
+        if PY3:
+            pickler.save_reduce(_create_function, (obj.__code__,
+                                globs, obj.__name__,
+                                obj.__defaults__, obj.__closure__,
+                                obj.__dict__), obj=obj)
+        else:
+            pickler.save_reduce(_create_function, (obj.func_code,
+                                globs, obj.func_name,
+                                obj.func_defaults, obj.func_closure,
+                                obj.__dict__), obj=obj)
+        log.info("# F1")
+    else:
+        log.info("F2: %s" % obj)
+        StockPickler.save_global(pickler, obj) #NOTE: also takes name=...
+        log.info("# F2")
+    return
 
 # quick sanity checking
 def pickles(obj,exact=False,safe=False,**kwds):
