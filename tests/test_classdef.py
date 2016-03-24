@@ -157,7 +157,9 @@ x = X(value)
 
 assert dill.pickles(X)
 assert dill.pickles(x)
-assert dill.pickles(X.x)
+assert dill.pickles(X.x) #FIXME: pypy
+# dill.dumps(X.x)
+# PicklingError: Can't pickle <type 'member_descriptor'>: it's not found as __builtin__.member_descriptor
 assert dill.copy(x).x == value
 
 # EOF

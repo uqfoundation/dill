@@ -5,7 +5,11 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
-from dill import __diff as diff
+from dill import __diff as diff #FIXME: pypy
+# Traceback (most recent call last):
+#   File "dill/__diff.py", line 119, in release_gone
+#     itop, mp, src = id_to_obj.pop, memo.pop, sys.getrefcount
+# AttributeError: 'module' object has no attribute 'getrefcount'
 
 
 class A:

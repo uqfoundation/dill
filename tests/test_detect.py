@@ -15,7 +15,9 @@ assert baditems(f) == [f]
 #assert baditems(globals()) == [f] #XXX
 assert badobjects(f) is f
 assert badtypes(f) == type(f)
-assert isinstance(errors(f), TypeError)
+assert isinstance(errors(f), TypeError) #FIXME: pypy
+# print (errors(f))
+# Can't pickle <class 'app_main.CommandLineError'>: it's not found as app_main.CommandLineError
 d = badtypes(f, 1)
 assert isinstance(d, dict)
 assert list(badobjects(f, 1).keys()) == list(d.keys())
@@ -30,7 +32,8 @@ listiter = iter(x)
 obj = parent(listiter, list)
 assert obj is x
 
-assert parent(obj, int) is x[-1]
+assert parent(obj, int) is x[-1] #FIXME: pypy
+# print (parent(obj, int), x[-1])
 assert at(id(at)) is at
 
 def f():

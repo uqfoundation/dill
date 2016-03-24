@@ -66,7 +66,8 @@ def test(strictio, fmode):
     f1mode = f.mode
     ftell = f.tell()
     f.close()
-    f2 = dill.loads(f_dumped)
+    f2 = dill.loads(f_dumped) #FIXME: pypy
+    # TypeError: expected py_object instance instead of str
     f2mode = f2.mode
     f2tell = f2.tell()
     f2name = f2.name
@@ -463,7 +464,7 @@ def test(strictio, fmode):
 if __name__ == '__main__':
 
     test(strictio=False, fmode=dill.HANDLE_FMODE)
-    test(strictio=False, fmode=dill.CONTENTS_FMODE)
+    test(strictio=False, fmode=dill.CONTENTS_FMODE) #FIXME: pypy
     test(strictio=False, fmode=dill.FILE_FMODE)
 
    #test(strictio=True, fmode=dill.HANDLE_FMODE)
