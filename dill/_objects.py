@@ -77,8 +77,11 @@ except ImportError: # Windows
 try:
     import ctypes
     HAS_CTYPES = True
+    # if using `pypy`, pythonapi is not found
+    IS_PYPY = not hasattr(ctypes, 'pythonapi')
 except ImportError: # MacPorts
     HAS_CTYPES = False
+    IS_PYPY = False
 
 # helper objects
 class _class:
@@ -103,6 +106,8 @@ class _newclass(object):
 #   @staticmethod
 #   def _static(self): #XXX: test me
 #       pass
+class _newclass2(object):
+    __slots__ = ['descriptor']
 def _function(x): yield x
 def _function2():
     try: raise
@@ -261,8 +266,9 @@ a['EllipsisType'] = Ellipsis
 a['ClosedFileType'] = open(os.devnull, 'wb', buffering=0).close()
 a['GetSetDescriptorType'] = array.array.typecode
 a['LambdaType'] = _lambda = lambda x: lambda y: x #XXX: works when not imported!
-a['MemberDescriptorType'] = type.__dict__['__weakrefoffset__']
-a['MemberDescriptorType2'] = datetime.timedelta.days
+a['MemberDescriptorType'] = _newclass2.descriptor
+if not IS_PYPY:
+    a['MemberDescriptorType2'] = datetime.timedelta.days
 a['MethodType'] = _method = _class()._method #XXX: works when not imported!
 a['ModuleType'] = datetime
 a['NotImplementedType'] = NotImplemented
@@ -287,9 +293,10 @@ if PY3:
 else:
     d['CellType'] = (_lambda)(0).func_closure[0]
     a['XRangeType'] = _xrange = xrange(1)
-d['MethodDescriptorType'] = type.__dict__['mro']
-d['WrapperDescriptorType'] = type.__repr__
-a['WrapperDescriptorType2'] = type.__dict__['__module__']
+if not IS_PYPY:
+    d['MethodDescriptorType'] = type.__dict__['mro']
+    d['WrapperDescriptorType'] = type.__repr__
+    a['WrapperDescriptorType2'] = type.__dict__['__module__']
 # built-in functions (CH 2)
 if PY3: 
     _methodwrap = (1).__lt__

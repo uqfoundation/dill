@@ -71,17 +71,14 @@ import gc
 from weakref import ReferenceType, ProxyType, CallableProxyType
 from functools import partial
 from operator import itemgetter, attrgetter
-# new in python2.5
-if sys.hexversion >= 0x20500f0:
-    from types import MemberDescriptorType, GetSetDescriptorType
 # new in python3.3
 if sys.hexversion < 0x03030000:
     FileNotFoundError = IOError
 try:
     import ctypes
     HAS_CTYPES = True
-    # if using `pypi`, pythonapi is not found
-    IS_PYPY = hasattr(ctypes, 'pythonapi')
+    # if using `pypy`, pythonapi is not found
+    IS_PYPY = not hasattr(ctypes, 'pythonapi')
 except ImportError:
     HAS_CTYPES = False
     IS_PYPY = False
@@ -139,8 +136,24 @@ if PY3:
     CellType = type((lambda x: lambda y: x)(0).__closure__[0])
 else:
     CellType = type((lambda x: lambda y: x)(0).func_closure[0])
-WrapperDescriptorType = type(type.__repr__)
-MethodDescriptorType = type(type.__dict__['mro'])
+# new in python2.5
+if sys.hexversion >= 0x20500f0:
+    from types import GetSetDescriptorType
+    if not IS_PYPY:
+        from types import MemberDescriptorType
+    else:
+        # oddly, MemberDescriptorType is GetSetDescriptorType
+        # while, member_descriptor does exist otherwise... is this a pypy bug?
+        class _member(object):
+            __slots__ = ['descriptor']
+        MemberDescriptorType = type(_member.descriptor)
+if IS_PYPY:
+    WrapperDescriptorType = MethodType
+    MethodDescriptorType = FunctionType
+else:
+    WrapperDescriptorType = type(type.__repr__)
+    MethodDescriptorType = type(type.__dict__['mro'])
+
 MethodWrapperType = type([].__repr__)
 PartialType = type(partial(int,base=2))
 SuperType = type(super(Exception, TypeError()))
@@ -469,8 +482,6 @@ def _create_typemap():
 _reverse_typemap = dict(_create_typemap())
 _reverse_typemap.update({
     'CellType': CellType,
-    'WrapperDescriptorType': WrapperDescriptorType,
-    'MethodDescriptorType': MethodDescriptorType,
     'MethodWrapperType': MethodWrapperType,
     'PartialType': PartialType,
     'SuperType': SuperType,
@@ -491,6 +502,11 @@ if ExitType:
 if InputType:
     _reverse_typemap['InputType'] = InputType
     _reverse_typemap['OutputType'] = OutputType
+if not IS_PYPY:
+    _reverse_typemap['WrapperDescriptorType'] = WrapperDescriptorType
+    _reverse_typemap['MethodDescriptorType'] = MethodDescriptorType
+else:
+    _reverse_typemap['MemberDescriptorType'] = MemberDescriptorType
 if PY3:
     _typemap = dict((v, k) for k, v in _reverse_typemap.items())
 else:
@@ -970,16 +986,26 @@ def save_instancemethod0(pickler, obj):# example: cStringIO.StringI
     return
 
 if sys.hexversion >= 0x20500f0:
-    @register(MemberDescriptorType)
-    @register(GetSetDescriptorType)
-    @register(MethodDescriptorType)
-    @register(WrapperDescriptorType)
-    def save_wrapper_descriptor(pickler, obj):
-        log.info("Wr: %s" % obj)
-        pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
-                                       obj.__repr__()), obj=obj)
-        log.info("# Wr")
-        return
+    if not IS_PYPY:
+        @register(MemberDescriptorType)
+        @register(GetSetDescriptorType)
+        @register(MethodDescriptorType)
+        @register(WrapperDescriptorType)
+        def save_wrapper_descriptor(pickler, obj):
+            log.info("Wr: %s" % obj)
+            pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
+                                           obj.__repr__()), obj=obj)
+            log.info("# Wr")
+            return
+    else:
+        @register(MemberDescriptorType)
+        @register(GetSetDescriptorType)
+        def save_wrapper_descriptor(pickler, obj):
+            log.info("Wr: %s" % obj)
+            pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
+                                           obj.__repr__()), obj=obj)
+            log.info("# Wr")
+            return
 
     @register(MethodWrapperType)
     def save_instancemethod(pickler, obj):
@@ -987,7 +1013,8 @@ if sys.hexversion >= 0x20500f0:
         pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
         log.info("# Mw")
         return
-else:
+
+elif not IS_PYPY:
     @register(MethodDescriptorType)
     @register(WrapperDescriptorType)
     def save_wrapper_descriptor(pickler, obj):
@@ -1007,7 +1034,7 @@ def save_cell(pickler, obj):
 # The following function is based on 'saveDictProxy' from spickle
 # Copyright (c) 2011 by science+computing ag
 # License: http://www.apache.org/licenses/LICENSE-2.0
-if IS_PYPY:
+if not IS_PYPY:
     @register(DictProxyType)
     def save_dictproxy(pickler, obj):
         log.info("Dp: %s" % obj)
