@@ -7,6 +7,8 @@
 
 from dill.detect import baditems, badobjects, badtypes, errors, parent, at, globalvars
 from dill import settings
+from dill.dill import IS_PYPY
+from pickle import PicklingError
 
 import inspect
 
@@ -15,9 +17,7 @@ assert baditems(f) == [f]
 #assert baditems(globals()) == [f] #XXX
 assert badobjects(f) is f
 assert badtypes(f) == type(f)
-assert isinstance(errors(f), TypeError) #FIXME: pypy
-# print (errors(f))
-# Can't pickle <class 'app_main.CommandLineError'>: it's not found as app_main.CommandLineError
+assert type(errors(f)) is PicklingError if IS_PYPY else TypeError
 d = badtypes(f, 1)
 assert isinstance(d, dict)
 assert list(badobjects(f, 1).keys()) == list(d.keys())
@@ -34,6 +34,7 @@ assert obj is x
 
 assert parent(obj, int) is x[-1] #FIXME: pypy
 # print (parent(obj, int), x[-1])
+# (returns None) -- parent does not find int
 assert at(id(at)) is at
 
 def f():
