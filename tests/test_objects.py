@@ -15,13 +15,17 @@ pickle.settings['recurse'] = True
 #import pickle
 
 # get all objects for testing
-from dill import load_types, objects
+from dill import load_types, objects, extend
 load_types(pickleable=True,unpickleable=False) #FIXME: pypy
 # Traceback (most recent call last):
 #   File "dill/_objects.py", line 264, in <module>
 #     a['MemberDescriptorType'] = type.__dict__['__weakrefoffset__']
 # KeyError: '__weakrefoffset__'
 #load_types(pickleable=True,unpickleable=True)
+
+# uncomment the next two lines to test cloudpickle
+#extend(False)
+#import cloudpickle as pickle
 
 # helper objects
 class _class:
