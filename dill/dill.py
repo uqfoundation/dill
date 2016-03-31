@@ -944,7 +944,7 @@ def save_functor(pickler, obj):
     return
 
 @register(SuperType)
-def save_functor(pickler, obj):
+def save_super(pickler, obj):
     log.info("Su: %s" % obj)
     pickler.save_reduce(super, (obj.__thisclass__, obj.__self__), obj=obj)
     log.info("# Su")
