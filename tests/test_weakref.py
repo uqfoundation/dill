@@ -58,7 +58,7 @@ xr = weakref.ref(x)
 xp = weakref.proxy(x)
 
 objlist = [r,dr,m,dm,fr,xr, p,dp,t,dt, c,dc,d,dd, fp,xp] #FIXME: pypy
-# maximum recursion depth exceeded   (for p,dp,t,dt,...,fp,xp)
+# dill._proxy_helper fails due to repr difference with python
 
 #dill.detect.trace(True)
 for obj in objlist:

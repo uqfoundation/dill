@@ -5,12 +5,10 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
-from dill import __diff as diff #FIXME: pypy
-# Traceback (most recent call last):
-#   File "dill/__diff.py", line 119, in release_gone
-#     itop, mp, src = id_to_obj.pop, memo.pop, sys.getrefcount
-# AttributeError: 'module' object has no attribute 'getrefcount'
+from dill import __diff as diff
 
+import sys
+IS_PYPY = not hasattr(sys, 'getrefcount')
 
 class A:
     pass
@@ -54,18 +52,19 @@ changed = diff.whats_changed(c3)
 assert changed[0] == {}
 assert changed[1]
 
-try:
-    import abc
-    # make sure the "_abc_invaldation_counter" does not cause test to fail
-    diff.memorise(abc.ABCMeta, force=True)
-    assert not diff.has_changed(abc)
-    abc.ABCMeta.zzz = 1
-    assert diff.has_changed(abc)
-    changed = diff.whats_changed(abc)
-    assert list(changed[0].keys()) == ["ABCMeta"]
-    assert not changed[1]
-except ImportError:
-    pass
+if not IS_PYPY:
+    try:
+        import abc
+        # make sure the "_abc_invaldation_counter" does not cause test to fail
+        diff.memorise(abc.ABCMeta, force=True)
+        assert not diff.has_changed(abc)
+        abc.ABCMeta.zzz = 1
+        assert diff.has_changed(abc)
+        changed = diff.whats_changed(abc)
+        assert list(changed[0].keys()) == ["ABCMeta"]
+        assert not changed[1]
+    except ImportError:
+        pass
 
 '''
 import Queue
