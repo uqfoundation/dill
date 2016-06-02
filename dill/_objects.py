@@ -298,7 +298,7 @@ if not IS_PYPY:
     d['WrapperDescriptorType'] = type.__repr__
     a['WrapperDescriptorType2'] = type.__dict__['__module__']
 # built-in functions (CH 2)
-if PY3: 
+if PY3 or IS_PYPY: 
     _methodwrap = (1).__lt__
 else: 
     _methodwrap = (1).__cmp__
@@ -495,7 +495,8 @@ if HAS_CTYPES:
         x['CDLLType'] = _cdll = ctypes.cdll.msvcrt
     else:
         x['CDLLType'] = _cdll = ctypes.CDLL(None)
-    x['PyDLLType'] = _pydll = ctypes.pythonapi
+    if not IS_PYPY:
+        x['PyDLLType'] = _pydll = ctypes.pythonapi
     x['FuncPtrType'] = _cdll._FuncPtr()
     x['CCharArrayType'] = ctypes.create_string_buffer(1)
     x['CWCharArrayType'] = ctypes.create_unicode_buffer(1)
@@ -504,7 +505,7 @@ if HAS_CTYPES:
     x['LPCCharObjType'] = _lpchar = ctypes.POINTER(ctypes.c_char)
     x['NullPtrType'] = _lpchar()
     x['NullPyObjectType'] = ctypes.py_object()
-    x['PyObjectType'] = ctypes.py_object(1)
+    x['PyObjectType'] = ctypes.py_object(lambda :None)
     x['FieldType'] = _field = _Struct._field
     x['CFUNCTYPEType'] = _cfunc = ctypes.CFUNCTYPE(ctypes.c_char)
     x['CFunctionType'] = _cfunc(str)

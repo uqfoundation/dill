@@ -1046,7 +1046,6 @@ if not IS_PYPY:
             log.info("# Dp")
             return
         # all bad below... so throw ReferenceError or TypeError
-        from weakref import ReferenceError
         raise ReferenceError("%s does not reference a class __dict__" % obj)
 
 @register(SliceType)
@@ -1067,10 +1066,23 @@ def save_singleton(pickler, obj):
 
 def _proxy_helper(obj): # a dead proxy returns a reference to None
     """get memory address of proxy's reference object"""
-    try: #FIXME: has to be a smarter way to identify if it's a proxy
-        address = int(repr(obj).rstrip('>').split(' at ')[-1], base=16)
-    except ValueError: # has a repr... is thus probably not a proxy
-        address = id(obj)
+    _repr = repr(obj)
+    try: _str = str(obj)
+    except ReferenceError: # it's a dead proxy
+        return id(None)
+    if _str == _repr: return id(obj) # it's a repr
+    try: # either way, it's a proxy from here
+        address = int(_str.rstrip('>').split(' at ')[-1], base=16)   
+    except ValueError: # special case: proxy of a 'type'
+        if not IS_PYPY:
+            address = int(_repr.rstrip('>').split(' at ')[-1], base=16)
+        else:
+            objects = iter(gc.get_objects())
+            for _obj in objects:
+                if repr(_obj) == _str: return id(_obj)
+            # all bad below... nothing found so throw ReferenceError
+            msg = "Cannot reference object for proxy at '%s'" % id(obj)
+            raise ReferenceError(msg)
     return address
 
 def _locate_object(address, module=None):
@@ -1087,7 +1099,6 @@ def _locate_object(address, module=None):
     for obj in objects:
         if address == id(obj): return obj
     # all bad below... nothing found so throw ReferenceError or TypeError
-    from weakref import ReferenceError
     try: address = hex(address)
     except TypeError:
         raise TypeError("'%s' is not a valid memory address" % str(address))

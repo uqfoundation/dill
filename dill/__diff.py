@@ -22,6 +22,9 @@ try:
 except ImportError:
     import __builtin__ as builtins
 
+# pypy doesn't use reference counting
+getrefcount = getattr(sys, 'getrefcount', lambda x:0)
+
 # memo of objects indexed by id to a tuple (attributes, sequence items)
 # attributes is a dict indexed by attribute name to attribute id
 # sequence items is either a list of ids, of a dictionary of keys to ids
@@ -116,9 +119,9 @@ def memorise(obj, force=False):
 
 
 def release_gone():
-    itop, mp, src = id_to_obj.pop, memo.pop, sys.getrefcount
+    itop, mp, src = id_to_obj.pop, memo.pop, getrefcount
     [(itop(id_), mp(id_)) for id_, obj in list(id_to_obj.items())
-     if src(obj) < 4]
+     if src(obj) < 4] #XXX: correct for pypy?
 
 
 def whats_changed(obj, seen=None, simple=False, first=True):
