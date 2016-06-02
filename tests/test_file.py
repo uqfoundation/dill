@@ -66,7 +66,7 @@ def test(strictio, fmode):
     f1mode = f.mode
     ftell = f.tell()
     f.close()
-    f2 = dill.loads(f_dumped) #FIXME: pypy
+    f2 = dill.loads(f_dumped) #FIXME: fails due to pypy/issues/1233
     # TypeError: expected py_object instance instead of str
     f2mode = f2.mode
     f2tell = f2.tell()
@@ -464,12 +464,13 @@ def test(strictio, fmode):
 if __name__ == '__main__':
 
     test(strictio=False, fmode=dill.HANDLE_FMODE)
-    test(strictio=False, fmode=dill.CONTENTS_FMODE) #FIXME: pypy
     test(strictio=False, fmode=dill.FILE_FMODE)
+    if not dill.dill.IS_PYPY: #FIXME: fails due to pypy/issues/1233
+        test(strictio=False, fmode=dill.CONTENTS_FMODE)
 
    #test(strictio=True, fmode=dill.HANDLE_FMODE)
-   #test(strictio=True, fmode=dill.CONTENTS_FMODE)
    #test(strictio=True, fmode=dill.FILE_FMODE)
+   #test(strictio=True, fmode=dill.CONTENTS_FMODE)
 
 if os.path.exists(fname):
     os.remove(fname)

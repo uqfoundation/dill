@@ -622,6 +622,8 @@ def _create_filehandle(name, mode, position, closed, open, strictio, fmode, fdat
                             ("ob_refcnt", ctypes.c_int),
                             ("ob_type", ctypes.py_object)
                             ]
+                    #FIXME: CONTENTS_FMODE fails for pypy due to issue #1233
+                    #       https://bitbucket.org/pypy/pypy/issues/1233
                     ctypes.cast(id(f), ctypes.POINTER(FILE)).contents.name = name
                     ctypes.cast(id(name), ctypes.POINTER(PyObject)).contents.ob_refcnt += 1
                 assert f.name == name
