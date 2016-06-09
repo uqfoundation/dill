@@ -802,6 +802,7 @@ def save_module_dict(pickler, obj):
             pickler.write('c__main__\n__dict__\n')   #XXX: works in general?
         log.info("# D3")
     elif '__name__' in obj and obj != _main_module.__dict__ \
+    and type(obj['__name__']) is str \
     and obj is getattr(_import_module(obj['__name__'],True), '__dict__', None):
         log.info("D4: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if PY3:
