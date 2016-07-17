@@ -19,6 +19,7 @@ dill.egg-info/PKG-INFO
 dill.egg-info/SOURCES.txt
 dill.egg-info/dependency_links.txt
 dill.egg-info/not-zip-safe
+dill.egg-info/requires.txt
 dill.egg-info/top_level.txt
 scripts/get_objgraph.py
 scripts/unpickle.py
