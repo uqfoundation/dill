@@ -1153,12 +1153,12 @@ def save_module(pickler, obj):
         pickler.save_reduce(_import_module, (obj.__name__,), obj=obj)
         log.info("# M2")
     else:
-        # if a module file name starts with prefx, it should be a builtin
+        # if a module file name starts with prefix, it should be a builtin
         # module, so should be pickled as a reference
         if hasattr(obj, "__file__"):
             names = ["base_prefix", "base_exec_prefix", "exec_prefix",
                      "prefix", "real_prefix"]
-            builtin_mod = any([obj.__file__.startswith(getattr(sys, name))
+            builtin_mod = any([obj.__file__.startswith(os.path.normpath(getattr(sys, name)))
                            for name in names if hasattr(sys, name)])
             builtin_mod = builtin_mod or 'site-packages' in obj.__file__
         else:
