@@ -288,8 +288,17 @@ def errors(obj, depth=0, exact=False, safe=False):
         except Exception:
             import sys
             return sys.exc_info()[1]
-    return dict(((attr, errors(getattr(obj,attr),depth-1,exact,safe)) \
-           for attr in dir(obj) if not pickles(getattr(obj,attr),exact,safe)))
+    _dict = {}
+    for attr in dir(obj):
+        try:
+            _attr = getattr(obj,attr)
+        except Exception:
+            import sys
+            _dict[attr] = sys.exc_info()[1]
+            continue
+        if not pickles(_attr,exact,safe):
+            _dict[attr] = errors(_attr,depth-1,exact,safe)
+    return _dict
 
 del absolute_import, with_statement
 
