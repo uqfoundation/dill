@@ -1,0 +1,28 @@
+language: python
+
+sudo: false
+
+matrix:
+    include:
+        - python: '2.7'
+        - python: '3.4'
+        - python: '3.5'
+        - python: '3.6-dev'
+        - python: 'nightly'
+    allow_failures:
+        - python: '3.5'
+        - python: '3.6-dev'
+        - python: 'nightly'
+    fast_finish: true
+
+cache:
+    pip: true
+
+before_install:
+    - set -e  # fail on any error
+
+install:
+    - python setup.py build && python setup.py install
+
+script:
+    - for test in tests/*.py; do echo $test ; python $test > /dev/null ; done
