@@ -64,7 +64,12 @@ try:
     from pickle import DEFAULT_PROTOCOL
 except ImportError:
     DEFAULT_PROTOCOL = HIGHEST_PROTOCOL
-import __main__ as _main_module
+
+try:
+  import __main__ as _main_module
+except ImportError:
+  _main_module = None
+
 import marshal
 import gc
 # import zlib
