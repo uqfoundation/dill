@@ -8,6 +8,7 @@
 import dill
 dill.settings['recurse'] = True
 
+
 def wtf(x,y,z):
   def zzz():
     return x
@@ -16,6 +17,7 @@ def wtf(x,y,z):
   def xxx():
     return z
   return zzz,yyy
+
 
 def quad(a=1, b=1, c=0):
   inverted = [False]
@@ -37,7 +39,9 @@ def quad(a=1, b=1, c=0):
 def double_add(*args):
   return sum(args)
 
+
 fx = sum([1,2,3])
+
 
 ### to make it interesting...
 def quad_factory(a=1,b=1,c=0):
@@ -48,11 +52,14 @@ def quad_factory(a=1,b=1,c=0):
     return func
   return dec
 
+
 @quad_factory(a=0,b=4,c=0)
 def quadish(x):
   return x+1
 
+
 quadratic = quad_factory()
+
 
 def doubler(f):
   def inner(*args, **kwds):
@@ -60,13 +67,13 @@ def doubler(f):
     return 2*fx
   return inner
 
+
 @doubler
 def quadruple(x):
   return 2*x
 
 
-if __name__ == '__main__':
-
+def test_mixins():
   # test mixins
   assert double_add(1,2,3) == 2*fx
   double_add.invert()
@@ -107,6 +114,3 @@ if __name__ == '__main__':
   assert result == 'def quad(a=1, b=1, c=0):\n  inverted = [False]\n  def invert():\n    inverted[0] = not inverted[0]\n  def dec(f):\n    def func(*args, **kwds):\n      x = f(*args, **kwds)\n      if inverted[0]: x = -x\n      return a*x**2 + b*x + c\n    func.__wrapped__ = f\n    func.invert = invert\n    func.inverted = inverted\n    return func\n  return dec\n\n@quad(a=0,b=2)\ndef double_add(*args):\n  return sum(args)\n'
   assert set([a,b,c,d]) == set(['a = 0', 'c = 0', 'b = 2', 'inverted = [True]'])
   #*****
-
-
-# EOF

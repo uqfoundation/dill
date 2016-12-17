@@ -5,11 +5,16 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
-import dill
-import random
 import os
 import sys
 import string
+import random
+
+import pytest
+
+import dill
+
+
 dill.settings['recurse'] = True
 
 fname = "_test_file.txt"
@@ -19,6 +24,7 @@ if sys.hexversion < 0x03030000:
     FileNotFoundError = IOError
 buffer_error = ValueError("invalid buffer size")
 dne_error = FileNotFoundError("[Errno 2] No such file or directory: '%s'" % fname)
+
 
 def write_randomness(number=200):
     f = open(fname, "w")
@@ -44,7 +50,24 @@ def throws(op, args, exc):
         return False
 
 
-def test(strictio, fmode):
+def teardown_module():
+    if os.path.exists(fname):
+        os.remove(fname)
+
+
+@pytest.mark.parametrize('strictio,fmode,skippypy', [
+    (False, dill.HANDLE_FMODE, False),
+    (False, dill.FILE_FMODE, False),
+    (False, dill.CONTENTS_FMODE, True),
+    #(True, dill.HANDLE_FMODE, False),
+    #(True, dill.FILE_FMODE, False),
+    #(True, dill.CONTENTS_FMODE, True),
+])
+def test_various(strictio, fmode, skippypy):
+    import platform
+    if skippypy and platform.python_implementation() == 'PyPy':
+        pytest.skip('Skip for PyPy...')
+
     # file exists, with same contents
     # read
 
@@ -459,20 +482,3 @@ def test(strictio, fmode):
     else:
         raise RuntimeError("Unknown file mode '%s'" % fmode)
     f2.close()
-
-
-if __name__ == '__main__':
-
-    test(strictio=False, fmode=dill.HANDLE_FMODE)
-    test(strictio=False, fmode=dill.FILE_FMODE)
-    if not dill.dill.IS_PYPY: #FIXME: fails due to pypy/issues/1233
-        test(strictio=False, fmode=dill.CONTENTS_FMODE)
-
-   #test(strictio=True, fmode=dill.HANDLE_FMODE)
-   #test(strictio=True, fmode=dill.FILE_FMODE)
-   #test(strictio=True, fmode=dill.CONTENTS_FMODE)
-
-if os.path.exists(fname):
-    os.remove(fname)
-
-# EOF

@@ -8,10 +8,12 @@
 test dill's ability to handle nested functions
 """
 
+import os
+import math
+
 import dill as pickle
 pickle.settings['recurse'] = True
-import math
-#import pickle
+
 
 # the nested function: pickle should fail here, but dill is ok.
 def adder(augend):
@@ -20,6 +22,7 @@ def adder(augend):
     def inner(addend):
         return addend + augend + zero[0]
     return inner
+
 
 # rewrite the nested function using a class: standard pickle should work here.
 class cadder(object):
@@ -30,6 +33,7 @@ class cadder(object):
     def __call__(self, addend):
         return addend + self.augend + self.zero[0]
 
+
 # rewrite again, but as an old-style class
 class c2adder:
     def __init__(self, augend):
@@ -39,22 +43,22 @@ class c2adder:
     def __call__(self, addend):
         return addend + self.augend + self.zero[0]
 
-# some basic stuff
-a = [0, 1, 2]
 
 # some basic class stuff
 class basic(object):
     pass
 
+
 class basic2:
     pass
 
 
-if __name__ == '__main__':
-    x = 5
-    y = 1
+x = 5
+y = 1
 
-    # pickled basic stuff
+
+def test_basic():
+    a = [0, 1, 2]
     pa = pickle.dumps(a)
     pmath = pickle.dumps(math) #XXX: FAILS in pickle
     pmap = pickle.dumps(map)
@@ -64,46 +68,52 @@ if __name__ == '__main__':
     lmap = pickle.loads(pmap)
     assert list(map(math.sin, a)) == list(lmap(lmath.sin, la))
 
-    # pickled basic class stuff
+
+def test_basic_class():
     pbasic2 = pickle.dumps(basic2)
     _pbasic2 = pickle.loads(pbasic2)()
     pbasic = pickle.dumps(basic)
     _pbasic = pickle.loads(pbasic)()
 
-    # pickled c2adder
+
+def test_c2adder():
     pc2adder = pickle.dumps(c2adder)
     pc2add5 = pickle.loads(pc2adder)(x)
     assert pc2add5(y) == x+y
 
-    # pickled cadder
+
+def test_pickled_cadder():
     pcadder = pickle.dumps(cadder)
     pcadd5 = pickle.loads(pcadder)(x)
     assert pcadd5(y) == x+y
 
-    # raw adder and inner
+
+def test_raw_adder_and_inner():
     add5 = adder(x)
     assert add5(y) == x+y
 
-    # pickled adder
+
+def test_pickled_adder():
     padder = pickle.dumps(adder)
     padd5 = pickle.loads(padder)(x)
     assert padd5(y) == x+y
 
-    # pickled inner
+
+def test_pickled_inner():
+    add5 = adder(x)
     pinner = pickle.dumps(add5) #XXX: FAILS in pickle
     p5add = pickle.loads(pinner)
     assert p5add(y) == x+y
 
-    # testing moduledict where not __main__
+
+def test_moduledict_where_not_main():
     try:
-            import test_moduledict
+            from . import test_moduledict
             error = None
     except:
             import sys
             error = sys.exc_info()[1]
     assert error is None
-    # clean up
-    import os
     name = 'test_moduledict.py'
     if os.path.exists(name) and os.path.exists(name+'c'):
         os.remove(name+'c')
@@ -114,6 +124,3 @@ if __name__ == '__main__':
 
     if os.path.exists("__pycache__") and not os.listdir("__pycache__"):
         os.removedirs("__pycache__")
-
-
-# EOF

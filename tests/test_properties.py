@@ -5,9 +5,10 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
+import sys
+
 import dill
 dill.settings['recurse'] = True
-import sys
 
 
 class Foo(object):
@@ -23,26 +24,32 @@ class Foo(object):
     data = property(_get_data, _set_data)
 
 
-FooS = dill.copy(Foo)
+def test_data_not_none():
+    FooS = dill.copy(Foo)
+    assert FooS.data.fget is not None
+    assert FooS.data.fset is not None
+    assert FooS.data.fdel is None
 
-assert FooS.data.fget is not None
-assert FooS.data.fset is not None
-assert FooS.data.fdel is None
 
-try:
-    res = FooS().data
-except Exception:
-    e = sys.exc_info()[1]
-    raise AssertionError(str(e))
-else:
-    assert res == 1
+def test_data_unchanged():
+    FooS = dill.copy(Foo)
+    try:
+        res = FooS().data
+    except Exception:
+        e = sys.exc_info()[1]
+        raise AssertionError(str(e))
+    else:
+        assert res == 1
 
-try:
-    f = FooS()
-    f.data = 1024
-    res = f.data
-except Exception:
-    e = sys.exc_info()[1]
-    raise AssertionError(str(e))
-else:
-    assert res == 1024
+
+def test_data_changed():
+    FooS = dill.copy(Foo)
+    try:
+        f = FooS()
+        f.data = 1024
+        res = f.data
+    except Exception:
+        e = sys.exc_info()[1]
+        raise AssertionError(str(e))
+    else:
+        assert res == 1024
