@@ -26,7 +26,7 @@ load_types(pickleable=True,unpickleable=False)
 class _class:
     def _method(self):
         pass
-        
+
 # objects that *fail* if imported
 special = {}
 special['LambdaType'] = _lambda = lambda x: lambda y: x
@@ -49,14 +49,9 @@ def pickles(name, exact=False):
             assert type(obj) == type(pik)
     except Exception:
         print ("fails: %s %s" % (name, type(obj)))
-    return
 
 
-if __name__ == '__main__':
-
+def test_objects():
     for member in objects.keys():
        #pickles(member, exact=True)
         pickles(member, exact=False)
-
-
-# EOF
