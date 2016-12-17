@@ -14,17 +14,18 @@ except ImportError:
 def my_fn(x):
     return x * 17
 
-obj = lambda : my_fn(34)
-assert obj() == 578
+def test_extend():
+    obj = lambda : my_fn(34)
+    assert obj() == 578
 
-obj_io = StringIO()
-pickler = pickle.Pickler(obj_io)
-pickler.dump(obj)
+    obj_io = StringIO()
+    pickler = pickle.Pickler(obj_io)
+    pickler.dump(obj)
 
-obj_str = obj_io.getvalue()
+    obj_str = obj_io.getvalue()
 
-obj2_io = StringIO(obj_str)
-unpickler = pickle.Unpickler(obj2_io)
-obj2 = unpickler.load()
+    obj2_io = StringIO(obj_str)
+    unpickler = pickle.Unpickler(obj2_io)
+    obj2 = unpickler.load()
 
-assert obj2() == 578
+    assert obj2() == 578
