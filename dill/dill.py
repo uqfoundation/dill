@@ -16,7 +16,7 @@ Test against CH16+ Std. Lib. ... TBD.
 """
 __all__ = ['dump','dumps','load','loads','dump_session','load_session',
            'Pickler','Unpickler','register','copy','pickle','pickles',
-           'check','HIGHEST_PROTOCOL','DEFAULT_PROTOCOL','PicklingError',
+           'HIGHEST_PROTOCOL','DEFAULT_PROTOCOL','PicklingError',
            'UnpicklingError','HANDLE_FMODE','CONTENTS_FMODE','FILE_FMODE']
 
 import logging
@@ -1075,7 +1075,7 @@ def _proxy_helper(obj): # a dead proxy returns a reference to None
         return id(None)
     if _str == _repr: return id(obj) # it's a repr
     try: # either way, it's a proxy from here
-        address = int(_str.rstrip('>').split(' at ')[-1], base=16)   
+        address = int(_str.rstrip('>').split(' at ')[-1], base=16)
     except ValueError: # special case: proxy of a 'type'
         if not IS_PYPY:
             address = int(_repr.rstrip('>').split(' at ')[-1], base=16)
@@ -1315,33 +1315,6 @@ def pickles(obj,exact=False,safe=False,**kwds):
         return False
     except exceptions:
         return False
-
-def check(obj, *args, **kwds):
-    """check pickling of an object across another process"""
-   # == undocumented ==
-   # python -- the string path or executable name of the selected python
-   # verbose -- if True, be verbose about printing warning messages
-   # all other args and kwds are passed to dill.dumps
-    verbose = kwds.pop('verbose', False)
-    python = kwds.pop('python', None)
-    if python is None:
-        import sys
-        python = sys.executable
-    # type check
-    isinstance(python, str)
-    import subprocess
-    fail = True
-    try:
-        _obj = dumps(obj, *args, **kwds)
-        fail = False
-    finally:
-        if fail and verbose:
-            print("DUMP FAILED")
-    msg = "%s -c import dill; print(dill.loads(%s))" % (python, repr(_obj))
-    msg = "SUCCESS" if not subprocess.call(msg.split(None,2)) else "LOAD FAILED"
-    if verbose:
-        print(msg)
-    return
 
 # use to protect against missing attributes
 def is_dill(pickler):
