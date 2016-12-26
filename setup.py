@@ -19,8 +19,6 @@ copy_file(path.join(_here, 'LICENSE'), path.join(_here, 'dill'))
 with open(path.join(_here, 'README.rst')) as f:
     long_description = f.read()
 
-install_requires = []
-    
 # build the 'setup' call
 setup(
     name='dill',
@@ -29,16 +27,13 @@ setup(
         'local_scheme': 'dirty-tag',
         'write_to': 'dill/_version.py'
     },
-    setup_requires=['setuptools-scm>=1.6.0'],
     description='serialize all of python',
     long_description = long_description,
     author_email = 'mmckerns at uqfoundation dot org',
     maintainer = 'Mike McKerns',
     maintainer_email = 'mmckerns at uqfoundation dot org',
     license = '3-clause BSD',
-    platforms = ['Linux', 'Windows', 'Mac'],
-    url = 'http://www.cacr.caltech.edu/~mmckerns/dill.htm',
-    download_url = 'http://dev.danse.us/packages',
+    url = 'http://trac.mystic.cacr.caltech.edu/project/pathos/wiki/dill.html',
     classifiers = (
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
@@ -54,7 +49,8 @@ setup(
     include_package_data=True,
     package_data={'': ['LICENSE', '*.rst']},
     zip_safe=False,
-    install_requires=install_requires,
+    install_requires=[],
+    setup_requires=['setuptools-scm>=1.6.0'],
     extras_require={
         'optional': [
             'objgraph>=1.7.2', 

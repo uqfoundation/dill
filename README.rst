@@ -37,51 +37,49 @@ ticket list at https://github.com/uqfoundation/dill/issues.
 Major Features
 ==============
 
-`dill` can pickle the following standard types::
+`dill` can pickle the following standard types:
 
-    - none, type, bool, int, long, float, complex, str, unicode,
-    - tuple, list, dict, file, buffer, builtin,
-    - both old and new style classes,
-    - instances of old and new style classes,
-    - set, frozenset, array, functions, exceptions
+* none, type, bool, int, long, float, complex, str, unicode,
+* tuple, list, dict, file, buffer, builtin,
+* both old and new style classes,
+* instances of old and new style classes,
+* set, frozenset, array, functions, exceptions
 
-`dill` can also pickle more 'exotic' standard types::
+`dill` can also pickle more 'exotic' standard types:
 
-    - functions with yields, nested functions, lambdas,
-    - cell, method, unboundmethod, module, code, methodwrapper,
-    - dictproxy, methoddescriptor, getsetdescriptor, memberdescriptor,
-    - wrapperdescriptor, xrange, slice,
-    - notimplemented, ellipsis, quit
+* functions with yields, nested functions, lambdas,
+* cell, method, unboundmethod, module, code, methodwrapper,
+* dictproxy, methoddescriptor, getsetdescriptor, memberdescriptor,
+* wrapperdescriptor, xrange, slice,
+* notimplemented, ellipsis, quit
 
-`dill` cannot yet pickle these standard types::
+`dill` cannot yet pickle these standard types:
 
-    - frame, generator, traceback
+* frame, generator, traceback
 
-`dill` also provides the capability to::
+`dill` also provides the capability to:
 
-    - save and load python interpreter sessions
-    - save and extract the source code from functions and classes
-    - interactively diagnose pickling errors
+* save and load python interpreter sessions
+* save and extract the source code from functions and classes
+* interactively diagnose pickling errors
 
 
 Current Release
 ===============
 
-This version is `dill-%(relver)s`.
+The latest released version of `dill` is available from:
 
-The latest released version of `dill` is available from::
+* http://trac.mystic.cacr.caltech.edu/project/pathos
 
-    http://trac.mystic.cacr.caltech.edu/project/pathos
+or:
 
-or::
+* https://github.com/uqfoundation/dill/releases
 
-    https://github.com/uqfoundation/dill/releases
+or also:
 
-or also::
+* https://pypi.python.org/pypi/dill
 
-    https://pypi.python.org/pypi/dill
-
-`dill` is distributed under a 3-clause BSD license.
+`dill` is distributed under a 3-clause BSD license::
 
     >>> import dill
     >>> print (dill.license())
@@ -90,9 +88,9 @@ or also::
 Development Version 
 ===================
 
-You can get the latest development version with all the shiny new features at::
+You can get the latest development version with all the shiny new features at:
 
-    https://github.com/uqfoundation
+* https://github.com/uqfoundation/dill/
 
 If you have a new contribution, please submit a pull request.
 
@@ -120,15 +118,15 @@ Alternately, `dill` can be installed with `pip` or `easy_install`::
 Requirements
 ============
 
-`dill` requires::
+`dill` requires:
 
-    - python2, version >= 2.5  *or*  python3, version >= 3.1
-    - pyreadline, version >= 1.7.1  (on windows)
+* python2, version >= 2.5  *or*  python3, version >= 3.1
+* pyreadline, version >= 1.7.1  (on windows)
 
-Optional requirements::
+Optional requirements:
 
-    - setuptools, version >= 0.6
-    - objgraph, version >= 1.7.2
+* setuptools, version >= 0.6
+* objgraph, version >= 1.7.2
 
 
 More Information

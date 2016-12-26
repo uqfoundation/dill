@@ -82,10 +82,10 @@ extend()
 
 def license():
     """print license"""
-    print (__license__)
+    print(__license__)
 
 def citation():
     """print citation"""
-    print (__doc__[-501:-123])
+    print(__doc__[-501:-123])
 
 del odict
