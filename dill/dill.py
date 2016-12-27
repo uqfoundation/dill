@@ -37,7 +37,7 @@ _use_diff = False
 PY3 = (sys.hexversion >= 0x30000f0)
 if PY3: #XXX: get types from .objtypes ?
     import builtins as __builtin__
-    from pickle import _Pickler as StockPickler, _Unpickler as StockUnpickler
+    from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
     from _thread import LockType
    #from io import IOBase
     from types import CodeType, FunctionType, MethodType, GeneratorType, \
