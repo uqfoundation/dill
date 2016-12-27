@@ -22,6 +22,8 @@ matrix:
         - python: '3.5'     # tests fail
         - python: '3.6-dev' # tests fail
         - python: 'nightly' # tests fail
+        - python: 'pypy'    # tests fail
+        - python: 'pypy3'   # tests fail
     fast_finish: true
 
 cache:
