@@ -253,8 +253,7 @@ try: # python 2.7
     # generic operating system services (CH 15)
     a['NullHandlerType'] = logging.NullHandler() # pickle ok  # new 2.7
     a['ArgParseFileType'] = argparse.FileType() # pickle ok
-#except AttributeError:
-except ImportError:
+except (AttributeError, ImportError):
     pass
 
 # -- pickle fails on all below here -----------------------------------------
