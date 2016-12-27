@@ -17,13 +17,13 @@ matrix:
         - python: 'pypy'
         - python: 'pypy3'
     allow_failures:
-        - python: '2.5'     # not supported by travis
-        - python: '3.1'     # not supported by travis
-        - python: '3.5'     # tests fail
-        - python: '3.6-dev' # tests fail
-        - python: 'nightly' # tests fail
-        - python: 'pypy'    # tests fail
-        - python: 'pypy3'   # tests fail
+        - python: '2.5'
+        - python: '3.1'
+        - python: '3.5'
+        - python: '3.6-dev'
+        - python: 'nightly'
+        - python: 'pypy'
+        - python: 'pypy3'
     fast_finish: true
 
 cache:
