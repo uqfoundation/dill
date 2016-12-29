@@ -8,12 +8,8 @@
 from __future__ import absolute_import
 
 # get version numbers, license, and long description
-try:
-    from .info import this_version as __version__
-    from .info import readme as __doc__, license as __license__
-except ImportError:
-    msg = """First run 'python setup.py build' to build dill."""
-    raise ImportError(msg)
+from ._version import version as __version__
+from .info import readme as __doc__, license as __license__
 
 __author__ = 'Mike McKerns'
 
@@ -27,18 +23,12 @@ from .dill import dump, dumps, load, loads, dump_session, load_session, \
     Pickler, Unpickler, register, copy, pickle, pickles, check, \
     HIGHEST_PROTOCOL, DEFAULT_PROTOCOL, PicklingError, UnpicklingError, \
     HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE
-from . import source, temp, detect
 
-# get global settings
+from . import source, temp, detect
 from .settings import settings
 
 # make sure "trace" is turned off
 detect.trace(False)
-
-try:
-    from imp import reload
-except ImportError:
-    pass
 
 # put the objects in order, if possible
 try:
@@ -49,6 +39,7 @@ except ImportError:
     except ImportError:
         odict = dict
 objects = odict()
+
 # local import of dill._objects
 #from . import _objects
 #objects.update(_objects.succeeds)
@@ -61,6 +52,8 @@ def load_types(pickleable=True, unpickleable=True):
     """load pickleable and/or unpickleable types to dill.types"""
     # local import of dill.objects
     from . import _objects
+    
+    from imp import reload
     if pickleable:
         objects.update(_objects.succeeds)
     else:
@@ -80,23 +73,19 @@ def load_types(pickleable=True, unpickleable=True):
 def extend(use_dill=True):
     '''add (or remove) dill types to/from pickle'''
     from .dill import _revert_extension, _extend
-    if use_dill: _extend()
-    else: _revert_extension()
-    return
+    if use_dill: 
+        _extend()
+    else: 
+        _revert_extension()
 
 extend()
 
 def license():
     """print license"""
-    print (__license__)
-    return
+    print(__license__)
 
 def citation():
     """print citation"""
-    print (__doc__[-501:-123])
-    return
+    print(__doc__[-501:-123])
 
-del absolute_import
 del odict
-
-# end of file

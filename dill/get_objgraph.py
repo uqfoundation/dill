@@ -14,11 +14,10 @@ import dill as pickle
 #import pickle
 
 # get all objects for testing
-from dill import load_types
+from . import load_types, objects
 load_types(pickleable=True,unpickleable=True)
-from dill import objects
 
-if __name__ == "__main__":
+def main():
     import sys
     if len(sys.argv) != 2:
         print ("Please provide exactly one type name (e.g. 'IntType')")
@@ -34,6 +33,9 @@ if __name__ == "__main__":
             objgraph.show_refs(obj, filename=objtype+'.png')
         except ImportError:
             print ("Please install 'objgraph' to view object graphs")
+
+if __name__ == "__main__":
+    main()
 
 
 # EOF

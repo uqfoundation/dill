@@ -1,0 +1,3 @@
+include DEV_NOTES
+include README.rst
+include LICENSE
