@@ -13,8 +13,9 @@ import sys
 
 f = lambda x:x**2
 
-#FIXME: this doesn't catch output... it's from the internal call
-def test(func, **kwds):
+
+# FIXME: this doesn't catch output... it's from the internal call
+def no_exception_raised(func, **kwds):
     try:
         with capture('stdout') as out:
             check(func, **kwds)
@@ -27,19 +28,22 @@ def test(func, **kwds):
         out.close()
 
 
-if __name__ == '__main__':
-    test(f)
-    test(f, recurse=True)
-    test(f, byref=True)
-    test(f, protocol=0)
-    #TODO: test incompatible versions
+def test_check():
+    no_exception_raised(f)
+    no_exception_raised(f, recurse=True)
+    no_exception_raised(f, byref=True)
+    no_exception_raised(f, protocol=0)
+    # TODO: test incompatible versions
     # SyntaxError: invalid syntax
     if PY3:
-        test(f, python='python3.4')
+        no_exception_raised(f, python='python3.4')
     else:
-        test(f, python='python2.7')
-    #TODO: test dump failure
-    #TODO: test load failure
+        no_exception_raised(f, python='python2.7')
+    # TODO: test dump failure
+    # TODO: test load failure
 
+
+if __name__ == '__main__':
+    test_check()
 
 # EOF
