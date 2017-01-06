@@ -8,6 +8,7 @@
 
 import os
 import sys
+import uuid
 import string
 import random
 
@@ -16,18 +17,14 @@ import dill
 
 dill.settings['recurse'] = True
 
-fname = "_test_file.txt"
-rand_chars = list(string.ascii_letters) + ["\n"] * 40  # bias newline
-
 if sys.hexversion < 0x03030000:
     FileNotFoundError = IOError
-buffer_error = ValueError("invalid buffer size")
-dne_error = FileNotFoundError("[Errno 2] No such file or directory: '%s'" % fname)
 
 
-def write_randomness(number=200):
+def write_randomness(fname, number=200):
     f = open(fname, "w")
     for i in range(number):
+        rand_chars = list(string.ascii_letters) + ["\n"] * 40  # bias newline
         f.write(random.choice(rand_chars))
     f.close()
     f = open(fname, "r")
@@ -36,7 +33,7 @@ def write_randomness(number=200):
     return contents
 
 
-def trunc_file():
+def trunc_file(fname):
     open(fname, "w").close()
 
 
@@ -49,21 +46,25 @@ def throws(op, args, exc):
         return False
 
 
-def teardown_module():
+def clean_artifact(fname):
     if os.path.exists(fname):
         os.remove(fname)
 
 
-def bench(strictio, fmode, skippypy):
+def bench(fname, strictio, fmode, skippypy):
     import platform
     if skippypy and platform.python_implementation() == 'PyPy':
         # Skip for PyPy...
         return
 
+    buffer_error = ValueError("invalid buffer size")
+    dne_error = FileNotFoundError(
+        "[Errno 2] No such file or directory: '%s'" % fname)
+
     # file exists, with same contents
     # read
 
-    write_randomness()
+    write_randomness(fname)
 
     f = open(fname, "r")
     _f = dill.loads(dill.dumps(f, fmode=fmode))#, strictio=strictio))
@@ -107,7 +108,7 @@ def bench(strictio, fmode, skippypy):
 
     # append
 
-    trunc_file()
+    trunc_file(fname)
 
     f = open(fname, "a")
     f.write("hello")
@@ -137,7 +138,7 @@ def bench(strictio, fmode, skippypy):
     # file exists, with different contents (smaller size)
     # read
 
-    write_randomness()
+    write_randomness(fname)
 
     f = open(fname, "r")
     fstr = f.read()
@@ -146,7 +147,7 @@ def bench(strictio, fmode, skippypy):
     ftell = f.tell()
     f.close()
     _flen = 150
-    _fstr = write_randomness(number=_flen)
+    _fstr = write_randomness(fname, number=_flen)
 
     if strictio:  # throw error if ftell > EOF
         assert throws(dill.loads, (f_dumped,), buffer_error)
@@ -175,7 +176,7 @@ def bench(strictio, fmode, skippypy):
 
     # write
 
-    write_randomness()
+    write_randomness(fname)
 
     f = open(fname, "w")
     f.write("hello")
@@ -216,7 +217,7 @@ def bench(strictio, fmode, skippypy):
 
     # append
 
-    trunc_file()
+    trunc_file(fname)
 
     f = open(fname, "a")
     f.write("hello")
@@ -257,7 +258,7 @@ def bench(strictio, fmode, skippypy):
     # file does not exist
     # read
 
-    write_randomness()
+    write_randomness(fname)
 
     f = open(fname, "r")
     fstr = f.read()
@@ -296,7 +297,7 @@ def bench(strictio, fmode, skippypy):
 
     # write
 
-    write_randomness()
+    write_randomness(fname)
 
     f = open(fname, "w+")
     f.write("hello")
@@ -332,7 +333,7 @@ def bench(strictio, fmode, skippypy):
 
     # append
 
-    trunc_file()
+    trunc_file(fname)
 
     f = open(fname, "a")
     f.write("hello")
@@ -367,7 +368,7 @@ def bench(strictio, fmode, skippypy):
     # file exists, with different contents (larger size)
     # read
 
-    write_randomness()
+    write_randomness(fname)
 
     f = open(fname, "r")
     fstr = f.read()
@@ -376,7 +377,7 @@ def bench(strictio, fmode, skippypy):
     ftell = f.tell()
     f.close()
     _flen = 250
-    _fstr = write_randomness(number=_flen)
+    _fstr = write_randomness(fname, number=_flen)
 
     # XXX: no safe_file: no way to be 'safe'?
 
@@ -441,7 +442,7 @@ def bench(strictio, fmode, skippypy):
 
     # append
 
-    trunc_file()
+    trunc_file(fname)
 
     f = open(fname, "a")
     f.write("hello")
@@ -477,23 +478,26 @@ def bench(strictio, fmode, skippypy):
 
 
 def test_nostrictio_handlefmode():
-    bench(False, dill.HANDLE_FMODE, False)
-    teardown_module()
+    fname = "_test_file_%s.txt" % uuid.uuid4()
+    bench(fname, False, dill.HANDLE_FMODE, False)
+    clean_artifact(fname)
 
 
 def test_nostrictio_filefmode():
-    bench(False, dill.FILE_FMODE, False)
-    teardown_module()
+    fname = "_test_file_%s.txt" % uuid.uuid4()
+    bench(fname, False, dill.FILE_FMODE, False)
+    clean_artifact(fname)
 
 
 def test_nostrictio_contentsfmode():
-    bench(False, dill.CONTENTS_FMODE, True)
-    teardown_module()
+    fname = "_test_file_%s.txt" % uuid.uuid4()
+    bench(fname, False, dill.CONTENTS_FMODE, True)
+    clean_artifact(fname)
 
 
-#bench(True, dill.HANDLE_FMODE, False)
-#bench(True, dill.FILE_FMODE, False)
-#bench(True, dill.CONTENTS_FMODE, True)
+#bench(fname, True, dill.HANDLE_FMODE, False)
+#bench(fname, True, dill.FILE_FMODE, False)
+#bench(fname, True, dill.CONTENTS_FMODE, True)
 
 
 if __name__ == '__main__':
