@@ -11,8 +11,6 @@ import sys
 import string
 import random
 
-import pytest
-
 import dill
 
 
@@ -59,7 +57,8 @@ def teardown_module():
 def bench(strictio, fmode, skippypy):
     import platform
     if skippypy and platform.python_implementation() == 'PyPy':
-        pytest.skip('Skip for PyPy...')
+        # Skip for PyPy...
+        return
 
     # file exists, with same contents
     # read
@@ -479,14 +478,17 @@ def bench(strictio, fmode, skippypy):
 
 def test_nostrictio_handlefmode():
     bench(False, dill.HANDLE_FMODE, False)
+    teardown_module()
 
 
 def test_nostrictio_filefmode():
     bench(False, dill.FILE_FMODE, False)
+    teardown_module()
 
 
 def test_nostrictio_contentsfmode():
     bench(False, dill.CONTENTS_FMODE, True)
+    teardown_module()
 
 
 #bench(True, dill.HANDLE_FMODE, False)
