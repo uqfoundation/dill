@@ -8,14 +8,14 @@
 
 from __future__ import with_statement
 from dill import check
-from dill.temp import capture
-from dill.dill import PY3
 import sys
 
-f = lambda x:x**2
+from dill.temp import capture
+from dill.dill import PY3
+
 
 #FIXME: this doesn't catch output... it's from the internal call
-def test(func, **kwds):
+def raise_check(func, **kwds):
     try:
         with capture('stdout') as out:
             check(func, **kwds)
@@ -28,19 +28,40 @@ def test(func, **kwds):
         out.close()
 
 
-if __name__ == '__main__':
-    test(f)
-    test(f, recurse=True)
-    test(f, byref=True)
-    test(f, protocol=0)
-    #TODO: test incompatible versions
-    # SyntaxError: invalid syntax
+f = lambda x:x**2
+
+
+def test_simple():
+    raise_check(f)
+
+
+def test_recurse():
+    raise_check(f, recurse=True)
+
+
+def test_byref():
+    raise_check(f, byref=True)
+
+
+def test_protocol():
+    raise_check(f, protocol=True)
+
+
+def test_python():
     if PY3:
-        test(f, python='python3.4')
+        raise_check(f, python='python3.4')
     else:
-        test(f, python='python2.7')
-    #TODO: test dump failure
-    #TODO: test load failure
+        raise_check(f, python='python2.7')
 
 
-# EOF
+#TODO: test incompatible versions
+#TODO: test dump failure
+#TODO: test load failure
+
+
+if __name__ == '__main__':
+    test_simple()
+    test_recurse()
+    test_byref()
+    test_protocol()
+    test_python()

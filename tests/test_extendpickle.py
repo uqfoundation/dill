@@ -12,20 +12,27 @@ try:
 except ImportError:
     from io import BytesIO as StringIO
 
+
 def my_fn(x):
     return x * 17
 
-obj = lambda : my_fn(34)
-assert obj() == 578
 
-obj_io = StringIO()
-pickler = pickle.Pickler(obj_io)
-pickler.dump(obj)
+def test_extend():
+    obj = lambda : my_fn(34)
+    assert obj() == 578
 
-obj_str = obj_io.getvalue()
+    obj_io = StringIO()
+    pickler = pickle.Pickler(obj_io)
+    pickler.dump(obj)
 
-obj2_io = StringIO(obj_str)
-unpickler = pickle.Unpickler(obj2_io)
-obj2 = unpickler.load()
+    obj_str = obj_io.getvalue()
 
-assert obj2() == 578
+    obj2_io = StringIO(obj_str)
+    unpickler = pickle.Unpickler(obj2_io)
+    obj2 = unpickler.load()
+
+    assert obj2() == 578
+
+
+if __name__ == '__main__':
+    test_extend()

@@ -9,6 +9,7 @@
 import dill
 dill.settings['recurse'] = True
 
+
 def wtf(x,y,z):
   def zzz():
     return x
@@ -17,6 +18,7 @@ def wtf(x,y,z):
   def xxx():
     return z
   return zzz,yyy
+
 
 def quad(a=1, b=1, c=0):
   inverted = [False]
@@ -38,7 +40,9 @@ def quad(a=1, b=1, c=0):
 def double_add(*args):
   return sum(args)
 
+
 fx = sum([1,2,3])
+
 
 ### to make it interesting...
 def quad_factory(a=1,b=1,c=0):
@@ -49,11 +53,14 @@ def quad_factory(a=1,b=1,c=0):
     return func
   return dec
 
+
 @quad_factory(a=0,b=4,c=0)
 def quadish(x):
   return x+1
 
+
 quadratic = quad_factory()
+
 
 def doubler(f):
   def inner(*args, **kwds):
@@ -61,13 +68,13 @@ def doubler(f):
     return 2*fx
   return inner
 
+
 @doubler
 def quadruple(x):
   return 2*x
 
 
-if __name__ == '__main__':
-
+def test_mixins():
   # test mixins
   assert double_add(1,2,3) == 2*fx
   double_add.invert()
@@ -110,4 +117,5 @@ if __name__ == '__main__':
   #*****
 
 
-# EOF
+if __name__ == '__main__':
+    test_mixins()

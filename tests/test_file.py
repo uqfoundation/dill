@@ -6,11 +6,14 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
-import dill
-import random
 import os
 import sys
 import string
+import random
+
+import dill
+
+
 dill.settings['recurse'] = True
 
 fname = "_test_file.txt"
@@ -20,6 +23,7 @@ if sys.hexversion < 0x03030000:
     FileNotFoundError = IOError
 buffer_error = ValueError("invalid buffer size")
 dne_error = FileNotFoundError("[Errno 2] No such file or directory: '%s'" % fname)
+
 
 def write_randomness(number=200):
     f = open(fname, "w")
@@ -45,7 +49,17 @@ def throws(op, args, exc):
         return False
 
 
-def test(strictio, fmode):
+def teardown_module():
+    if os.path.exists(fname):
+        os.remove(fname)
+
+
+def bench(strictio, fmode, skippypy):
+    import platform
+    if skippypy and platform.python_implementation() == 'PyPy':
+        # Skip for PyPy...
+        return
+
     # file exists, with same contents
     # read
 
@@ -462,18 +476,27 @@ def test(strictio, fmode):
     f2.close()
 
 
+def test_nostrictio_handlefmode():
+    bench(False, dill.HANDLE_FMODE, False)
+    teardown_module()
+
+
+def test_nostrictio_filefmode():
+    bench(False, dill.FILE_FMODE, False)
+    teardown_module()
+
+
+def test_nostrictio_contentsfmode():
+    bench(False, dill.CONTENTS_FMODE, True)
+    teardown_module()
+
+
+#bench(True, dill.HANDLE_FMODE, False)
+#bench(True, dill.FILE_FMODE, False)
+#bench(True, dill.CONTENTS_FMODE, True)
+
+
 if __name__ == '__main__':
-
-    test(strictio=False, fmode=dill.HANDLE_FMODE)
-    test(strictio=False, fmode=dill.FILE_FMODE)
-    if not dill.dill.IS_PYPY: #FIXME: fails due to pypy/issues/1233
-        test(strictio=False, fmode=dill.CONTENTS_FMODE)
-
-   #test(strictio=True, fmode=dill.HANDLE_FMODE)
-   #test(strictio=True, fmode=dill.FILE_FMODE)
-   #test(strictio=True, fmode=dill.CONTENTS_FMODE)
-
-if os.path.exists(fname):
-    os.remove(fname)
-
-# EOF
+    test_nostrictio_handlefmode()
+    test_nostrictio_filefmode()
+    test_nostrictio_contentsfmode()
