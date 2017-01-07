@@ -13,38 +13,33 @@ from pickle import PicklingError
 
 import inspect
 
-f = inspect.currentframe()
-assert baditems(f) == [f]
-#assert baditems(globals()) == [f] #XXX
-assert badobjects(f) is f
-assert badtypes(f) == type(f)
-assert type(errors(f)) is PicklingError if IS_PYPY else TypeError
-d = badtypes(f, 1)
-assert isinstance(d, dict)
-assert list(badobjects(f, 1).keys()) == list(d.keys())
-assert list(errors(f, 1).keys()) == list(d.keys())
-s = set([(err.__class__.__name__,err.args[0]) for err in list(errors(f, 1).values())])
-a = dict(s)
-assert len(s) is len(a) # TypeError (and possibly PicklingError)
-assert len(a) is 2 if 'PicklingError' in a.keys() else 1
+def test_bad_things():
+    f = inspect.currentframe()
+    assert baditems(f) == [f]
+    #assert baditems(globals()) == [f] #XXX
+    assert badobjects(f) is f
+    assert badtypes(f) == type(f)
+    assert type(errors(f)) is PicklingError if IS_PYPY else TypeError
+    d = badtypes(f, 1)
+    assert isinstance(d, dict)
+    assert list(badobjects(f, 1).keys()) == list(d.keys())
+    assert list(errors(f, 1).keys()) == list(d.keys())
+    s = set([(err.__class__.__name__,err.args[0]) for err in list(errors(f, 1).values())])
+    a = dict(s)
+    assert len(s) is len(a) # TypeError (and possibly PicklingError)
+    assert len(a) is 2 if 'PicklingError' in a.keys() else 1
 
-x = [4,5,6,7]
-listiter = iter(x)
-obj = parent(listiter, list)
-assert obj is x
+def test_parent():
+    x = [4,5,6,7]
+    listiter = iter(x)
+    obj = parent(listiter, list)
+    assert obj is x
 
-if IS_PYPY: assert parent(obj, int) is None
-else: assert parent(obj, int) is x[-1] # python oddly? finds last int
-assert at(id(at)) is at
+    if IS_PYPY: assert parent(obj, int) is None
+    else: assert parent(obj, int) is x[-1] # python oddly? finds last int
+    assert at(id(at)) is at
 
-def f():
-    a
-    def g():
-        b
-        def h():
-            c
 a, b, c = 1, 2, 3
-assert globalvars(f) == dict(a=1, b=2, c=3)
 
 def squared(x):
   return a+x**2
@@ -60,27 +55,36 @@ class _class:
     def ok(self):
         return True
 
-res = globalvars(foo, recurse=True)
-assert set(res) == set(['squared', 'a'])
-res = globalvars(foo, recurse=False)
-assert res == {}
-zap = foo(2)
-res = globalvars(zap, recurse=True)
-assert set(res) == set(['squared', 'a'])
-res = globalvars(zap, recurse=False)
-assert set(res) == set(['squared'])
-del zap
-res = globalvars(squared)
-assert set(res) == set(['a'])
-# FIXME: should find referenced __builtins__
-#res = globalvars(_class, recurse=True)
-#assert set(res) == set(['True'])
-#res = globalvars(_class, recurse=False)
-#assert res == {}
-#res = globalvars(_class.ok, recurse=True)
-#assert set(res) == set(['True'])
-#res = globalvars(_class.ok, recurse=False)
-#assert set(res) == set(['True'])
+def test_globals():
+    def f():
+        a
+        def g():
+            b
+            def h():
+                c
+    assert globalvars(f) == dict(a=1, b=2, c=3)
+
+    res = globalvars(foo, recurse=True)
+    assert set(res) == set(['squared', 'a'])
+    res = globalvars(foo, recurse=False)
+    assert res == {}
+    zap = foo(2)
+    res = globalvars(zap, recurse=True)
+    assert set(res) == set(['squared', 'a'])
+    res = globalvars(zap, recurse=False)
+    assert set(res) == set(['squared'])
+    del zap
+    res = globalvars(squared)
+    assert set(res) == set(['a'])
+    # FIXME: should find referenced __builtins__
+    #res = globalvars(_class, recurse=True)
+    #assert set(res) == set(['True'])
+    #res = globalvars(_class, recurse=False)
+    #assert res == {}
+    #res = globalvars(_class.ok, recurse=True)
+    #assert set(res) == set(['True'])
+    #res = globalvars(_class.ok, recurse=False)
+    #assert set(res) == set(['True'])
 
 
 #98 dill ignores __getstate__ in interactive lambdas
@@ -96,24 +100,39 @@ class Foo(object):
         pass
 
 f = Foo()
-from dill import dumps, loads
-dumps(f)
-dumps(lambda: f, recurse=False) # doesn't call __getstate__
-dumps(lambda: f, recurse=True) # calls __getstate__
-assert bar[0] == 2
 
+def test_getstate():
+    from dill import dumps, loads
+    dumps(f)
+    b = bar[0]
+    dumps(lambda: f, recurse=False) # doesn't call __getstate__
+    assert bar[0] == b
+    dumps(lambda: f, recurse=True) # calls __getstate__
+    assert bar[0] == b + 1
 
 #97 serialize lambdas in test files
-from math import sin, pi
-def sinc(x):
-    return sin(x)/x
+def test_deleted():
+    from dill import dumps, loads
+    from math import sin, pi
+    global sin
 
-settings['recurse'] = True
-_sinc = dumps(sinc)
-del sin
-sinc_ = loads(_sinc) # no NameError... pickling preserves 'sin'
-res = sinc_(1)
-from math import sin
-assert sinc(1) == res
+    def sinc(x):
+        return sin(x)/x
+
+    settings['recurse'] = True
+    _sinc = dumps(sinc)
+    sin = globals().pop('sin')
+    sin = 1
+    del sin
+    sinc_ = loads(_sinc) # no NameError... pickling preserves 'sin'
+    res = sinc_(1)
+    from math import sin
+    assert sinc(1) == res
 
 
+if __name__ == '__main__':
+    test_bad_things()
+    test_parent()
+    test_globals()
+    test_getstate()
+    test_deleted()
