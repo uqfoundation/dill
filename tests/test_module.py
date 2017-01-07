@@ -27,8 +27,9 @@ del sys.modules[module.__name__]
 del module
 
 module = dill.loads(pik_mod)
-assert hasattr(module, "a") and module.a == 1234
-assert module.double_add(1, 2, 3) == 2 * module.fx
+def test_attributes():
+    assert hasattr(module, "a") and module.a == 1234
+    assert module.double_add(1, 2, 3) == 2 * module.fx
 
 # Restart, and test use_diff
 
@@ -48,11 +49,13 @@ try:
     del module
 
     module = dill.loads(pik_mod)
-    assert hasattr(module, "a") and module.a == 1234
-    assert module.double_add(1, 2, 3) == 2 * module.fx
+    def test_diff_attributes():
+        assert hasattr(module, "a") and module.a == 1234
+        assert module.double_add(1, 2, 3) == 2 * module.fx
 
 except AttributeError:
-    pass
+    def test_diff_attributes():
+        pass
 
 # clean up
 import os
@@ -69,8 +72,13 @@ def get_lambda(str, **kwarg):
     return eval(str, kwarg, None)
 
 obj = get_lambda('lambda x: math.exp(x)', math=math)
-assert obj.__module__ is None
-assert dill.copy(obj)(3) == obj(3)
+
+def test_module_is_none():
+    assert obj.__module__ is None
+    assert dill.copy(obj)(3) == obj(3)
 
 
-# EOF
+if __name__ == '__main__':
+    test_attributes()
+    test_diff_attributes()
+    test_module_is_none()

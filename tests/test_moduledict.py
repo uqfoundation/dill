@@ -18,7 +18,8 @@ def f(func):
 def f2(): pass
 
 # check when __main__ and on import
-assert dill.pickles(f2)
+def test_decorated():
+  assert dill.pickles(f2)
 
 
 import doctest
@@ -32,7 +33,8 @@ class SomeUnreferencedUnpicklableClass(object):
 unpicklable = SomeUnreferencedUnpicklableClass()
 
 # This works fine outside of Doctest:
-serialized = dill.dumps(lambda x: x)
+def test_normal():
+    serialized = dill.dumps(lambda x: x)
 
 # should not try to pickle unpicklable object in __globals__
 def tests():
@@ -42,4 +44,11 @@ def tests():
     return
 
 #print("\n\nRunning Doctest:")
-doctest.testmod()
+def test_doctest():
+    doctest.testmod()
+
+
+if __name__ is '__main__':
+    test_decorated()
+    test_normal()
+    test_doctest()
