@@ -93,7 +93,10 @@ if hex(sys.hexversion) >= '0x20600f0':
     Z = namedtuple("Z", ['a','b'])
     Zi = Z(0,1)
     X = namedtuple("Y", ['a','b'])
-    X.__name__ = "X" #XXX: name must 'match' or fails to pickle
+    if dill.dill.PY3:
+        X.__qualname__ = "X" #XXX: name must 'match' or fails to pickle
+    else:
+        X.__name__ = "X"
     Xi = X(0,1)
 else:
     Z = Zi = X = Xi = None
