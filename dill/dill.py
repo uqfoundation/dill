@@ -151,9 +151,11 @@ if sys.hexversion >= 0x20500f0:
 if IS_PYPY:
     WrapperDescriptorType = MethodType
     MethodDescriptorType = FunctionType
+    ClassMethodDescriptorType = FunctionType
 else:
     WrapperDescriptorType = type(type.__repr__)
     MethodDescriptorType = type(type.__dict__['mro'])
+    ClassMethodDescriptorType = type(type.__dict__['__prepare__' if PY3 else 'mro'])
 
 MethodWrapperType = type([].__repr__)
 PartialType = type(partial(int,base=2))
@@ -506,6 +508,7 @@ if InputType:
 if not IS_PYPY:
     _reverse_typemap['WrapperDescriptorType'] = WrapperDescriptorType
     _reverse_typemap['MethodDescriptorType'] = MethodDescriptorType
+    _reverse_typemap['ClassMethodDescriptorType'] = ClassMethodDescriptorType
 else:
     _reverse_typemap['MemberDescriptorType'] = MemberDescriptorType
 if PY3:
@@ -527,7 +530,7 @@ def _create_function(fcode, fglobals, fname=None, fdefaults=None, \
     # same as FunctionType, but enable passing __dict__ to new function,
     # __dict__ is the storehouse for attributes added after function creation
     if fdict is None: fdict = dict()
-    func = FunctionType(fcode, fglobals, fname, fdefaults, fclosure)
+    func = FunctionType(fcode, fglobals or dict(), fname, fdefaults, fclosure)
     func.__dict__.update(fdict) #XXX: better copy? option to copy?
     return func
 
@@ -719,9 +722,10 @@ def _getattr(objclass, name, repr_str):
         attr = repr_str.split("'")[3]
         return eval(attr+'.__dict__["'+name+'"]')
     except:
-        attr = getattr(objclass,name)
-        if name == '__dict__':
-            attr = attr[name]
+        if name in ('__dict__','__weakref__','__prepare__'):
+            attr = getattr(objclass,'__dict__')[name]
+        else:
+            attr = getattr(objclass,name)
         return attr
 
 def _get_attr(self, name):
@@ -732,6 +736,7 @@ def _dict_from_dictproxy(dictproxy):
     _dict = dictproxy.copy() # convert dictproxy to dict
     _dict.pop('__dict__', None)
     _dict.pop('__weakref__', None)
+    _dict.pop('__prepare__', None)
     return _dict
 
 def _import_module(import_name, safe=False):
@@ -995,6 +1000,7 @@ if sys.hexversion >= 0x20500f0:
         @register(GetSetDescriptorType)
         @register(MethodDescriptorType)
         @register(WrapperDescriptorType)
+        @register(ClassMethodDescriptorType)
         def save_wrapper_descriptor(pickler, obj):
             log.info("Wr: %s" % obj)
             pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,

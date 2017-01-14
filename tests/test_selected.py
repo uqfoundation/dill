@@ -17,6 +17,9 @@ verbose = False
 def test_dict_contents():
   c = type.__dict__
   for i in c.values():
+    if dill.dill.IS_PYPY and type(i) is type(type.__dict__['__dict__']):
+        print("SKIPPED: %s" % i) #FIXME: if verbose
+        continue #NOTE: __objclass__ attribute is missing (pypy bug)
     ok = dill.pickles(i)
     if verbose: print ("%s: %s, %s" % (ok, type(i), i))
     assert ok
@@ -73,12 +76,13 @@ def test_frame_related():
   g = _g(1)
   f = g.gi_frame
   e,t = _f()
+  _is = lambda ok: not ok if dill.dill.IS_PYPY else ok
   ok = dill.pickles(f)
   if verbose: print ("%s: %s, %s" % (ok, type(f), f))
-  assert not ok #XXX: dill fails
+  assert _is(not ok) #XXX: dill fails
   ok = dill.pickles(g)
   if verbose: print ("%s: %s, %s" % (ok, type(g), g))
-  assert not ok #XXX: dill fails
+  assert _is(not ok) #XXX: dill fails
   ok = dill.pickles(t)
   if verbose: print ("%s: %s, %s" % (ok, type(t), t))
   assert not ok #XXX: dill fails
@@ -89,7 +93,7 @@ def test_frame_related():
 
 
 if __name__ == '__main__':
- #test_dict_contents()
+  test_frame_related()
+  test_dict_contents() #FIXME: fails py36, pypy
   test_class()
   test_class_descriptors()
-  test_frame_related()

@@ -27,7 +27,8 @@ def test_bad_things():
     s = set([(err.__class__.__name__,err.args[0]) for err in list(errors(f, 1).values())])
     a = dict(s)
     assert len(s) is len(a) # TypeError (and possibly PicklingError)
-    assert len(a) is 2 if 'PicklingError' in a.keys() else 1
+    n = 1 if IS_PYPY else 2
+    assert len(a) is n if 'PicklingError' in a.keys() else n-1
 
 def test_parent():
     x = [4,5,6,7]

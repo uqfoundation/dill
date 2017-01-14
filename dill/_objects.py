@@ -297,6 +297,7 @@ if not IS_PYPY:
     d['MethodDescriptorType'] = type.__dict__['mro']
     d['WrapperDescriptorType'] = type.__repr__
     a['WrapperDescriptorType2'] = type.__dict__['__module__']
+    d['ClassMethodDescriptorType'] = type.__dict__['__prepare__' if PY3 else 'mro']
 # built-in functions (CH 2)
 if PY3 or IS_PYPY: 
     _methodwrap = (1).__lt__
