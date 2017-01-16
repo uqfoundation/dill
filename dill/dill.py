@@ -722,9 +722,13 @@ def _getattr(objclass, name, repr_str):
         attr = repr_str.split("'")[3]
         return eval(attr+'.__dict__["'+name+'"]')
     except:
-        if name in ('__dict__','__weakref__','__prepare__'):
-            attr = getattr(objclass,'__dict__')[name]
-        else:
+        try:
+            attr = objclass.__dict__
+            if type(attr) is DictProxyType:
+                attr = attr[name]
+            else:
+                attr = getattr(objclass,name)
+        except:
             attr = getattr(objclass,name)
         return attr
 
