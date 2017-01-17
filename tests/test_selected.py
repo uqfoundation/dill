@@ -16,12 +16,12 @@ verbose = False
 
 def test_dict_contents():
   c = type.__dict__
-  for i in c.values():
-    if dill.dill.IS_PYPY and type(i) is type(type.__dict__['__dict__']):
-        print("SKIPPED: %s" % i) #FIXME: if verbose
-        continue #NOTE: __objclass__ attribute is missing (pypy bug)
-    ok = dill.pickles(i)
-    if verbose: print ("%s: %s, %s" % (ok, type(i), i))
+  for i,j in c.items():
+   #try:
+    ok = dill.pickles(j)
+   #except:
+   #  print ("FAIL: %s with %s" % (i, dill.detect.errors(j)))
+    if verbose: print ("%s: %s, %s" % (ok, type(j), j))
     assert ok
   if verbose: print ("")
 

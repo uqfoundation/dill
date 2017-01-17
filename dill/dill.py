@@ -1016,7 +1016,9 @@ if sys.hexversion >= 0x20500f0:
         @register(GetSetDescriptorType)
         def save_wrapper_descriptor(pickler, obj):
             log.info("Wr: %s" % obj)
-            pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
+            name = obj.__name__ #XXX: workaround pypy "bug"
+            name = '__doc__' if name == '<generic property>' else name
+            pickler.save_reduce(_getattr, (obj.__objclass__, name,
                                            obj.__repr__()), obj=obj)
             log.info("# Wr")
             return
