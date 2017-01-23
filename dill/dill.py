@@ -264,7 +264,8 @@ def load(file):
     pik = Unpickler(file)
     pik._main = _main_module
     obj = pik.load()
-    if type(obj).__module__ == _main_module.__name__: # point obj class to main
+    if type(obj).__module__ == getattr(_main_module, '__name__', None):
+        # point obj class to main
         try: obj.__class__ == getattr(pik._main, type(obj).__name__)
         except AttributeError: pass # defined in a file
    #_main_module.__dict__.update(obj.__dict__) #XXX: should update globals ?
