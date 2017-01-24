@@ -717,6 +717,18 @@ def _create_array(f, args, state, npdict=None):
         array.__dict__.update(npdict)
     return array
 
+def _create_namedtuple(name, fieldnames, modulename):
+    mod = _import_module(modulename, safe=True)
+    if mod is not None:
+        try:
+            return getattr(mod, name)
+        except:
+            pass
+    import collections
+    t = collections.namedtuple(name, fieldnames)
+    t.__module__ = modulename
+    return t
+
 def _getattr(objclass, name, repr_str):
     # hack to grab the reference directly
     try: #XXX: works only for __builtin__ ?
@@ -1087,7 +1099,7 @@ def _proxy_helper(obj): # a dead proxy returns a reference to None
         return id(None)
     if _str == _repr: return id(obj) # it's a repr
     try: # either way, it's a proxy from here
-        address = int(_str.rstrip('>').split(' at ')[-1], base=16)   
+        address = int(_str.rstrip('>').split(' at ')[-1], base=16)
     except ValueError: # special case: proxy of a 'type'
         if not IS_PYPY:
             address = int(_repr.rstrip('>').split(' at ')[-1], base=16)
@@ -1198,15 +1210,13 @@ def save_type(pickler, obj):
         log.info("T1: %s" % obj)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
         log.info("# T1")
+    elif issubclass(obj, tuple) and all([hasattr(obj, attr) for attr in ('_fields','_asdict','_make','_replace')]):
+        # special case: namedtuples
+        log.info("T6: %s" % obj)
+        pickler.save_reduce(_create_namedtuple, (getattr(obj, "__qualname__", obj.__name__), obj._fields, obj.__module__), obj=obj)
+        log.info("# T6")
+        return
     elif obj.__module__ == '__main__':
-        try: # use StockPickler for special cases [namedtuple,]
-            [getattr(obj, attr) for attr in ('_fields','_asdict',
-                                             '_make','_replace')]
-            log.info("T6: %s" % obj)
-            StockPickler.save_global(pickler, obj)
-            log.info("# T6")
-            return
-        except AttributeError: pass
         if issubclass(type(obj), type):
         #   try: # used when pickling the class as code (or the interpreter)
             if is_dill(pickler) and not pickler._byref:
