@@ -291,7 +291,7 @@ if has_setuptools:
 
 # add the scripts, and close 'setup' call
 setup_code += """    
-      scripts=['scripts/unpickle','scripts/get_objgraph'])
+      scripts=['scripts/dill_unpickle.py','scripts/get_objgraph.py'])
 """
 
 # exec the 'setup' code
