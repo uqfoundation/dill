@@ -21,8 +21,8 @@ dill.egg-info/dependency_links.txt
 dill.egg-info/not-zip-safe
 dill.egg-info/requires.txt
 dill.egg-info/top_level.txt
-scripts/get_objgraph.py
-scripts/unpickle.py
+scripts/get_objgraph
+scripts/unpickle
 tests/dill_bugs.py
 tests/test_check.py
 tests/test_classdef.py
