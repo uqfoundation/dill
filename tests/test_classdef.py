@@ -93,20 +93,24 @@ if hex(sys.hexversion) >= '0x20600f0':
     Z = namedtuple("Z", ['a','b'])
     Zi = Z(0,1)
     X = namedtuple("Y", ['a','b'])
-    if hex(sys.hexversion) >= '0x30500f0':
+    X.__name__ = "X"
+    if hex(sys.hexversion) >= '0x30300f0':
         X.__qualname__ = "X" #XXX: name must 'match' or fails to pickle
-    else:
-        X.__name__ = "X"
     Xi = X(0,1)
+    Bad = namedtuple("FakeName", ['a','b'])
+    Badi = Bad(0,1)
 else:
-    Z = Zi = X = Xi = None
+    Z = Zi = X = Xi = Bad = Badi = None
 
 # test namedtuple
 def test_namedtuple():
-    assert Z == dill.loads(dill.dumps(Z))
+    assert Z is dill.loads(dill.dumps(Z))
     assert Zi == dill.loads(dill.dumps(Zi))
-    assert X == dill.loads(dill.dumps(X))
+    assert X is dill.loads(dill.dumps(X))
     assert Xi == dill.loads(dill.dumps(Xi))
+    assert Bad is not dill.loads(dill.dumps(Bad))
+    assert Bad._fields == dill.loads(dill.dumps(Bad))._fields
+    assert tuple(Badi) == tuple(dill.loads(dill.dumps(Badi)))
 
 def test_array_subclass():
     try:
@@ -115,7 +119,7 @@ def test_array_subclass():
         class TestArray(np.ndarray):
             def __new__(cls, input_array, color):
                 obj = np.asarray(input_array).view(cls)
-                obj.color = color 
+                obj.color = color
                 return obj
             def __array_finalize__(self, obj):
                 if obj is None:
