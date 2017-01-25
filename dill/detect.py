@@ -194,7 +194,7 @@ def globalvars(func, recurse=True, builtin=False):
         func_closure = 'func_closure'
     if ismethod(func): func = getattr(func, im_func)
     if isfunction(func):
-        globs = vars(getmodule(sum)) if builtin else {}
+        globs = vars(getmodule(sum)).copy() if builtin else {}
         # get references from within closure
         orig_func, func = func, set()
         for obj in getattr(orig_func, func_closure) or {}:
@@ -216,7 +216,7 @@ def globalvars(func, recurse=True, builtin=False):
                     continue  #XXX: globalvars(func, False)?
                 func.update(globalvars(nested_func, True, builtin))
     elif iscode(func):
-        globs = vars(getmodule(sum)) if builtin else {}
+        globs = vars(getmodule(sum)).copy() if builtin else {}
        #globs.update(globals())
         if not recurse:
             func = func.co_names # get names

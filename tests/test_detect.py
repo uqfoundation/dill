@@ -131,9 +131,26 @@ def test_deleted():
     assert sinc(1) == res
 
 
+def test_lambdify():
+    try:
+        from sympy import symbols, lambdify
+    except ImportError:
+        return
+    settings['recurse'] = True
+    x = symbols("x")
+    y = x**2
+    f = lambdify([x], y)
+    z = min
+    d = globals()
+    globalvars(f, recurse=True, builtin=True)
+    assert z is min 
+    assert d is globals() 
+
+
 if __name__ == '__main__':
     test_bad_things()
     test_parent()
     test_globals()
     test_getstate()
     test_deleted()
+    test_lambdify()
