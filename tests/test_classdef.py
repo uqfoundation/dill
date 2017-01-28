@@ -112,6 +112,18 @@ def test_namedtuple():
     assert Bad._fields == dill.loads(dill.dumps(Bad))._fields
     assert tuple(Badi) == tuple(dill.loads(dill.dumps(Badi)))
 
+def test_array_nested():
+    try:
+        import numpy as np
+    
+        x = np.array([1])
+        y = (x,)
+        dill.dumps(x)
+        assert y == dill.loads(dill.dumps(y))
+
+    except ImportError: pass
+
+
 def test_array_subclass():
     try:
         import numpy as np
@@ -181,6 +193,7 @@ if __name__ == '__main__':
     test_class_objects()
     test_none()
     test_namedtuple()
+    test_array_nested()
     test_array_subclass()
     test_method_decorator()
     test_slots()

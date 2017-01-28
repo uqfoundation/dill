@@ -245,7 +245,7 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None):#, stri
             log.info("Nu: (%s, %s)" % (obj.shape,obj.dtype))
             npdict = getattr(obj, '__dict__', None)
             f, args, state = obj.__reduce__()
-            pik.save_reduce(_create_array, (f, args, state, npdict), obj=obj)
+            pickler.save_reduce(_create_array, (f,args,state,npdict), obj=obj)
             log.info("# Nu")
             return
     # end hack
