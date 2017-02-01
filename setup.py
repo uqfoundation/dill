@@ -10,7 +10,7 @@ from __future__ import with_statement, absolute_import
 import os
 
 # set version numbers
-stable_version = '0.2.5'
+stable_version = '0.2.6'
 target_version = '0.2.6'
 is_release = stable_version == target_version
 
@@ -172,7 +172,7 @@ Requirements
 
 `dill` requires::
 
-    - python2, version >= 2.5  *or*  python3, version >= 3.1
+    - python2, version >= 2.5  *or*  python3, version >= 3.1  *or*  pypy
     - pyreadline, version >= 1.7.1  (on windows)
 
 Optional requirements::
