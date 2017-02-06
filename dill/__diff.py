@@ -102,6 +102,8 @@ def memorise(obj, force=False):
         seq_id = None
     elif hasattr(s, "items"):
         seq_id = dict((id_(key),id_(value)) for key, value in s.items())
+    elif not hasattr(s, "__len__"): #XXX: avoid TypeError from unexpected case
+        seq_id = None
     else:
         seq_id = [id_(i) for i in s]
 

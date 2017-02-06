@@ -94,6 +94,6 @@ def test_frame_related():
 
 if __name__ == '__main__':
   test_frame_related()
-  test_dict_contents() #FIXME: fails py36, pypy
+  test_dict_contents()
   test_class()
   test_class_descriptors()

@@ -1300,31 +1300,35 @@ def save_function(pickler, obj):
             globs = obj.__globals__ if PY3 else obj.func_globals
         _byref = getattr(pickler, '_byref', None)
         _recurse = getattr(pickler, '_recurse', None)
-        _memo = id(obj) in stack and _recurse is not None
-        stack.add(id(obj))
-        if _memo:
-            pickler._recurse = False
+        _memo = not IS_PYPY and id(obj) in stack and _recurse is not None
+        if not IS_PYPY: stack.add(id(obj))
         if PY3:
             #NOTE: workaround for 'super' (see issue #75)
-            _super = 'super' in obj.__code__.co_names and _byref is not None
+            _super = not IS_PYPY and 'super' in obj.__code__.co_names and _byref is not None
             if _super or _memo:
-                pickler._byref = True
+                if _super is not None: pickler._byref = True
+                if _memo is not None: pickler._recurse = False
             pickler.save_reduce(_create_function, (obj.__code__,
                                 globs, obj.__name__,
                                 obj.__defaults__, obj.__closure__,
                                 obj.__dict__), obj=obj)
         else:
-            _super = 'super' in obj.func_code.co_names and _byref is not None and getattr(pickler, '_recurse', False)
+            _super = not IS_PYPY and 'super' in obj.func_code.co_names and _byref is not None and getattr(pickler, '_recurse', False)
             if _super or _memo:
-                pickler._byref = True
+                if _super is not None: pickler._byref = True
+                if _memo is not None: pickler._recurse = False
             pickler.save_reduce(_create_function, (obj.func_code,
                                 globs, obj.func_name,
                                 obj.func_defaults, obj.func_closure,
                                 obj.__dict__), obj=obj)
         if _super or _memo:
-            pickler._byref = _byref
-        if _memo:
-            pickler._recurse = _recurse
+            if _super is not None: pickler._byref = _byref
+            if _memo is not None: pickler._recurse = _recurse
+        if not IS_PYPY: pickler.clear_memo()
+       #if _memo:
+       #    stack.remove(id(obj))
+       #   #pickler.clear_memo()
+       #   #StockPickler.clear_memo(pickler)
         log.info("# F1")
     else:
         log.info("F2: %s" % obj)
