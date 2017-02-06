@@ -844,7 +844,7 @@ def save_module_dict(pickler, obj):
 
 @register(ClassType)
 def save_classobj(pickler, obj): #FIXME: enable pickler._byref
-   #stack.add(obj)
+   #stack.add(id(obj))
     if obj.__module__ == '__main__': #XXX: use _main_module.__name__ everywhere?
         log.info("C1: %s" % obj)
         pickler.save_reduce(ClassType, (obj.__name__, obj.__bases__,
@@ -1205,7 +1205,7 @@ def save_module(pickler, obj):
 
 @register(TypeType)
 def save_type(pickler, obj):
-   #stack.add(obj) #XXX: probably don't need object from all cases below
+   #stack.add(id(obj)) #XXX: probably don't need object from all cases below
     if obj in _typemap:
         log.info("T1: %s" % obj)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
@@ -1291,24 +1291,40 @@ def save_function(pickler, obj):
             # remove objects that have already been serialized
            #stacktypes = (ClassType, TypeType, FunctionType)
            #for key,value in list(globs.items()):
-           #    if isinstance(value, stacktypes) and value in stack:
+           #    if isinstance(value, stacktypes) and id(value) in stack:
            #        del globs[key]
             # ABORT: if self-references, use _recurse=False
-            if obj in globs.values(): # or obj in stack:
+            if obj in globs.values(): # or id(obj) in stack:
                 globs = obj.__globals__ if PY3 else obj.func_globals
         else:
             globs = obj.__globals__ if PY3 else obj.func_globals
-       #stack.add(obj)
+        _byref = getattr(pickler, '_byref', None)
+        _recurse = getattr(pickler, '_recurse', None)
+        _memo = id(obj) in stack and _recurse is not None
+        stack.add(id(obj))
+        if _memo:
+            pickler._recurse = False
         if PY3:
+            #NOTE: workaround for 'super' (see issue #75)
+            _super = 'super' in obj.__code__.co_names and _byref is not None
+            if _super or _memo:
+                pickler._byref = True
             pickler.save_reduce(_create_function, (obj.__code__,
                                 globs, obj.__name__,
                                 obj.__defaults__, obj.__closure__,
                                 obj.__dict__), obj=obj)
         else:
+            _super = 'super' in obj.func_code.co_names and _byref is not None and getattr(pickler, '_recurse', False)
+            if _super or _memo:
+                pickler._byref = True
             pickler.save_reduce(_create_function, (obj.func_code,
                                 globs, obj.func_name,
                                 obj.func_defaults, obj.func_closure,
                                 obj.__dict__), obj=obj)
+        if _super or _memo:
+            pickler._byref = _byref
+        if _memo:
+            pickler._recurse = _recurse
         log.info("# F1")
     else:
         log.info("F2: %s" % obj)
