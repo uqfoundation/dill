@@ -39,7 +39,7 @@ PY3 = (sys.hexversion >= 0x30000f0)
 if PY3: #XXX: get types from .objtypes ?
     import builtins as __builtin__
     from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
-    from _thread import LockType
+    from _thread import LockType, RLock as RLockType
    #from io import IOBase
     from types import CodeType, FunctionType, MethodType, GeneratorType, \
         TracebackType, FrameType, ModuleType, BuiltinMethodType
@@ -56,6 +56,7 @@ else:
     import __builtin__
     from pickle import Pickler as StockPickler, Unpickler as StockUnpickler
     from thread import LockType
+    from threading import _RLock as RLockType
     from types import CodeType, FunctionType, ClassType, MethodType, \
          GeneratorType, DictProxyType, XRangeType, SliceType, TracebackType, \
          NotImplementedType, EllipsisType, FrameType, ModuleType, \
@@ -542,12 +543,20 @@ def _create_ftype(ftypeobj, func, args, kwds):
         args = ()
     return ftypeobj(func, *args, **kwds)
 
-def _create_lock(locked, *args):
+def _create_lock(locked, *args): #XXX: ignores 'blocking'
     from threading import Lock
     lock = Lock()
     if locked:
         if not lock.acquire(False):
             raise UnpicklingError("Cannot acquire lock")
+    return lock
+
+def _create_rlock(count, owner, *args): #XXX: ignores 'blocking'
+    lock = RLockType()
+    if owner is not None:
+        lock._acquire_restore((count, owner))
+    if owner and not lock._is_owned(): 
+        raise UnpicklingError("Cannot acquire lock")
     return lock
 
 # thanks to matsjoyce for adding all the different file modes
@@ -864,6 +873,16 @@ def save_lock(pickler, obj):
     log.info("# Lo")
     return
 
+@register(RLockType)
+def save_rlock(pickler, obj):
+    log.info("RL: %s" % obj)
+    r = obj.__repr__() # don't use _release_save as it unlocks the lock
+    count = int(r.split('count=')[1].split()[0].rstrip('>'))
+    owner = int(r.split('owner=')[1].split()[0]) if PY3 else getattr(obj, '_RLock__owner')
+    pickler.save_reduce(_create_rlock, (count,owner,), obj=obj)
+    log.info("# RL")
+    return
+
 @register(ItemGetterType)
 def save_itemgetter(pickler, obj):
     log.info("Ig: %s" % obj)
@@ -1054,7 +1073,8 @@ elif not IS_PYPY:
 @register(CellType)
 def save_cell(pickler, obj):
     log.info("Ce: %s" % obj)
-    pickler.save_reduce(_create_cell, (obj.cell_contents,), obj=obj)
+    f = obj.cell_contents
+    pickler.save_reduce(_create_cell, (f,), obj=obj)
     log.info("# Ce")
     return
 
@@ -1301,6 +1321,7 @@ def save_function(pickler, obj):
         _byref = getattr(pickler, '_byref', None)
         _recurse = getattr(pickler, '_recurse', None)
         _memo = not IS_PYPY and id(obj) in stack and _recurse is not None
+        #print("stack: %s + '%s'" % (set(hex(i) for i in stack),hex(id(obj))))
         if not IS_PYPY: stack.add(id(obj))
         if PY3:
             #NOTE: workaround for 'super' (see issue #75)
