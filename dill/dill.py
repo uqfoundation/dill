@@ -339,8 +339,7 @@ def dump_session(filename='/tmp/session.pkl', main=None, byref=False):
     from .settings import settings
     protocol = settings['protocol']
     if main is None: main = _main_module
-    f = open(filename, 'wb')
-    try:
+    with open(filename, 'wb') as f:
         if byref:
             main = _stash_modules(main)
         pickler = Pickler(f, protocol)
@@ -349,15 +348,12 @@ def dump_session(filename='/tmp/session.pkl', main=None, byref=False):
         pickler._recurse = False # disable pickling recursion for globals
         pickler._session = True  # is best indicator of when pickling a session
         pickler.dump(main)
-    finally:
-        f.close()
     return
 
 def load_session(filename='/tmp/session.pkl', main=None):
     """update the __main__ module with the state from the session file"""
     if main is None: main = _main_module
-    f = open(filename, 'rb')
-    try:
+    with open(filename, 'rb') as f:
         unpickler = Unpickler(f)
         unpickler._main = main
         unpickler._session = True
@@ -365,8 +361,6 @@ def load_session(filename='/tmp/session.pkl', main=None):
         unpickler._session = False
         main.__dict__.update(module.__dict__)
         _restore_modules(main)
-    finally:
-        f.close()
     return
 
 ### End: Pickle the Interpreter
