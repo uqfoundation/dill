@@ -163,17 +163,25 @@ PartialType = type(partial(int,base=2))
 SuperType = type(super(Exception, TypeError()))
 ItemGetterType = type(itemgetter(0))
 AttrGetterType = type(attrgetter('__repr__'))
-FileType = type(open(os.devnull, 'rb', buffering=0))
-TextWrapperType = type(open(os.devnull, 'r', buffering=-1))
-BufferedRandomType = type(open(os.devnull, 'r+b', buffering=-1))
-BufferedReaderType = type(open(os.devnull, 'rb', buffering=-1))
-BufferedWriterType = type(open(os.devnull, 'wb', buffering=-1))
+
+def get_file_type(*args, **kwargs):
+    open = kwargs.pop("open", __builtin__.open)
+    f = open(os.devnull, *args, **kwargs)
+    t = type(f)
+    f.close()
+    return t
+
+FileType = get_file_type('rb', buffering=0)
+TextWrapperType = get_file_type('r', buffering=-1)
+BufferedRandomType = get_file_type('r+b', buffering=-1)
+BufferedReaderType = get_file_type('rb', buffering=-1)
+BufferedWriterType = get_file_type('wb', buffering=-1)
 try:
     from _pyio import open as _open
-    PyTextWrapperType = type(_open(os.devnull, 'r', buffering=-1))
-    PyBufferedRandomType = type(_open(os.devnull, 'r+b', buffering=-1))
-    PyBufferedReaderType = type(_open(os.devnull, 'rb', buffering=-1))
-    PyBufferedWriterType = type(_open(os.devnull, 'wb', buffering=-1))
+    PyTextWrapperType = get_file_type('r', buffering=-1, open=_open)
+    PyBufferedRandomType = get_file_type('r+b', buffering=-1, open=_open)
+    PyBufferedReaderType = get_file_type('rb', buffering=-1, open=_open)
+    PyBufferedWriterType = get_file_type('wb', buffering=-1, open=_open)
 except ImportError:
     PyTextWrapperType = PyBufferedRandomType = PyBufferedReaderType = PyBufferedWriterType = None
 try:
@@ -555,7 +563,7 @@ def _create_rlock(count, owner, *args): #XXX: ignores 'blocking'
     lock = RLockType()
     if owner is not None:
         lock._acquire_restore((count, owner))
-    if owner and not lock._is_owned(): 
+    if owner and not lock._is_owned():
         raise UnpicklingError("Cannot acquire lock")
     return lock
 
