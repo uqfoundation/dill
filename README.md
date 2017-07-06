@@ -21,7 +21,7 @@ session.
 `dill` can be used to store python objects to a file, but the primary
 usage is to send python objects across the network as a byte stream.
 `dill` is quite flexible, and allows arbitrary user defined classes
-and funcitons to be serialized.  Thus `dill` is not intended to be
+and functions to be serialized.  Thus `dill` is not intended to be
 secure against erroneously or maliciously constructed data. It is
 left to the user to decide whether the data they unpickle is from
 a trustworthy source.
