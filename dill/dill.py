@@ -39,7 +39,11 @@ PY3 = (sys.hexversion >= 0x30000f0)
 if PY3: #XXX: get types from .objtypes ?
     import builtins as __builtin__
     from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
-    from _thread import LockType, RLock as RLockType
+    from _thread import LockType
+    if (sys.hexversion >= 0x30200f0):
+        from _thread import RLock as RLockType
+    else:
+        from threading import _RLock as RLockType
    #from io import IOBase
     from types import CodeType, FunctionType, MethodType, GeneratorType, \
         TracebackType, FrameType, ModuleType, BuiltinMethodType
@@ -76,6 +80,9 @@ from operator import itemgetter, attrgetter
 # new in python3.3
 if sys.hexversion < 0x03030000:
     FileNotFoundError = IOError
+if PY3 and sys.hexversion < 0x03040000:
+    GENERATOR_FAIL = True
+else: GENERATOR_FAIL = False    
 try:
     import ctypes
     HAS_CTYPES = True
@@ -258,7 +265,11 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None):#, stri
             log.info("# Nu")
             return
     # end hack
-    pik.dump(obj)
+    if GENERATOR_FAIL and type(obj) == GeneratorType:
+        msg = "Can't pickle %s: attribute lookup builtins.generator failed" % GeneratorType
+        raise PicklingError(msg)
+    else:
+        pik.dump(obj)
     stack.clear()  # clear record of 'recursion-sensitive' pickled objects
     return
 
