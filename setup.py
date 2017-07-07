@@ -10,7 +10,7 @@ from __future__ import with_statement, absolute_import
 import os
 
 # set version numbers
-stable_version = '0.2.6'
+stable_version = '0.2.7'
 target_version = '0.2.7'
 is_release = stable_version == target_version
 
@@ -250,9 +250,7 @@ setup(name='dill',
       description='serialize all of python',
       long_description = '''%s''',
       author = 'Mike McKerns',
-      author_email = 'mmckerns at uqfoundation dot org',
       maintainer = 'Mike McKerns',
-      maintainer_email = 'mmckerns at uqfoundation dot org',
       license = '3-clause BSD',
       platforms = ['Linux', 'Windows', 'Mac'],
       url = 'http://www.cacr.caltech.edu/~mmckerns/dill.htm',
