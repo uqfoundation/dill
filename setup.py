@@ -11,7 +11,7 @@ import os
 
 # set version numbers
 stable_version = '0.2.7'
-target_version = '0.2.7'
+target_version = '0.2.8'
 is_release = stable_version == target_version
 
 # check if easy_install is available
@@ -154,7 +154,7 @@ Installation
 download the tarball, unzip, and run the installer::
 
     [download]
-    $ tar -xvzf dill-%(thisver)s.tgz
+    $ tar -xvzf dill-%(thisver)s.tar.gz
     $ cd dill-%(thisver)s
     $ python setup py build
     $ python setup py install
