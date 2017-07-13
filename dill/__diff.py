@@ -118,7 +118,9 @@ def memorise(obj, force=False):
             [(mem(key), mem(item))
              for key, item in s.items()]
         else:
-            [mem(item) for item in s]
+            if hasattr(s, '__len__'):
+                [mem(item) for item in s]
+            else: mem(s)
 
 
 def release_gone():
@@ -182,9 +184,9 @@ def whats_changed(obj, seen=None, simple=False, first=True):
     # compare sequence
     items = get_seq(obj)
     seq_diff = False
-    if items is not None:
+    if (items is not None) and (hasattr(items, '__len__')):
         obj_seq = memo[obj_id][1]
-        if len(items) != len(obj_seq):
+        if (len(items) != len(obj_seq)):
             seq_diff = True
         elif hasattr(obj, "items"):  # dict type obj
             obj_get = obj_seq.get

@@ -36,6 +36,7 @@ import sys
 diff = None
 _use_diff = False
 PY3 = (sys.hexversion >= 0x30000f0)
+OLDER = (PY3 and sys.hexversion < 0x30400f0) or (sys.hexversion < 0x20700f0)
 if PY3: #XXX: get types from .objtypes ?
     import builtins as __builtin__
     from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
@@ -845,7 +846,7 @@ def save_module_dict(pickler, obj):
         else:
             pickler.write('c__builtin__\n__main__\n')
         log.info("# D1")
-    elif not is_dill(pickler) and obj == _main_module.__dict__:
+    elif (not is_dill(pickler)) and (obj == _main_module.__dict__):
         log.info("D3: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if PY3:
             pickler.write(bytes('c__main__\n__dict__\n', 'UTF-8'))
@@ -1339,32 +1340,32 @@ def save_function(pickler, obj):
             globs = obj.__globals__ if PY3 else obj.func_globals
         _byref = getattr(pickler, '_byref', None)
         _recurse = getattr(pickler, '_recurse', None)
-        _memo = not IS_PYPY and id(obj) in stack and _recurse is not None
+        _memo = (id(obj) in stack) and (_recurse is not None)
         #print("stack: %s + '%s'" % (set(hex(i) for i in stack),hex(id(obj))))
-        if not IS_PYPY: stack.add(id(obj))
+        stack.add(id(obj))
         if PY3:
             #NOTE: workaround for 'super' (see issue #75)
-            _super = not IS_PYPY and 'super' in obj.__code__.co_names and _byref is not None
+            _super = ('super' in getattr(obj.__code__,'co_names',()) and (_byref is not None))
             if _super or _memo:
-                if _super is not None: pickler._byref = True
-                if _memo is not None: pickler._recurse = False
+                if _super: pickler._byref = True
+                if _memo: pickler._recurse = False
             pickler.save_reduce(_create_function, (obj.__code__,
                                 globs, obj.__name__,
                                 obj.__defaults__, obj.__closure__,
                                 obj.__dict__), obj=obj)
         else:
-            _super = not IS_PYPY and 'super' in obj.func_code.co_names and _byref is not None and getattr(pickler, '_recurse', False)
+            _super = ('super' in getattr(obj.func_code,'co_names',()) and (_byref is not None) and (getattr(pickler, '_recurse', False)))
             if _super or _memo:
-                if _super is not None: pickler._byref = True
-                if _memo is not None: pickler._recurse = False
+                if _super: pickler._byref = True
+                if _memo: pickler._recurse = False
             pickler.save_reduce(_create_function, (obj.func_code,
                                 globs, obj.func_name,
                                 obj.func_defaults, obj.func_closure,
                                 obj.__dict__), obj=obj)
         if _super or _memo:
-            if _super is not None: pickler._byref = _byref
-            if _memo is not None: pickler._recurse = _recurse
-        if not IS_PYPY: pickler.clear_memo()
+            if _super: pickler._byref = _byref
+            if _memo: pickler._recurse = _recurse
+        if (OLDER and not IS_PYPY): pickler.clear_memo() #FIXME: HACK
        #if _memo:
        #    stack.remove(id(obj))
        #   #pickler.clear_memo()
