@@ -36,7 +36,8 @@ import sys
 diff = None
 _use_diff = False
 PY3 = (sys.hexversion >= 0x30000f0)
-OLDER = (PY3 and sys.hexversion < 0x30400f0) or (sys.hexversion < 0x20700f0)
+# OLDER: 3.0 <= x < 3.4 *OR* x < 2.7.10  #NOTE: guessing relevant versions
+OLDER = (PY3 and sys.hexversion < 0x30400f0) or (sys.hexversion < 0x2070af0)
 if PY3: #XXX: get types from .objtypes ?
     import builtins as __builtin__
     from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
@@ -1365,7 +1366,7 @@ def save_function(pickler, obj):
         if _super or _memo:
             if _super: pickler._byref = _byref
             if _memo: pickler._recurse = _recurse
-        if (OLDER and not IS_PYPY): pickler.clear_memo() #FIXME: HACK
+        if OLDER: pickler.clear_memo()
        #if _memo:
        #    stack.remove(id(obj))
        #   #pickler.clear_memo()
