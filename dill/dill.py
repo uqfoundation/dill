@@ -1346,27 +1346,27 @@ def save_function(pickler, obj):
         stack.add(id(obj))
         if PY3:
             #NOTE: workaround for 'super' (see issue #75)
-            _super = ('super' in getattr(obj.__code__,'co_names',()) and (_byref is not None))
-            if _super or _memo:
-                if _super: pickler._byref = True
-                if _memo: pickler._recurse = False
+            _super = ('super' in getattr(obj.__code__,'co_names',())) and (_byref is not None)
+            if _super: pickler._byref = True
+            if _memo: pickler._recurse = False
             pickler.save_reduce(_create_function, (obj.__code__,
                                 globs, obj.__name__,
                                 obj.__defaults__, obj.__closure__,
                                 obj.__dict__), obj=obj)
         else:
-            _super = ('super' in getattr(obj.func_code,'co_names',()) and (_byref is not None) and (getattr(pickler, '_recurse', False)))
-            if _super or _memo:
-                if _super: pickler._byref = True
-                if _memo: pickler._recurse = False
+            _super = ('super' in getattr(obj.func_code,'co_names',())) and (_byref is not None) and getattr(pickler, '_recurse', False)
+            if _super: pickler._byref = True
+            if _memo: pickler._recurse = False
             pickler.save_reduce(_create_function, (obj.func_code,
                                 globs, obj.func_name,
                                 obj.func_defaults, obj.func_closure,
                                 obj.__dict__), obj=obj)
-        if _super or _memo:
-            if _super: pickler._byref = _byref
-            if _memo: pickler._recurse = _recurse
-        if OLDER: pickler.clear_memo()
+        if _super: pickler._byref = _byref
+        if _memo: pickler._recurse = _recurse
+       #clear = (_byref, _super, _recurse, _memo)
+       #print(clear + (OLDER,))
+        #NOTE: workaround for #234; "partial" still is problematic for recurse
+        if OLDER and not _byref and (_super or (not _super and _memo) or (not _super and not _memo and _recurse)): pickler.clear_memo()
        #if _memo:
        #    stack.remove(id(obj))
        #   #pickler.clear_memo()

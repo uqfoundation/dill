@@ -52,12 +52,12 @@ class Model(object):
 def test_partial():
     assert dill.copy(Machine(), byref=True)
     assert dill.copy(Machine(), byref=True, recurse=True)
-    assert dill.copy(Machine(), recurse=True)
+    if not OLDER:
+        assert dill.copy(Machine(), recurse=True)
     assert dill.copy(Machine())
 
 
 
 if __name__ == '__main__':
     test_super()
-    if not OLDER: 
-        test_partial()
+    test_partial()
