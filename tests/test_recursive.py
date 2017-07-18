@@ -1,6 +1,5 @@
 import dill
 from functools import partial
-import sys
 from dill.dill import PY3, OLDER
 _super = super
 
@@ -57,7 +56,30 @@ def test_partial():
     assert dill.copy(Machine())
 
 
+class Machine2(object):
+    def __init__(self):
+        self.go = partial(self.member, self)
+    def member(self, model):
+        pass
+
+
+class SubMachine(Machine2):
+    def __init__(self):
+        _super(SubMachine, self).__init__()
+        #super(SubMachine, self).__init__() #XXX: works, except for 3.1-3.3
+
+
+def test_partials():
+    assert dill.copy(SubMachine(), byref=True)
+    assert dill.copy(SubMachine(), byref=True, recurse=True)
+    if not OLDER:
+        assert dill.copy(SubMachine(), recurse=True)
+    assert dill.copy(SubMachine())
+
+
 
 if __name__ == '__main__':
+    #print(('byref','_super','_recurse','_memo','_stop','OLDER'))
     test_super()
     test_partial()
+    test_partials()

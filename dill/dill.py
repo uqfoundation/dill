@@ -29,7 +29,7 @@ def _trace(boolean):
     else: log.setLevel(logging.WARN)
     return
 
-stack = set()  # record of 'recursion-sensitive' pickled objects
+stack = dict()  # record of 'recursion-sensitive' pickled objects
 
 import os
 import sys
@@ -874,7 +874,7 @@ def save_module_dict(pickler, obj):
 
 @register(ClassType)
 def save_classobj(pickler, obj): #FIXME: enable pickler._byref
-   #stack.add(id(obj))
+   #stack[id(obj)] = len(stack), obj
     if obj.__module__ == '__main__': #XXX: use _main_module.__name__ everywhere?
         log.info("C1: %s" % obj)
         pickler.save_reduce(ClassType, (obj.__name__, obj.__bases__,
@@ -1246,7 +1246,7 @@ def save_module(pickler, obj):
 
 @register(TypeType)
 def save_type(pickler, obj):
-   #stack.add(id(obj)) #XXX: probably don't need object from all cases below
+   #stack[id(obj)] = len(stack), obj #XXX: probably don't obj in all cases below
     if obj in _typemap:
         log.info("T1: %s" % obj)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
@@ -1342,8 +1342,8 @@ def save_function(pickler, obj):
         _byref = getattr(pickler, '_byref', None)
         _recurse = getattr(pickler, '_recurse', None)
         _memo = (id(obj) in stack) and (_recurse is not None)
-        #print("stack: %s + '%s'" % (set(hex(i) for i in stack),hex(id(obj))))
-        stack.add(id(obj))
+       #print("stack: %s + '%s'" % (set(hex(i) for i in stack),hex(id(obj))))
+        stack[id(obj)] = len(stack), obj
         if PY3:
             #NOTE: workaround for 'super' (see issue #75)
             _super = ('super' in getattr(obj.__code__,'co_names',())) and (_byref is not None)
