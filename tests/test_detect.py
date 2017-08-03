@@ -4,7 +4,7 @@
 # Copyright (c) 2008-2016 California Institute of Technology.
 # Copyright (c) 2016-2017 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
-#  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
+#  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 from dill.detect import baditems, badobjects, badtypes, errors, parent, at, globalvars
 from dill import settings

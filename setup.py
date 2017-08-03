@@ -4,7 +4,7 @@
 # Copyright (c) 2008-2016 California Institute of Technology.
 # Copyright (c) 2016-2017 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
-#  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
+#  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 from __future__ import with_statement, absolute_import
 import os
@@ -80,7 +80,7 @@ a trustworthy source.
 `dill` is part of `pathos`, a python framework for heterogeneous computing.
 `dill` is in active development, so any user feedback, bug reports, comments,
 or suggestions are highly appreciated.  A list of known issues is maintained
-at http://trac.mystic.cacr.caltech.edu/project/pathos/query, with a public
+at http://trac.mystic.cacr.caltech.edu/project/pathos/query.html, with a public
 ticket list at https://github.com/uqfoundation/dill/issues.
 
 
@@ -121,15 +121,7 @@ This version is `dill-%(relver)s`.
 
 The latest released version of `dill` is available from::
 
-    http://trac.mystic.cacr.caltech.edu/project/pathos
-
-or::
-
-    https://github.com/uqfoundation/dill/releases
-
-or also::
-
-    https://pypi.python.org/pypi/dill
+    https://pypi.org/project/dill
 
 `dill` is distributed under a 3-clause BSD license.
 
@@ -253,8 +245,8 @@ setup(name='dill',
       maintainer = 'Mike McKerns',
       license = '3-clause BSD',
       platforms = ['Linux', 'Windows', 'Mac'],
-      url = 'http://www.cacr.caltech.edu/~mmckerns/dill.htm',
-      download_url = 'http://dev.danse.us/packages',
+      url = 'https://pypi.org/project/dill',
+      download_url = 'https://github.com/uqfoundation/dill/releases/download/dill-%s/dill-%s.tar.gz',
       classifiers = ('Development Status :: 5 - Production/Stable',
                      'Intended Audience :: Developers',
                      'Intended Audience :: Science/Research',
@@ -266,7 +258,7 @@ setup(name='dill',
 
       packages = ['dill'],
       package_dir = {'dill':'dill'},
-""" % (target_version, long_description)
+""" % (target_version, long_description, stable_version, stable_version)
 
 # add dependencies
 ctypes_version = '>=1.0.1'
