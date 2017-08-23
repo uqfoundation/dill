@@ -18,8 +18,8 @@
 #
 import os
 from datetime import datetime
-# import sys
-# sys.path.insert(0, os.path.abspath('../..'))
+import sys
+sys.path.insert(0, os.path.abspath('../../scripts'))
 
 # Import the project
 import dill

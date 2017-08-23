@@ -3,15 +3,19 @@
 dill package documentation
 ==========================
 
-.. toctree::
-   :maxdepth: 4
-   :caption: Contents:
-
 .. automodule:: dill
-   :members:
-   :undoc-members:
-   :show-inheritance:
+    :members:
+    :undoc-members:
+    :private-members:
+    :special-members:
+    :show-inheritance:
 
+.. toctree::
+    :maxdepth: 2
+    :caption: Contents:
+
+    dill
+    scripts
 
 Indices and tables
 ==================

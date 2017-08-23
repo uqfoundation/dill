@@ -7,7 +7,11 @@ detect module
 .. automodule:: dill.detect
     :members:
     :undoc-members:
+    :private-members:
+    :special-members:
     :show-inheritance:
+    :imported-members:
+..  :exclude-members: ismethod, isfunction, istraceback, isframe, iscode, parent, reference, at, parents, children
 
 dill module
 -----------
@@ -15,7 +19,11 @@ dill module
 .. automodule:: dill.dill
     :members:
     :undoc-members:
+    :private-members:
+    :special-members:
     :show-inheritance:
+    :imported-members:
+..  :exclude-members:
 
 objtypes module
 ---------------
@@ -23,7 +31,11 @@ objtypes module
 .. automodule:: dill.objtypes
     :members:
     :undoc-members:
+    :private-members:
+    :special-members:
     :show-inheritance:
+    :imported-members:
+..  :exclude-members:
 
 pointers module
 ---------------
@@ -31,7 +43,11 @@ pointers module
 .. automodule:: dill.pointers
     :members:
     :undoc-members:
+    :private-members:
+    :special-members:
     :show-inheritance:
+    :imported-members:
+..  :exclude-members:
 
 settings module
 ---------------
@@ -39,7 +55,11 @@ settings module
 .. automodule:: dill.settings
     :members:
     :undoc-members:
+    :private-members:
+    :special-members:
     :show-inheritance:
+    :imported-members:
+..  :exclude-members:
 
 source module
 -------------
@@ -47,7 +67,11 @@ source module
 .. automodule:: dill.source
     :members:
     :undoc-members:
+    :private-members:
+    :special-members:
     :show-inheritance:
+    :imported-members:
+..  :exclude-members:
 
 temp module
 -----------
@@ -55,5 +79,9 @@ temp module
 .. automodule:: dill.temp
     :members:
     :undoc-members:
+    :private-members:
+    :special-members:
     :show-inheritance:
+    :imported-members:
+..  :exclude-members:
 

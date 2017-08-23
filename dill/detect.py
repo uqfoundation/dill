@@ -17,6 +17,10 @@ from .pointers import parent, reference, at, parents, children
 from .dill import _trace as trace
 from .dill import PY3
 
+__all__ = ['baditems','badobjects','badtypes','code','errors','freevars',
+           'getmodule','globalvars','nestedcode','nestedglobals','outermost',
+           'referredglobals','referrednested','trace','varnames']
+
 def getmodule(object, _filename=None, force=False):
     """get the module of the object"""
     from inspect import getmodule as getmod
