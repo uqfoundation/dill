@@ -59,7 +59,20 @@ objects = odict()
 from . import objtypes as types
 
 def load_types(pickleable=True, unpickleable=True):
-    """load pickleable and/or unpickleable types to dill.types"""
+    """load pickleable and/or unpickleable types to ``dill.types``
+
+    ``dill.types`` is meant to mimic the ``types`` module, providing a
+    registry of object types.  By default, the module is empty (for import
+    speed purposes). Use the ``load_types`` function to load selected object
+    types to the ``dill.types`` module.
+
+    Args:
+        pickleable (bool, default=True): if True, load pickleable types.
+        unpickleable (bool, default=True): if True, load unpickleable types.
+
+    Returns:
+        None
+    """
     # local import of dill.objects
     from . import _objects
     if pickleable:
@@ -79,7 +92,18 @@ def load_types(pickleable=True, unpickleable=True):
     reload(types)
 
 def extend(use_dill=True):
-    '''add (or remove) dill types to/from pickle'''
+    '''add (or remove) dill types to/from the pickle registry
+
+    by default, ``dill`` populates its types to ``pickle.Pickler.dispatch``.
+    Thus, all ``dill`` types are available upon calling ``'import pickle'``.
+    To drop all ``dill`` types from the ``pickle`` dispatch, *use_dill=False*.
+
+    Args:
+        use_dill (bool, default=True): if True, extend the dispatch table.
+
+    Returns:
+        None
+    '''
     from .dill import _revert_extension, _extend
     if use_dill: _extend()
     else: _revert_extension()

@@ -6,7 +6,17 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 """
-use objgraph to plot the reference paths for types found in dill.types
+generate a plot of reference paths for any object in ``dill.types``
+
+Note:
+    the generated image is useful in showing what needs to be pickled,
+    and can be any object found in ``dill.objects`` after calling 
+    ``dill.load_types(picklable=True, unpicklable=True)``.
+
+Examples::
+
+    $ get_objgraph.py FrameType
+    Image generated as FrameType.png
 """
 #XXX: useful if could read .pkl file and generate the graph... ?
 

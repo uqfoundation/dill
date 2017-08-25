@@ -5,6 +5,14 @@
 # Copyright (c) 2016-2017 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
+"""
+unpickle the contents of a pickled object file
+
+Examples::
+
+    $ dill_unpickle.py hello.pkl
+    ['hello', 'world']
+"""
 
 if __name__ == '__main__':
   import sys
