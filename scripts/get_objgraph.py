@@ -8,7 +8,7 @@
 """
 generate a plot of reference paths for any object in ``dill.types``
 
-Note:
+Notes:
     the generated image is useful in showing what needs to be pickled,
     and can be any object found in ``dill.objects`` after calling 
     ``dill.load_types(picklable=True, unpicklable=True)``.
