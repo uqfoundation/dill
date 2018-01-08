@@ -345,7 +345,8 @@ if HAS_ALL:
 a['ShelveType'] = shelve.Shelf({})
 # data compression and archiving (CH 12)
 if HAS_ALL:
-    a['BZ2FileType'] = bz2.BZ2File(os.devnull) #FIXME: fail >= 3.3
+    if (hex(sys.hexversion) < '0x2070ef0') or PY3:
+        a['BZ2FileType'] = bz2.BZ2File(os.devnull) #FIXME: fail >= 3.3, 2.7.14
     a['BZ2CompressorType'] = bz2.BZ2Compressor()
     a['BZ2DecompressorType'] = bz2.BZ2Decompressor()
 #a['ZipFileType'] = _zip = zipfile.ZipFile(os.devnull,'w') #FIXME: fail >= 3.2
