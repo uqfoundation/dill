@@ -96,6 +96,8 @@ except ImportError:
 NumpyUfuncType = None
 NumpyArrayType = None
 try:
+    if OLDER:
+        raise AttributeError('find_spec not found')
     import importlib
     if not importlib.machinery.PathFinder().find_spec('numpy'):
         raise ImportError('numpy not installed')
