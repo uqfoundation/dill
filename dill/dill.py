@@ -93,14 +93,24 @@ try:
 except ImportError:
     HAS_CTYPES = False
     IS_PYPY = False
+NumpyUfuncType = None
+NumpyArrayType = None
 try:
-    import imp
-    imp.find_module('numpy')
+    import importlib
+    if not importlib.machinery.PathFinder().find_spec('numpy'):
+        raise ImportError('numpy not installed')
     NumpyUfuncType = True
     NumpyArrayType = True
+except AttributeError:
+    try:
+        import imp
+        imp.find_module('numpy')
+        NumpyUfuncType = True
+        NumpyArrayType = True
+    except ImportError:
+        pass
 except ImportError:
-    NumpyUfuncType = None
-    NumpyArrayType = None
+    pass
 def __hook__():
     global NumpyArrayType, NumpyUfuncType
     from numpy import ufunc as NumpyUfuncType

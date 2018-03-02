@@ -37,9 +37,12 @@ from .settings import settings
 detect.trace(False)
 
 try:
-    from imp import reload
+    from importlib import reload
 except ImportError:
-    pass
+    try:
+        from imp import reload
+    except ImportError:
+        pass
 
 # put the objects in order, if possible
 try:
