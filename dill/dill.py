@@ -84,7 +84,7 @@ if sys.hexversion < 0x03030000:
     FileNotFoundError = IOError
 if PY3 and sys.hexversion < 0x03040000:
     GENERATOR_FAIL = True
-else: GENERATOR_FAIL = False    
+else: GENERATOR_FAIL = False
 try:
     import ctypes
     HAS_CTYPES = True
@@ -94,13 +94,20 @@ except ImportError:
     HAS_CTYPES = False
     IS_PYPY = False
 try:
-    import imp
-    imp.find_module('numpy')
+    import importlib
+    importlib.import_module('numpy')
     NumpyUfuncType = True
     NumpyArrayType = True
 except ImportError:
-    NumpyUfuncType = None
-    NumpyArrayType = None
+    try:
+        import imp
+        imp.find_module('numpy')
+        NumpyUfuncType = True
+        NumpyArrayType = True
+    except ImportError:
+        NumpyUfuncType = None
+        NumpyArrayType = None
+
 def __hook__():
     global NumpyArrayType, NumpyUfuncType
     from numpy import ufunc as NumpyUfuncType
