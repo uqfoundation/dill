@@ -163,7 +163,7 @@ Requirements
 
 ``dill`` requires:
 
-    - ``python``, **version >= 2.5** or **version >= 3.1**, or ``pypy``
+    - ``python``, **version 2.7** or **version >= 3.4**, or ``pypy``
     - ``pyreadline``, **version >= 1.7.1** (on windows)
 
 Optional requirements:
@@ -250,13 +250,8 @@ setup(name='dill',
                      'Intended Audience :: Science/Research',
                      'License :: OSI Approved :: BSD License',
                      'Programming Language :: Python :: 2',
-                     'Programming Language :: Python :: 2.5',
-                     'Programming Language :: Python :: 2.6',
                      'Programming Language :: Python :: 2.7',
                      'Programming Language :: Python :: 3',
-                     'Programming Language :: Python :: 3.1',
-                     'Programming Language :: Python :: 3.2',
-                     'Programming Language :: Python :: 3.3',
                      'Programming Language :: Python :: 3.4',
                      'Programming Language :: Python :: 3.5',
                      'Programming Language :: Python :: 3.6',
@@ -281,11 +276,6 @@ if has_setuptools:
         setup_code += """
       install_requires = ['pyreadline%s'],
 """ % (pyreadline_version)
-    # verrrry unlikely that this is still relevant
-    elif hex(sys.hexversion) < '0x20500f0':
-        setup_code += """
-      install_requires = ['ctypes%s'],
-""" % (ctypes_version)
 
 # add the scripts, and close 'setup' call
 setup_code += """    

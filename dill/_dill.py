@@ -82,9 +82,8 @@ from operator import itemgetter, attrgetter
 # new in python3.3
 if sys.hexversion < 0x03030000:
     FileNotFoundError = IOError
-if PY3 and sys.hexversion < 0x03040000:
-    GENERATOR_FAIL = True
-else: GENERATOR_FAIL = False    
+
+GENERATOR_FAIL = False
 try:
     import ctypes
     HAS_CTYPES = True
@@ -159,17 +158,16 @@ if PY3:
     CellType = type((lambda x: lambda y: x)(0).__closure__[0])
 else:
     CellType = type((lambda x: lambda y: x)(0).func_closure[0])
-# new in python2.5
-if sys.hexversion >= 0x20500f0:
-    from types import GetSetDescriptorType
-    if not IS_PYPY:
-        from types import MemberDescriptorType
-    else:
-        # oddly, MemberDescriptorType is GetSetDescriptorType
-        # while, member_descriptor does exist otherwise... is this a pypy bug?
-        class _member(object):
-            __slots__ = ['descriptor']
-        MemberDescriptorType = type(_member.descriptor)
+
+from types import GetSetDescriptorType
+if not IS_PYPY:
+    from types import MemberDescriptorType
+else:
+    # oddly, MemberDescriptorType is GetSetDescriptorType
+    # while, member_descriptor does exist otherwise... is this a pypy bug?
+    class _member(object):
+        __slots__ = ['descriptor']
+    MemberDescriptorType = type(_member.descriptor)
 if IS_PYPY:
     WrapperDescriptorType = MethodType
     MethodDescriptorType = FunctionType
@@ -1081,45 +1079,34 @@ def save_instancemethod0(pickler, obj):# example: cStringIO.StringI
     log.info("# Me")
     return
 
-if sys.hexversion >= 0x20500f0:
-    if not IS_PYPY:
-        @register(MemberDescriptorType)
-        @register(GetSetDescriptorType)
-        @register(MethodDescriptorType)
-        @register(WrapperDescriptorType)
-        @register(ClassMethodDescriptorType)
-        def save_wrapper_descriptor(pickler, obj):
-            log.info("Wr: %s" % obj)
-            pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
-                                           obj.__repr__()), obj=obj)
-            log.info("# Wr")
-            return
-    else:
-        @register(MemberDescriptorType)
-        @register(GetSetDescriptorType)
-        def save_wrapper_descriptor(pickler, obj):
-            log.info("Wr: %s" % obj)
-            pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
-                                           obj.__repr__()), obj=obj)
-            log.info("# Wr")
-            return
-
-    @register(MethodWrapperType)
-    def save_instancemethod(pickler, obj):
-        log.info("Mw: %s" % obj)
-        pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
-        log.info("# Mw")
-        return
-
-elif not IS_PYPY:
+if not IS_PYPY:
+    @register(MemberDescriptorType)
+    @register(GetSetDescriptorType)
     @register(MethodDescriptorType)
     @register(WrapperDescriptorType)
+    @register(ClassMethodDescriptorType)
     def save_wrapper_descriptor(pickler, obj):
         log.info("Wr: %s" % obj)
         pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
                                        obj.__repr__()), obj=obj)
         log.info("# Wr")
         return
+else:
+    @register(MemberDescriptorType)
+    @register(GetSetDescriptorType)
+    def save_wrapper_descriptor(pickler, obj):
+        log.info("Wr: %s" % obj)
+        pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
+                                       obj.__repr__()), obj=obj)
+        log.info("# Wr")
+        return
+
+@register(MethodWrapperType)
+def save_instancemethod(pickler, obj):
+    log.info("Mw: %s" % obj)
+    pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
+    log.info("# Mw")
+    return
 
 @register(CellType)
 def save_cell(pickler, obj):

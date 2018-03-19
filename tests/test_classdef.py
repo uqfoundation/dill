@@ -88,19 +88,16 @@ def test_class_objects():
 def test_none():
     assert dill.pickles(type(None))
 
-if hex(sys.hexversion) >= '0x20600f0':
-    from collections import namedtuple
-    Z = namedtuple("Z", ['a','b'])
-    Zi = Z(0,1)
-    X = namedtuple("Y", ['a','b'])
-    X.__name__ = "X"
-    if hex(sys.hexversion) >= '0x30300f0':
-        X.__qualname__ = "X" #XXX: name must 'match' or fails to pickle
-    Xi = X(0,1)
-    Bad = namedtuple("FakeName", ['a','b'])
-    Badi = Bad(0,1)
-else:
-    Z = Zi = X = Xi = Bad = Badi = None
+from collections import namedtuple
+Z = namedtuple("Z", ['a','b'])
+Zi = Z(0,1)
+X = namedtuple("Y", ['a','b'])
+X.__name__ = "X"
+if hex(sys.hexversion) >= '0x30300f0':
+    X.__qualname__ = "X" #XXX: name must 'match' or fails to pickle
+Xi = X(0,1)
+Bad = namedtuple("FakeName", ['a','b'])
+Badi = Bad(0,1)
 
 # test namedtuple
 def test_namedtuple():
