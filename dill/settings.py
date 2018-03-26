@@ -21,6 +21,7 @@ settings = {
    #'strictio' : False,
     'fmode' : 0, #HANDLE_FMODE
     'recurse' : False,
+    'ignore' : False,
 }
 
 del DEFAULT_PROTOCOL

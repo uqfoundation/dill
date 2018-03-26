@@ -293,22 +293,27 @@ def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None):#, strictio=
     dump(obj, file, protocol, byref, fmode, recurse)#, strictio)
     return file.getvalue()
 
-def load(file):
+def load(file, ignore=None):
     """unpickle an object from a file"""
+    from .settings import settings
+    if ignore is None: ignore = settings['ignore']
     pik = Unpickler(file)
     pik._main = _main_module
+    # apply kwd settings
+    pik._ignore = bool(ignore)
     obj = pik.load()
     if type(obj).__module__ == getattr(_main_module, '__name__', '__main__'):
-        # point obj class to main
-        try: obj.__class__ = getattr(pik._main, type(obj).__name__)
-        except (AttributeError,TypeError): pass # defined in a file
+        if not ignore:
+            # point obj class to main
+            try: obj.__class__ = getattr(pik._main, type(obj).__name__)
+            except (AttributeError,TypeError): pass # defined in a file
    #_main_module.__dict__.update(obj.__dict__) #XXX: should update globals ?
     return obj
 
-def loads(str):
+def loads(str, ignore=None):
     """unpickle an object from a string"""
     file = StringIO(str)
-    return load(file)
+    return load(file, ignore)
 
 # def dumpzs(obj, protocol=None):
 #     """pickle an object to a compressed string"""
@@ -446,6 +451,8 @@ class Pickler(StockPickler):
 
 class Unpickler(StockUnpickler):
     """python's Unpickler extended to interpreter sessions and more types"""
+    from .settings import settings
+    _ignore = settings['ignore']
     _main = None
     _session = False
 
@@ -457,8 +464,10 @@ class Unpickler(StockUnpickler):
         return StockUnpickler.find_class(self, module, name)
 
     def __init__(self, *args, **kwds):
+        _ignore = kwds.pop('ignore', Unpickler._ignore)
         StockUnpickler.__init__(self, *args, **kwds)
         self._main = _main_module
+        self._ignore = _ignore
     pass
 
 '''
