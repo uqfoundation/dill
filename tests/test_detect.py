@@ -8,7 +8,7 @@
 
 from dill.detect import baditems, badobjects, badtypes, errors, parent, at, globalvars
 from dill import settings
-from dill.dill import IS_PYPY
+from dill._dill import IS_PYPY
 from pickle import PicklingError
 
 import inspect

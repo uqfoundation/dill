@@ -11,7 +11,7 @@ from dill import check
 import sys
 
 from dill.temp import capture
-from dill.dill import PY3
+from dill._dill import PY3
 
 
 #FIXME: this doesn't catch output... it's from the internal call
