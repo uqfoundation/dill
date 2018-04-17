@@ -12,13 +12,12 @@ and file-like objects.
 #XXX: better instead to have functions write to any given file-like object ?
 #XXX: currently, all file-like objects are created by the function...
 
-from __future__ import absolute_import
 __all__ = ['dump_source', 'dump', 'dumpIO_source', 'dumpIO',\
            'load_source', 'load', 'loadIO_source', 'loadIO',\
            'capture']
 
 import contextlib
-from .dill import PY3
+from ._dill import PY3
 
 
 @contextlib.contextmanager
@@ -258,7 +257,7 @@ Optional kwds:
     return file
 
 
-del absolute_import, contextlib
+del contextlib
 
 
 # EOF

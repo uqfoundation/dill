@@ -6,14 +6,13 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
-from __future__ import absolute_import
 __all__ = ['parent', 'reference', 'at', 'parents', 'children']
 
 import gc
 import sys
 
-from .dill import _proxy_helper as reference
-from .dill import _locate_object as at
+from ._dill import _proxy_helper as reference
+from ._dill import _locate_object as at
 
 def parent(obj, objtype, ignore=()):
     """

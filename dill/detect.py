@@ -9,13 +9,12 @@
 Methods for detecting objects leading to pickling failures.
 """
 
-from __future__ import absolute_import, with_statement
 import dis
 from inspect import ismethod, isfunction, istraceback, isframe, iscode
 from .pointers import parent, reference, at, parents, children
 
-from .dill import _trace as trace
-from .dill import PY3
+from ._dill import _trace as trace
+from ._dill import PY3
 
 __all__ = ['baditems','badobjects','badtypes','code','errors','freevars',
            'getmodule','globalvars','nestedcode','nestedglobals','outermost',
@@ -304,8 +303,6 @@ def errors(obj, depth=0, exact=False, safe=False):
         if not pickles(_attr,exact,safe):
             _dict[attr] = errors(_attr,depth-1,exact,safe)
     return _dict
-
-del absolute_import, with_statement
 
 
 # EOF

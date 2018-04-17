@@ -6,8 +6,6 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
-from __future__ import absolute_import
-
 # get version numbers, license, and long description
 try:
     from .info import this_version as __version__
@@ -24,7 +22,7 @@ __doc__ = """
 __license__ = """
 """ + __license__
 
-from .dill import dump, dumps, load, loads, dump_session, load_session, \
+from ._dill import dump, dumps, load, loads, dump_session, load_session, \
     Pickler, Unpickler, register, copy, pickle, pickles, check, \
     HIGHEST_PROTOCOL, DEFAULT_PROTOCOL, PicklingError, UnpicklingError, \
     HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE
@@ -107,7 +105,7 @@ def extend(use_dill=True):
     Returns:
         None
     '''
-    from .dill import _revert_extension, _extend
+    from ._dill import _revert_extension, _extend
     if use_dill: _extend()
     else: _revert_extension()
     return
@@ -124,7 +122,6 @@ def citation():
     print (__doc__[-501:-123])
     return
 
-del absolute_import
 del odict
 
 # end of file
