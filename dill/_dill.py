@@ -29,7 +29,7 @@ def _trace(boolean):
     else: log.setLevel(logging.WARN)
     return
 
-stack = dict()  # record of 'recursion-sensitive' pickled objects
+stack = {}  # record of 'recursion-sensitive' pickled objects
 
 import os
 import sys
@@ -563,9 +563,9 @@ if not IS_PYPY:
 else:
     _reverse_typemap['MemberDescriptorType'] = MemberDescriptorType
 if PY3:
-    _typemap = dict((v, k) for k, v in _reverse_typemap.items())
+    _typemap = {v: k for k, v in _reverse_typemap.items()}
 else:
-    _typemap = dict((v, k) for k, v in _reverse_typemap.iteritems())
+    _typemap = {v: k for k, v in _reverse_typemap.iteritems()}
 
 def _unmarshal(string):
     return marshal.loads(string)
@@ -580,8 +580,8 @@ def _create_function(fcode, fglobals, fname=None, fdefaults=None, \
                                       fclosure=None, fdict=None):
     # same as FunctionType, but enable passing __dict__ to new function,
     # __dict__ is the storehouse for attributes added after function creation
-    if fdict is None: fdict = dict()
-    func = FunctionType(fcode, fglobals or dict(), fname, fdefaults, fclosure)
+    if fdict is None: fdict = {}
+    func = FunctionType(fcode, fglobals or {}, fname, fdefaults, fclosure)
     func.__dict__.update(fdict) #XXX: better copy? option to copy?
     return func
 
@@ -1240,8 +1240,8 @@ def save_module(pickler, obj):
         if hasattr(obj, "__file__"):
             names = ["base_prefix", "base_exec_prefix", "exec_prefix",
                      "prefix", "real_prefix"]
-            builtin_mod = any([obj.__file__.startswith(os.path.normpath(getattr(sys, name)))
-                           for name in names if hasattr(sys, name)])
+            builtin_mod = any(obj.__file__.startswith(os.path.normpath(getattr(sys, name)))
+                           for name in names if hasattr(sys, name))
             builtin_mod = builtin_mod or 'site-packages' in obj.__file__
         else:
             builtin_mod = True
@@ -1268,7 +1268,7 @@ def save_type(pickler, obj):
         log.info("T1: %s" % obj)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
         log.info("# T1")
-    elif issubclass(obj, tuple) and all([hasattr(obj, attr) for attr in ('_fields','_asdict','_make','_replace')]):
+    elif issubclass(obj, tuple) and all(hasattr(obj, attr) for attr in ('_fields','_asdict','_make','_replace')):
         # special case: namedtuples
         log.info("T6: %s" % obj)
         pickler.save_reduce(_create_namedtuple, (getattr(obj, "__qualname__", obj.__name__), obj._fields, obj.__module__), obj=obj)

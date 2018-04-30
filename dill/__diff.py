@@ -33,8 +33,8 @@ memo = {}
 id_to_obj = {}
 # types that cannot have changing attributes
 builtins_types = {str, list, dict, set, frozenset, int}
-dont_memo = set(id(i) for i in (memo, sys.modules, sys.path_importer_cache,
-             os.environ, id_to_obj))
+dont_memo = {id(i) for i in (memo, sys.modules, sys.path_importer_cache,
+             os.environ, id_to_obj)}
 
 
 def get_attrs(obj):
@@ -95,13 +95,13 @@ def memorise(obj, force=False):
     if g is None:
         attrs_id = None
     else:
-        attrs_id = dict((key,id_(value)) for key, value in g.items())
+        attrs_id = {key: id_(value) for key, value in g.items()}
 
     s = get_seq(obj)
     if s is None:
         seq_id = None
     elif hasattr(s, "items"):
-        seq_id = dict((id_(key),id_(value)) for key, value in s.items())
+        seq_id = {id_(key): id_(value) for key, value in s.items()}
     elif not hasattr(s, "__len__"): #XXX: avoid TypeError from unexpected case
         seq_id = None
     else:
@@ -176,7 +176,7 @@ def whats_changed(obj, seen=None, simple=False, first=True):
     else:
         obj_attrs = memo[obj_id][0]
         obj_get = obj_attrs.get
-        changed = dict((key,None) for key in obj_attrs if key not in attrs)
+        changed = {key: None for key in obj_attrs if key not in attrs}
         for key, o in attrs.items():
             if id_(o) != obj_get(key, None) or chngd(o, seen, True, False):
                 changed[key] = o

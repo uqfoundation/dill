@@ -83,7 +83,7 @@ def _matchlambda(func, line):
         _, code = getcode(_f).co_code, getcode(func).co_code
         if len(_) != len(code): return False
         #NOTE: should be same code same order, but except for 't' and '\x88'
-        _ = set((i,j) for (i,j) in zip(_,code) if i != j)
+        _ = {(i,j) for (i,j) in zip(_,code) if i != j}
         if len(_) != 1: return False #('t','\x88')
         return True
     # check indentsize
@@ -981,7 +981,7 @@ def importable(obj, alias='', source=None, builtin=True):
             # get source code of objects referred to by obj in global scope
             from .detect import globalvars
             obj = globalvars(obj) #XXX: don't worry about alias? recurse? etc?
-            obj = list(getsource(_obj,name,force=True) for (name,_obj) in obj.items() if not isbuiltin(_obj))
+            obj = [getsource(_obj,name,force=True) for (name,_obj) in obj.items() if not isbuiltin(_obj)]
             obj = '\n'.join(obj) if obj else ''
             # combine all referred-to source (global then enclosing)
             if not obj: return src

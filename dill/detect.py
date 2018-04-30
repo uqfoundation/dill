@@ -157,13 +157,13 @@ def freevars(func):
         func = getattr(func, func_code).co_freevars # get freevars
     else:
         return {}
-    return dict((name,c.cell_contents) for (name,c) in zip(func,closures))
+    return {name: c.cell_contents for (name,c) in zip(func,closures)}
 
 # thanks to Davies Liu for recursion of globals
 def nestedglobals(func, recurse=True):
     """get the names of any globals found within func"""
     func = code(func)
-    if func is None: return list()
+    if func is None: return []
     from .temp import capture
     names = set()
     with capture('stdout') as out:
@@ -172,7 +172,7 @@ def nestedglobals(func, recurse=True):
         if '_GLOBAL' in line:
             name = line.split('(')[-1].split(')')[0]
             names.add(name)
-    for co in getattr(func, 'co_consts', tuple()):
+    for co in getattr(func, 'co_consts', ()):
         if co and recurse and iscode(co):
             names.update(nestedglobals(co, recurse=True))
     return list(names)
@@ -236,7 +236,7 @@ def globalvars(func, recurse=True, builtin=False):
     else:
         return {}
     #NOTE: if name not in func_globals, then we skip it...
-    return dict((name,globs[name]) for name in func if name in globs)
+    return {name: globs[name] for name in func if name in globs}
 
 
 def varnames(func):

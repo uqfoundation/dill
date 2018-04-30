@@ -24,7 +24,7 @@ def test_bad_things():
     assert isinstance(d, dict)
     assert list(badobjects(f, 1).keys()) == list(d.keys())
     assert list(errors(f, 1).keys()) == list(d.keys())
-    s = set([(err.__class__.__name__,err.args[0]) for err in list(errors(f, 1).values())])
+    s = {(err.__class__.__name__,err.args[0]) for err in list(errors(f, 1).values())}
     a = dict(s)
     assert len(s) is len(a) # TypeError (and possibly PicklingError)
     n = 1 if IS_PYPY else 2
