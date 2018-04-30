@@ -128,7 +128,7 @@ The latest released version of ``dill`` is available from:
     >>> print (dill.license())
 
 
-Development Version 
+Development Version
 ===================
 
 You can get the latest development version with all the shiny new features at:
@@ -151,7 +151,7 @@ download the tarball, unzip, and run the installer::
     $ python setup py install
 
 You will be warned of any missing dependencies and/or settings
-after you run the "build" step above. 
+after you run the "build" step above.
 
 Alternately, ``dill`` can be installed with ``pip`` or ``easy_install``::
 
@@ -244,7 +244,7 @@ setup(name='dill',
       platforms = ['Linux', 'Windows', 'Mac'],
       url = 'https://pypi.org/project/dill',
       download_url = 'https://github.com/uqfoundation/dill/releases/download/dill-%s/dill-%s.tar.gz',
-      python_requires='>=2.5, !=3.0.*',
+      python_requires='>=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*',
       classifiers = ['Development Status :: 5 - Production/Stable',
                      'Intended Audience :: Developers',
                      'Intended Audience :: Science/Research',
