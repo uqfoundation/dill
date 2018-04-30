@@ -66,17 +66,17 @@ def test_globals():
     assert globalvars(f) == dict(a=1, b=2, c=3)
 
     res = globalvars(foo, recurse=True)
-    assert set(res) == set(['squared', 'a'])
+    assert set(res) == {'squared', 'a'}
     res = globalvars(foo, recurse=False)
     assert res == {}
     zap = foo(2)
     res = globalvars(zap, recurse=True)
-    assert set(res) == set(['squared', 'a'])
+    assert set(res) == {'squared', 'a'}
     res = globalvars(zap, recurse=False)
-    assert set(res) == set(['squared'])
+    assert set(res) == {'squared'}
     del zap
     res = globalvars(squared)
-    assert set(res) == set(['a'])
+    assert set(res) == {'a'}
     # FIXME: should find referenced __builtins__
     #res = globalvars(_class, recurse=True)
     #assert set(res) == set(['True'])

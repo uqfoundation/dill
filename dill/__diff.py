@@ -32,7 +32,7 @@ getrefcount = getattr(sys, 'getrefcount', lambda x:0)
 memo = {}
 id_to_obj = {}
 # types that cannot have changing attributes
-builtins_types = set((str, list, dict, set, frozenset, int))
+builtins_types = {str, list, dict, set, frozenset, int}
 dont_memo = set(id(i) for i in (memo, sys.modules, sys.path_importer_cache,
              os.environ, id_to_obj))
 
