@@ -10,13 +10,13 @@ unpickle the contents of a pickled object file
 
 Examples::
 
-    $ dill_unpickle.py hello.pkl
+    $ undill hello.pkl
     ['hello', 'world']
 """
 
 if __name__ == '__main__':
-  import sys
-  import dill
-  for file in sys.argv[1:]:
-    print (dill.load(open(file,'rb')))
+    import sys
+    import dill
+    for file in sys.argv[1:]:
+        print (dill.load(open(file,'rb')))
 

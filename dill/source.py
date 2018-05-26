@@ -507,7 +507,7 @@ def _wrap(f):
     """ encapsulate a function and it's __import__ """
     def func(*args, **kwds):
         try:
-            #_ = eval(getsource(f, force=True)) #FIXME: safer, but not as robust
+            # _ = eval(getsource(f, force=True)) #XXX: safer but less robust
             exec getimportable(f, alias='_') in %s, %s
         except:
             raise ImportError('cannot import name ' + f.__name__)
@@ -521,7 +521,7 @@ def _wrap(f):
     """ encapsulate a function and it's __import__ """
     def func(*args, **kwds):
         try:
-            #_ = eval(getsource(f, force=True)) #FIXME: safer, but not as robust
+            # _ = eval(getsource(f, force=True)) #XXX: safer but less robust
             exec(getimportable(f, alias='_'), %s, %s)
         except:
             raise ImportError('cannot import name ' + f.__name__)

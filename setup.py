@@ -6,7 +6,6 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
-from __future__ import with_statement, absolute_import
 import os
 
 # set version numbers
@@ -117,7 +116,7 @@ Major Features
 Current Release
 ===============
 
-This version is ``dill-%(relver)s``.
+This documentation is for version ``dill-%(thisver)s``.
 
 The latest released version of ``dill`` is available from:
 
@@ -146,8 +145,8 @@ Installation
 download the tarball, unzip, and run the installer::
 
     [download]
-    $ tar -xvzf dill-%(thisver)s.tar.gz
-    $ cd dill-%(thisver)s
+    $ tar -xvzf dill-%(relver)s.tar.gz
+    $ cd dill-%(relver)s
     $ python setup py build
     $ python setup py install
 
@@ -176,17 +175,19 @@ Optional requirements:
 More Information
 ================
 
-Probably the best way to get started is to look at the tests that are
-provided within ``dill``. See ``dill.tests`` for a set of scripts that demonstrate
-how ``dill`` can serialize different python objects.  Since ``dill`` conforms
-to the ``pickle`` interface, the examples and documentation at
-http://docs.python.org/library/pickle.html also apply to ``dill`` if one will
-``import dill as pickle``. The source code is also generally well
-documented, so further questions may be resolved by inspecting the code
-itself.  Please also feel free to submit a ticket on github, or ask a
+Probably the best way to get started is to look at the documentation at
+http://dill.rtfd.io. Also see ``dill.tests`` for a set of scripts that
+demonstrate how ``dill`` can serialize different python objects. You can
+run the test suite with ``python -m dill.tests``. The contents of any
+pickle file can be examined with ``undill``.  As ``dill`` conforms to
+the ``pickle`` interface, the examples and documentation found at
+http://docs.python.org/library/pickle.html also apply to ``dill``
+if one will ``import dill as pickle``. The source code is also generally
+well documented, so further questions may be resolved by inspecting the
+code itself. Please feel free to submit a ticket on github, or ask a
 question on stackoverflow (**@Mike McKerns**).
-If you would like to share how you use ``dill`` in your work, please send an
-email (to **mmckerns at uqfoundation dot org**).
+If you would like to share how you use ``dill`` in your work, please send
+an email (to **mmckerns at uqfoundation dot org**).
 
 
 Citation
@@ -252,8 +253,8 @@ setup(name='dill',
                      'Topic :: Scientific/Engineering',
                      'Topic :: Software Development'),
 
-      packages = ['dill'],
-      package_dir = {'dill':'dill'},
+      packages = ['dill','dill.tests'],
+      package_dir = {'dill':'dill', 'dill.tests':'tests'},
 """ % (target_version, long_description, stable_version, stable_version)
 
 # add dependencies
@@ -277,7 +278,7 @@ if has_setuptools:
 
 # add the scripts, and close 'setup' call
 setup_code += """    
-      scripts=['scripts/dill_unpickle.py','scripts/get_objgraph.py'])
+      scripts=['scripts/undill','scripts/get_objgraph'])
 """
 
 # exec the 'setup' code

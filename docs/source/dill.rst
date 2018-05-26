@@ -1,6 +1,18 @@
 dill module documentation
 =========================
 
+dill module
+-----------
+
+.. automodule:: dill._dill
+    :members:
+    :undoc-members:
+    :private-members:
+    :special-members:
+    :show-inheritance:
+    :imported-members:
+..  :exclude-members:
+
 detect module
 -------------
 
@@ -12,18 +24,6 @@ detect module
     :show-inheritance:
     :imported-members:
 ..  :exclude-members: ismethod, isfunction, istraceback, isframe, iscode, parent, reference, at, parents, children
-
-dill module
------------
-
-.. automodule:: dill.dill
-    :members:
-    :undoc-members:
-    :private-members:
-    :special-members:
-    :show-inheritance:
-    :imported-members:
-..  :exclude-members:
 
 objtypes module
 ---------------

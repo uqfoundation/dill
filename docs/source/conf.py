@@ -19,7 +19,13 @@
 import os
 from datetime import datetime
 import sys
-sys.path.insert(0, os.path.abspath('../../scripts'))
+scripts = os.path.abspath('../../scripts')
+sys.path.insert(0, scripts)
+try:
+    os.symlink(scripts+os.sep+'undill', scripts+os.sep+'_undill.py')
+    os.symlink(scripts+os.sep+'get_objgraph', scripts+os.sep+'_get_objgraph.py')
+except:
+    pass
 
 # Import the project
 import dill

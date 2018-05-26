@@ -1,14 +1,14 @@
 dill scripts documentation
 ==========================
 
-dill_unpickle script
---------------------
-
-.. automodule:: dill_unpickle
-    :members:
-
 get_objgraph script
 -------------------
 
-.. automodule:: get_objgraph
+.. automodule:: _get_objgraph
+    :members:
+
+undill script
+--------------------
+
+.. automodule:: _undill
     :members:

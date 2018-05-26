@@ -80,17 +80,19 @@ If you have a new contribution, please submit a pull request.
 
 More Information
 ----------------
-Probably the best way to get started is to look at the tests that are
-provide within ``dill``. See ``dill.tests`` for a set of scripts that demonstrate
-how ``dill`` can serialize different python objects.  Since ``dill`` conforms
-to the ``pickle`` interface, the examples and documentation at
-http://docs.python.org/library/pickle.html also apply to ``dill`` if one will
-``import dill as pickle``. The source code is also generally well documented,
-so further questions may be resolved by inspecting the code itself. Please
-also feel free to submit a ticket on github, or ask a question on
-stackoverflow (**@Mike McKerns**).
-If you would like to share how you use ``dill`` in your work, please send an
-email (to **mmckerns at uqfoundation dot org**).
+Probably the best way to get started is to look at the documentation at
+http://dill.rtfd.io. Also see ``dill.tests`` for a set of scripts that
+demonstrate how ``dill`` can serialize different python objects. You can
+run the test suite with ``python -m dill.tests``. The contents of any
+pickle file can be examined with ``undill``.  As ``dill`` conforms to
+the ``pickle`` interface, the examples and documentation found at
+http://docs.python.org/library/pickle.html also apply to ``dill``
+if one will ``import dill as pickle``. The source code is also generally
+well documented, so further questions may be resolved by inspecting the
+code itself. Please feel free to submit a ticket on github, or ask a
+question on stackoverflow (**@Mike McKerns**).
+If you would like to share how you use ``dill`` in your work, please send
+an email (to **mmckerns at uqfoundation dot org**).
 
 
 Citation
@@ -105,7 +107,7 @@ acknowledge use of ``dill`` by citing the following in your publication::
 
     Michael McKerns and Michael Aivazis,
     "pathos: a framework for heterogeneous computing", 2010- ;
-    http://dev.danse.us/trac/pathos
+    http://trac.mystic.cacr.caltech.edu/project/pathos
 
 Please see http://trac.mystic.cacr.caltech.edu/project/pathos or
 http://arxiv.org/pdf/1202.1056 for further information.

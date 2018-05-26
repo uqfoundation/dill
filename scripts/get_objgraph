@@ -6,19 +6,18 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 """
-generate a plot of reference paths for any object in ``dill.types``
+display the reference paths for objects in ``dill.types`` or a .pkl file
 
 Notes:
-    the generated image is useful in showing what needs to be pickled,
-    and can be any object found in ``dill.objects`` after calling 
-    ``dill.load_types(picklable=True, unpicklable=True)``.
+    the generated image is useful in showing the pointer references in
+    objects that are or can be pickled.  Any object in ``dill.objects``
+    listed in ``dill.load_types(picklable=True, unpicklable=True)`` works.
 
 Examples::
 
-    $ get_objgraph.py FrameType
+    $ get_objgraph FrameType
     Image generated as FrameType.png
 """
-#XXX: useful if could read .pkl file and generate the graph... ?
 
 import dill as pickle
 #pickle.debug.trace(True)
@@ -32,14 +31,19 @@ from dill import objects
 if __name__ == "__main__":
     import sys
     if len(sys.argv) != 2:
-        print ("Please provide exactly one type name (e.g. 'IntType')")
+        print ("Please provide exactly one file or type name (e.g. 'IntType')")
         msg = "\n"
         for objtype in list(objects.keys())[:40]:
             msg += objtype + ', '
         print (msg + "...")
     else:
         objtype = str(sys.argv[-1])
-        obj = objects[objtype]
+        try:
+            obj = objects[objtype]
+        except KeyError:
+            obj = pickle.load(open(objtype,'rb'))
+            import os
+            objtype = os.path.splitext(objtype)[0]
         try:
             import objgraph
             objgraph.show_refs(obj, filename=objtype+'.png')
