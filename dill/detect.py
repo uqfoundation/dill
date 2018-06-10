@@ -265,8 +265,8 @@ def badobjects(obj, depth=0, exact=False, safe=False):
     if not depth:
         if pickles(obj,exact,safe): return None
         return obj
-    return dict(((attr, badobjects(getattr(obj,attr),depth-1,exact,safe)) \
-           for attr in dir(obj) if not pickles(getattr(obj,attr),exact,safe)))
+    return {attr: badobjects(getattr(obj,attr),depth-1,exact,safe) \
+           for attr in dir(obj) if not pickles(getattr(obj,attr),exact,safe)}
 
 def badtypes(obj, depth=0, exact=False, safe=False):
     """get types for objects that fail to pickle"""
@@ -274,8 +274,8 @@ def badtypes(obj, depth=0, exact=False, safe=False):
     if not depth:
         if pickles(obj,exact,safe): return None
         return type(obj)
-    return dict(((attr, badtypes(getattr(obj,attr),depth-1,exact,safe)) \
-           for attr in dir(obj) if not pickles(getattr(obj,attr),exact,safe)))
+    return {attr: badtypes(getattr(obj,attr),depth-1,exact,safe) \
+           for attr in dir(obj) if not pickles(getattr(obj,attr),exact,safe)}
 
 def errors(obj, depth=0, exact=False, safe=False):
     """get errors for objects that fail to pickle"""
@@ -285,9 +285,9 @@ def errors(obj, depth=0, exact=False, safe=False):
             pik = copy(obj)
             if exact:
                 assert pik == obj, \
-                    "Unpickling produces %s instead of %s" % (pik,obj)
+                    "Unpickling produces {} instead of {}".format(pik,obj)
             assert type(pik) == type(obj), \
-                "Unpickling produces %s instead of %s" % (type(pik),type(obj))
+                "Unpickling produces {} instead of {}".format(type(pik),type(obj))
             return None
         except Exception:
             import sys

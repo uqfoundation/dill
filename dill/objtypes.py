@@ -15,7 +15,7 @@ to load more objects and types, use dill.load_types()
 # non-local import of dill.objects
 from dill import objects
 for _type in objects.keys():
-    exec("%s = type(objects['%s'])" % (_type,_type))
+    exec("{} = type(objects['{}'])".format(_type,_type))
     
 del objects
 try:

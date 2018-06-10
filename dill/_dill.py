@@ -270,7 +270,7 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None):#, stri
     if NumpyArrayType and ndarraysubclassinstance(obj):
         @register(type(obj))
         def save_numpy_array(pickler, obj):
-            log.info("Nu: (%s, %s)" % (obj.shape,obj.dtype))
+            log.info("Nu: ({}, {})".format(obj.shape,obj.dtype))
             npdict = getattr(obj, '__dict__', None)
             f, args, state = obj.__reduce__()
             pickler.save_reduce(_create_array, (f,args,state,npdict), obj=obj)
@@ -367,7 +367,7 @@ def _restore_modules(main_module):
         return
     imports = main_module.__dict__.pop('__dill_imported')
     for module, name in imports:
-        exec("from %s import %s" % (module, name), main_module.__dict__)
+        exec("from {} import {}".format(module, name), main_module.__dict__)
 
 #NOTE: 06/03/15 renamed main_module to main
 def dump_session(filename='/tmp/session.pkl', main=None, byref=False):
@@ -1050,11 +1050,11 @@ def save_builtin_method(pickler, obj):
         if obj.__self__ is __builtin__:
             module = 'builtins' if PY3 else '__builtin__'
             _t = "B1"
-            log.info("%s: %s" % (_t, obj))
+            log.info("{}: {}".format(_t, obj))
         else:
             module = obj.__self__
             _t = "B3"
-            log.info("%s: %s" % (_t, obj))
+            log.info("{}: {}".format(_t, obj))
         if is_dill(pickler):
             _recurse = pickler._recurse
             pickler._recurse = False
@@ -1204,10 +1204,10 @@ def save_weakproxy(pickler, obj):
     refobj = _locate_object(_proxy_helper(obj))
     try:
         _t = "R2"
-        log.info("%s: %s" % (_t, obj))
+        log.info("{}: {}".format(_t, obj))
     except ReferenceError:
         _t = "R3"
-        log.info("%s: %s" % (_t, sys.exc_info()[1]))
+        log.info("{}: {}".format(_t, sys.exc_info()[1]))
    #callable = bool(getattr(refobj, '__call__', None))
     if type(obj) is CallableProxyType: callable = True
     else: callable = False
@@ -1280,7 +1280,7 @@ def save_type(pickler, obj):
             if is_dill(pickler) and not pickler._byref:
                 # thanks to Tom Stepleton pointing out pickler._session unneeded
                 _t = 'T2'
-                log.info("%s: %s" % (_t, obj))
+                log.info("{}: {}".format(_t, obj))
                 _dict = _dict_from_dictproxy(obj.__dict__)
         #   except: # punt to StockPickler (pickle by class reference)
             else:
@@ -1290,7 +1290,7 @@ def save_type(pickler, obj):
                 return
         else:
             _t = 'T3'
-            log.info("%s: %s" % (_t, obj))
+            log.info("{}: {}".format(_t, obj))
             _dict = obj.__dict__
        #print (_dict)
        #print ("%s\n%s" % (type(obj), obj.__name__))
@@ -1438,7 +1438,7 @@ def check(obj, *args, **kwds):
     finally:
         if fail and verbose:
             print("DUMP FAILED")
-    msg = "%s -c import dill; print(dill.loads(%s))" % (python, repr(_obj))
+    msg = "{} -c import dill; print(dill.loads({}))".format(python, repr(_obj))
     msg = "SUCCESS" if not subprocess.call(msg.split(None,2)) else "LOAD FAILED"
     if verbose:
         print(msg)

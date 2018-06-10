@@ -22,6 +22,6 @@ if __name__ == '__main__':
 
     for test in tests:
         print('.', end='')
-        os.system('{0} {1}'.format(python, test))
+        os.system('{} {}'.format(python, test))
     print('')
 

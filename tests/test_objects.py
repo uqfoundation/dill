@@ -45,11 +45,11 @@ def pickles(name, exact=False):
                 assert pik == obj
             except AssertionError:
                 assert type(obj) == type(pik)
-                print ("weak: %s %s" % (name, type(obj)))
+                print ("weak: {} {}".format(name, type(obj)))
         else:
             assert type(obj) == type(pik)
     except Exception:
-        print ("fails: %s %s" % (name, type(obj)))
+        print ("fails: {} {}".format(name, type(obj)))
 
 
 def test_objects():

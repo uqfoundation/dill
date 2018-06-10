@@ -21,7 +21,7 @@ def test_dict_contents():
     ok = dill.pickles(j)
    #except:
    #  print ("FAIL: %s with %s" % (i, dill.detect.errors(j)))
-    if verbose: print ("%s: %s, %s" % (ok, type(j), j))
+    if verbose: print ("{}: {}, {}".format(ok, type(j), j))
     assert ok
   if verbose: print ("")
 
@@ -49,13 +49,13 @@ def test_class_descriptors():
   d = _d.__dict__
   for i in d.values():
     ok = dill.pickles(i)
-    if verbose: print ("%s: %s, %s" % (ok, type(i), i))
+    if verbose: print ("{}: {}, {}".format(ok, type(i), i))
     assert ok
   if verbose: print ("")
   od = _newclass.__dict__
   for i in od.values():
     ok = dill.pickles(i)
-    if verbose: print ("%s: %s, %s" % (ok, type(i), i))
+    if verbose: print ("{}: {}, {}".format(ok, type(i), i))
     assert ok
   if verbose: print ("")
 
@@ -64,10 +64,10 @@ def test_class():
   o = _d()
   oo = _newclass()
   ok = dill.pickles(o)
-  if verbose: print ("%s: %s, %s" % (ok, type(o), o))
+  if verbose: print ("{}: {}, {}".format(ok, type(o), o))
   assert ok
   ok = dill.pickles(oo)
-  if verbose: print ("%s: %s, %s" % (ok, type(oo), oo))
+  if verbose: print ("{}: {}, {}".format(ok, type(oo), oo))
   assert ok
   if verbose: print ("")
 
@@ -78,16 +78,16 @@ def test_frame_related():
   e,t = _f()
   _is = lambda ok: not ok if dill._dill.IS_PYPY else ok
   ok = dill.pickles(f)
-  if verbose: print ("%s: %s, %s" % (ok, type(f), f))
+  if verbose: print ("{}: {}, {}".format(ok, type(f), f))
   assert _is(not ok) #XXX: dill fails
   ok = dill.pickles(g)
-  if verbose: print ("%s: %s, %s" % (ok, type(g), g))
+  if verbose: print ("{}: {}, {}".format(ok, type(g), g))
   assert _is(not ok) #XXX: dill fails
   ok = dill.pickles(t)
-  if verbose: print ("%s: %s, %s" % (ok, type(t), t))
+  if verbose: print ("{}: {}, {}".format(ok, type(t), t))
   assert not ok #XXX: dill fails
   ok = dill.pickles(e)
-  if verbose: print ("%s: %s, %s" % (ok, type(e), e))
+  if verbose: print ("{}: {}, {}".format(ok, type(e), e))
   assert ok
   if verbose: print ("")
 

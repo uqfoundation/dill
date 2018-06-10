@@ -55,7 +55,7 @@ def _matchlambda(func, line):
     # process the line (removing leading whitespace, etc)
     lhs,rhs = line.split('lambda ',1)[-1].split(":", 1) #FIXME: if !1 inputs
     try: #FIXME: unsafe
-        _ = eval("lambda %s : %s" % (lhs,rhs), globals(),locals())
+        _ = eval("lambda {} : {}".format(lhs,rhs), globals(),locals())
     except: _ = dummy
     # get code objects, for comparison
     _, code = getcode(_).co_code, getcode(func).co_code
@@ -77,7 +77,7 @@ def _matchlambda(func, line):
     if (line.count('lambda ') > 1) and (lhs in freevars(func).keys()):
         _lhs,_rhs = rhs.split('lambda ',1)[-1].split(":",1) #FIXME: if !1 inputs
         try: #FIXME: unsafe
-            _f = eval("lambda %s : %s" % (_lhs,_rhs), globals(),locals())
+            _f = eval("lambda {} : {}".format(_lhs,_rhs), globals(),locals())
         except: _f = dummy
         # get code objects, for comparison
         _, code = getcode(_f).co_code, getcode(func).co_code
@@ -359,7 +359,7 @@ def getsource(object, alias='', lstrip=False, enclosing=False, \
             if module in ['builtins','__builtin__']:
                 return getimport(object, alias, builtin=builtin)
             else: #FIXME: leverage getimport? use 'from module import name'?
-                lines, lnum = ["%s = __import__('%s', fromlist=['%s']).%s\n" % (name,module,name,name)], 0
+                lines, lnum = ["{} = __import__('{}', fromlist=['{}']).{}\n".format(name,module,name,name)], 0
                 obj = eval(lines[0].lstrip(name + ' = '))
                 lines, lnum = getsourcelines(obj, enclosing=enclosing)
 
@@ -389,13 +389,13 @@ def getsource(object, alias='', lstrip=False, enclosing=False, \
             #XXX: use regex from findsource / getsourcelines ?
             if lines[skip].lstrip().startswith('def '): # we have a function
                 if alias != object.__name__:
-                    lines.append('\n%s = %s\n' % (alias, object.__name__))
+                    lines.append('\n{} = {}\n'.format(alias, object.__name__))
             elif 'lambda ' in lines[skip]: # we have a lambda
                 if alias != lines[skip].split('=')[0].strip():
-                    lines[skip] = '%s = %s' % (alias, lines[skip])
+                    lines[skip] = '{} = {}'.format(alias, lines[skip])
             else: # ...try to use the object's name
                 if alias != object.__name__:
-                    lines.append('\n%s = %s\n' % (alias, object.__name__))
+                    lines.append('\n{} = {}\n'.format(alias, object.__name__))
         else: # class or class instance
             if instance:
                 if alias != lines[-1].split('=')[0].strip():
@@ -403,7 +403,7 @@ def getsource(object, alias='', lstrip=False, enclosing=False, \
             else:
                 name = getname(object, force=True) or object.__name__
                 if alias != name:
-                    lines.append('\n%s = %s\n' % (alias, name))
+                    lines.append('\n{} = {}\n'.format(alias, name))
     return ''.join(lines)
 
 
@@ -546,7 +546,7 @@ def _enclose(object, alias=''): #FIXME: needs alias to hold returned object
     code += indent(getsource(object, alias=stub, lstrip=True, force=True))
     code += indent('return %s\n' % stub)
     if alias: code += '%s = ' % alias
-    code += '%s(); del %s\n' % (dummy, dummy)
+    code += '{}(); del {}\n'.format(dummy, dummy)
    #code += "globals().pop('%s',lambda :None)()\n" % dummy
     return code
 
@@ -577,9 +577,9 @@ def dumpsource(object, alias='', new=False, enclose=True):
         code += getsource(object.__class__, alias='', lstrip=True, force=True)
         mod = repr(object.__module__) # should have a module (no builtins here)
         if PY3:
-            code += pre + 'dill.loads(%s.replace(b%s,bytes(__name__,"UTF-8")))\n' % (pik,mod)
+            code += pre + 'dill.loads({}.replace(b{},bytes(__name__,"UTF-8")))\n'.format(pik,mod)
         else:
-            code += pre + 'dill.loads(%s.replace(%s,__name__))\n' % (pik,mod)
+            code += pre + 'dill.loads({}.replace({},__name__))\n'.format(pik,mod)
        #code += 'del %s' % object.__class__.__name__ #NOTE: kills any existing!
 
     if enclose:
@@ -689,7 +689,7 @@ def _getimport(head, tail, alias='', verify=True, builtin=False):
         else: pass # handle builtins below
     # get likely import string
     if not head: _str = "import %s" % tail
-    else: _str = "from %s import %s" % (head, tail)
+    else: _str = "from {} import {}".format(head, tail)
     _alias = " as %s\n" % alias if alias else "\n"
     if alias == tail: _alias = "\n"
     _str += _alias
