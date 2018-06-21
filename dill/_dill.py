@@ -100,7 +100,7 @@ try:
         raise AttributeError('find_spec not found')
     import importlib
     if not importlib.machinery.PathFinder().find_spec('numpy'):
-        raise ImportError('numpy not installed')
+        raise ImportError("No module named 'numpy'")
     NumpyUfuncType = True
     NumpyArrayType = True
 except AttributeError:
