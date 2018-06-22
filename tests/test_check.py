@@ -48,10 +48,7 @@ def test_protocol():
 
 
 def test_python():
-    if PY3:
-        raise_check(f, python='python3.4')
-    else:
-        raise_check(f, python='python2.7')
+    raise_check(f, python=None)
 
 
 #TODO: test incompatible versions
