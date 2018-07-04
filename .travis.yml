@@ -5,18 +5,44 @@ sudo: false
 matrix:
     include:
         - python: '2.5'
+          dist: trusty
+          sudo: false
         - python: '2.6'
+          dist: trusty
+          sudo: false
         - python: '2.7'
+          dist: trusty
+          sudo: false
         - python: '3.1'
+          dist: trusty
+          sudo: false
         - python: '3.2'
+          dist: trusty
+          sudo: false
         - python: '3.3'
+          dist: trusty
+          sudo: false
         - python: '3.4'
+          dist: trusty
+          sudo: false
         - python: '3.5'
+          dist: trusty
+          sudo: false
         - python: '3.6'
-        - python: '3.7-dev'
+          dist: trusty
+          sudo: false
+        - python: '3.7'
+          dist: xenial
+          sudo: true
         - python: 'nightly'
+          dist: xenial
+          sudo: true
         - python: 'pypy'
+          dist: trusty
+          sudo: false
         - python: 'pypy3'
+          dist: trusty
+          sudo: false
     allow_failures:
         - python: '2.5'
         - python: '2.6'
