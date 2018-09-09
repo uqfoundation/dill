@@ -1365,7 +1365,7 @@ def save_function(pickler, obj):
            #    if isinstance(value, stacktypes) and id(value) in stack:
            #        del globs[key]
             # ABORT: if self-references, use _recurse=False
-            if obj in globs.values(): # or id(obj) in stack:
+            if id(obj) in stack: # or obj in globs.values():
                 globs = obj.__globals__ if PY3 else obj.func_globals
         else:
             globs = obj.__globals__ if PY3 else obj.func_globals

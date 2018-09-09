@@ -214,7 +214,7 @@ def globalvars(func, recurse=True, builtin=False):
             # find globals for all entries of func
             for key in func.copy(): #XXX: unnecessary...?
                 nested_func = globs.get(key)
-                if nested_func == orig_func:
+                if nested_func is orig_func:
                    #func.remove(key) if key in func else None
                     continue  #XXX: globalvars(func, False)?
                 func.update(globalvars(nested_func, True, builtin))
@@ -228,7 +228,7 @@ def globalvars(func, recurse=True, builtin=False):
             func = set(nestedglobals(func))
             # find globals for all entries of func
             for key in func.copy(): #XXX: unnecessary...?
-                if key == orig_func:
+                if key is orig_func:
                    #func.remove(key) if key in func else None
                     continue  #XXX: globalvars(func, False)?
                 nested_func = globs.get(key)
