@@ -1256,6 +1256,7 @@ def save_module(pickler, obj):
             builtin_mod = any([obj.__file__.startswith(os.path.normpath(getattr(sys, name)))
                            for name in names if hasattr(sys, name)])
             builtin_mod = builtin_mod or 'site-packages' in obj.__file__
+            builtin_mod = builtin_mod or any(obj.__file__.startswith(os.path.normpath(ppath)) for ppath in sys.path)
         else:
             builtin_mod = True
         if obj.__name__ not in ("builtins", "dill") \
