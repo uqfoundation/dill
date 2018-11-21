@@ -955,7 +955,7 @@ def save_attrgetter(pickler, obj):
 
 def _save_file(pickler, obj, open_):
     if obj.closed:
-        position = None
+        position = 0
     else:
         obj.flush()
         if obj in (sys.__stdout__, sys.__stderr__, sys.__stdin__):
@@ -1011,7 +1011,7 @@ if InputType:
     def save_stringi(pickler, obj):
         log.info("Io: %s" % obj)
         if obj.closed:
-            value = ''; position = None
+            value = ''; position = 0
         else:
             value = obj.getvalue(); position = obj.tell()
         pickler.save_reduce(_create_stringi, (value, position, \
@@ -1023,7 +1023,7 @@ if InputType:
     def save_stringo(pickler, obj):
         log.info("Io: %s" % obj)
         if obj.closed:
-            value = ''; position = None
+            value = ''; position = 0
         else:
             value = obj.getvalue(); position = obj.tell()
         pickler.save_reduce(_create_stringo, (value, position, \
