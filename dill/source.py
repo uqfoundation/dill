@@ -22,13 +22,15 @@ __all__ = ['findsource', 'getsourcelines', 'getsource', 'indent', 'outdent', \
            '_wrap', 'dumpsource', 'getname', '_namespace', 'getimport', \
            '_importable', 'importable','isdynamic', 'isfrommain']
 
-import re
 import linecache
+import re
+from inspect import (getblock, getfile, getmodule, getsourcefile, indentsize,
+                     isbuiltin, isclass, iscode, isframe, isfunction, ismethod,
+                     ismodule, istraceback)
 from tokenize import TokenError
-from inspect import ismodule, isclass, ismethod, isfunction, istraceback
-from inspect import isframe, iscode, getfile, getmodule, getsourcefile
-from inspect import getblock, indentsize, isbuiltin
+
 from ._dill import PY3
+
 
 def isfrommain(obj):
     "check if object was built in __main__"
@@ -93,8 +95,8 @@ def _matchlambda(func, line):
     _ = _.split(_[0])  # 't' #XXX: remove matching values if starts the same?
     _f = code.split(code[0])  # '\x88'
     #NOTE: should be same code different order, with different first element
-    _ = dict(re.match('([\W\D\S])(.*)', _[i]).groups() for i in range(1,len(_)))
-    _f = dict(re.match('([\W\D\S])(.*)', _f[i]).groups() for i in range(1,len(_f)))
+    _ = dict(re.match(r'([\W\D\S])(.*)', _[i]).groups() for i in range(1,len(_)))
+    _f = dict(re.match(r'([\W\D\S])(.*)', _f[i]).groups() for i in range(1,len(_f)))
     if (_.keys() == _f.keys()) and (sorted(_.values()) == sorted(_f.values())):
         return True
     return False
@@ -839,7 +841,7 @@ def _closuredimport(func, alias='', builtin=False):
         else: # we have to "hack" a bit... and maybe be lucky
             encl = outermost(func)
             # pattern: 'func = enclosing(fobj'
-            pat = '.*[\w\s]=\s*'+getname(encl)+'\('+getname(fobj)
+            pat = r'.*[\w\s]=\s*'+getname(encl)+'\('+getname(fobj)
             mod = getname(getmodule(encl))
             #HACK: get file containing 'outer' function; is func there?
             lines,_ = findsource(encl)
@@ -866,7 +868,7 @@ def _closuredimport(func, alias='', builtin=False):
             lines,_ = findsource(name)
             # pattern: 'func = enclosing('
             candidate = [line for line in lines if getname(name) in line and \
-                         re.match('.*[\w\s]=\s*'+getname(name)+'\(', line)]
+                         re.match(r'.*[\w\s]=\s*'+getname(name)+r'\(', line)]
             if not len(candidate): raise TypeError('import could not be found')
             candidate = candidate[-1]
             name = candidate.split('=',1)[0].split()[-1].strip()
