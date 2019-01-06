@@ -38,6 +38,7 @@ _use_diff = False
 PY3 = (sys.hexversion >= 0x30000f0)
 # OLDER: 3.0 <= x < 3.4 *OR* x < 2.7.10  #NOTE: guessing relevant versions
 OLDER = (PY3 and sys.hexversion < 0x30400f0) or (sys.hexversion < 0x2070af0)
+PY34 = (0x30400f0 <= sys.hexversion < 0x30500f0)
 if PY3: #XXX: get types from .objtypes ?
     import builtins as __builtin__
     from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
@@ -1458,10 +1459,11 @@ def check(obj, *args, **kwds):
     return
 
 # use to protect against missing attributes
-def is_dill(pickler):
+def is_dill(pickler, child=None):
     "check the dill-ness of your pickler"
-    return 'dill' in pickler.__module__
-   #return hasattr(pickler,'_main')
+    if (child is False) or PY34 or (not hasattr(pickler.__class__, 'mro')):
+        return 'dill' in pickler.__module__
+    return Pickler in pickler.__class__.mro()
 
 def _extend():
     """extend pickle with all of dill's registered types"""
