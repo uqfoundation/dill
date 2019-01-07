@@ -164,11 +164,11 @@ Requirements
 ``dill`` requires:
 
     - ``python``, **version >= 2.5** or **version >= 3.1**, or ``pypy``
-    - ``pyreadline``, **version >= 1.7.1** (on windows)
 
 Optional requirements:
 
     - ``setuptools``, **version >= 0.6**
+    - ``pyreadline``, **version >= 1.7.1** (on windows)
     - ``objgraph``, **version >= 1.7.2**
 
 
@@ -279,13 +279,18 @@ if has_setuptools:
 """
     if sys.platform[:3] == 'win':
         setup_code += """
-      install_requires = ['pyreadline%s'],
-""" % (pyreadline_version)
+      extras_require = {'readline': ['pyreadline%s'], 'graph': ['objgraph%s']},
+""" % (pyreadline_version, objgraph_version)
     # verrrry unlikely that this is still relevant
     elif hex(sys.hexversion) < '0x20500f0':
         setup_code += """
       install_requires = ['ctypes%s'],
-""" % (ctypes_version)
+      extras_require = {'readline': [], 'graph': ['objgraph%s']},
+""" % (ctypes_version, objgraph_version)
+    else:
+        setup_code += """
+      extras_require = {'readline': [], 'graph': ['objgraph%s']},
+""" % (objgraph_version)
 
 # add the scripts, and close 'setup' call
 setup_code += """    

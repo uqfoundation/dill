@@ -117,7 +117,16 @@ def findsource(object):
     except TypeError: file = None 
     # use readline when working in interpreter (i.e. __main__ and not file)
     if module and module.__name__ == '__main__' and not file:
-        import readline
+        try: 
+            import readline
+            err = ''
+        except:
+            import sys
+            err = sys.exc_info()[1].args[0]
+            if sys.platform[:3] == 'win':
+                err += ", please install 'pyreadline'"
+        if err:
+            raise IOError(msg)
         lbuf = readline.get_current_history_length()
         lines = [readline.get_history_item(i)+'\n' for i in range(1,lbuf)]
     else:
@@ -142,12 +151,13 @@ def findsource(object):
             lines = linecache.getlines(file)
 
     if not lines:
-        raise IOError('could not get source code')
+        raise IOError('could not extract source code')
 
     #FIXME: all below may fail if exec used (i.e. exec('f = lambda x:x') )
     if ismodule(object):
         return lines, 0
 
+    #NOTE: beneficial if search goes from end to start of buffer history
     name = pat1 = obj = ''
     pat2 = r'^(\s*@)'
 #   pat1b = r'^(\s*%s\W*=)' % name #FIXME: finds 'f = decorate(f)', not exec
