@@ -36,6 +36,12 @@ builtins_types = set((str, list, dict, set, frozenset, int))
 dont_memo = set(id(i) for i in (memo, sys.modules, sys.path_importer_cache,
              os.environ, id_to_obj))
 
+# InstanceType is a type of all the instances of old-style classes (Python 2).
+try:
+    InstanceType = types.InstanceType
+except AttributeError:
+    # Python 3
+    InstanceType = None
 
 def get_attrs(obj):
     """
@@ -57,7 +63,7 @@ def get_seq(obj, cache={str: False, frozenset: False, list: True, set: True,
     """
     Gets all the items in a sequence or return None
     """
-    o_type = type(obj)
+    o_type = type(obj) if type(obj) is not InstanceType else obj.__class__
     hsattr = hasattr
     if o_type in cache:
         if cache[o_type]:
