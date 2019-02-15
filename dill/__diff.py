@@ -57,7 +57,10 @@ def get_seq(obj, cache={str: False, frozenset: False, list: True, set: True,
     """
     Gets all the items in a sequence or return None
     """
-    o_type = type(obj)
+    try:
+        o_type = obj.__class__
+    except AttributeError:
+        o_type = type(obj)
     hsattr = hasattr
     if o_type in cache:
         if cache[o_type]:
