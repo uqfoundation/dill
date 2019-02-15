@@ -779,12 +779,9 @@ def _create_array(f, args, state, npdict=None):
     return array
 
 def _create_namedtuple(name, fieldnames, modulename):
-    mod = _import_module(modulename, safe=True)
-    if mod is not None:
-        try:
-            return getattr(mod, name)
-        except:
-            pass
+    class_ = _import_module(modulename + '.' + name, safe=True)
+    if class_ is not None:
+        return class_
     import collections
     t = collections.namedtuple(name, fieldnames)
     t.__module__ = modulename
