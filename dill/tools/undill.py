@@ -14,7 +14,7 @@ Examples::
     ['hello', 'world']
 """
 
-if __name__ == '__main__':
+def undill():
     import sys
     import dill
     for file in sys.argv[1:]:
