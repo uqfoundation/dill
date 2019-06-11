@@ -484,7 +484,10 @@ x['CSVDictReaderType'] = csv.DictReader(_cstrI)
 x['CSVDictWriterType'] = csv.DictWriter(_cstrO,{})
 # cryptographic services (CH 14)
 x['HashType'] = hashlib.md5()
-x['HMACType'] = hmac.new(_in)
+if (hex(sys.hexversion) < '0x30800a1'):
+    x['HMACType'] = hmac.new(_in)
+else:
+    x['HMACType'] = hmac.new(_in, digestmod='md5')
 # generic operating system services (CH 15)
 if HAS_CURSES: pass
     #x['CursesWindowType'] = _curwin = curses.initscr() #FIXME: messes up tty

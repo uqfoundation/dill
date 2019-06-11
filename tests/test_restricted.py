@@ -23,5 +23,5 @@ def test_function_with_restricted_object():
     deserialized = dill.loads(dill.dumps(restricted_func, recurse=True))
 
 
-if __name__ is '__main__':
+if __name__ == '__main__':
     test_function_with_restricted_object()

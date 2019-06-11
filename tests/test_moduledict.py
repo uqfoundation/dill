@@ -48,7 +48,7 @@ def test_doctest():
     doctest.testmod()
 
 
-if __name__ is '__main__':
+if __name__ == '__main__':
     test_decorated()
     test_normal()
     test_doctest()
