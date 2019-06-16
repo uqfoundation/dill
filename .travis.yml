@@ -34,6 +34,9 @@ matrix:
         - python: '3.7'
           dist: xenial
           sudo: true
+        - python: '3.8'
+          dist: xenial
+          sudo: true
         - python: 'nightly'
           dist: xenial
           sudo: true
@@ -49,6 +52,7 @@ matrix:
         - python: '3.1'
         - python: '3.2'
         - python: '3.3'
+        - python: '3.8'
         - python: 'nightly'
         - python: 'pypy3'
     fast_finish: true
