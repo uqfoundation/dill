@@ -7,45 +7,74 @@ matrix:
         - python: '2.5'
           dist: trusty
           sudo: false
+          env:
+
         - python: '2.6'
           dist: trusty
           sudo: false
+          env:
+
         - python: '2.7'
           dist: trusty
           sudo: false
+          env:
+
         - python: '3.1'
           dist: trusty
           sudo: false
+          env:
+
         - python: '3.2'
           dist: trusty
           sudo: false
+          env:
+
         - python: '3.3'
           dist: trusty
           sudo: false
+          env:
+
         - python: '3.4'
           dist: trusty
           sudo: false
+          env:
+
         - python: '3.5'
           dist: trusty
           sudo: false
+          env:
+
         - python: '3.6'
           dist: trusty
           sudo: false
+          env:
+            - COVERAGE="true"
+
         - python: '3.7'
           dist: xenial
           sudo: true
+          env:
+
         - python: '3.8-dev'
           dist: xenial
           sudo: true
+          env:
+
         - python: 'nightly'
           dist: xenial
           sudo: true
+          env:
+
         - python: 'pypy'
           dist: trusty
           sudo: false
+          env:
+
         - python: 'pypy3'
           dist: trusty
           sudo: false
+          env:
+
     allow_failures:
         - python: '2.5'
         - python: '2.6'
@@ -62,9 +91,14 @@ cache:
 
 before_install:
     - set -e  # fail on any error
+    - if [[ $COVERAGE == "true" ]]; then pip install coverage; fi
 
 install:
     - python setup.py build && python setup.py install
 
 script:
-    - for test in tests/*.py; do echo $test ; python $test > /dev/null ; done
+    - for test in tests/__init__.py; do echo $test ; if [[ $COVERAGE == "true" ]]; then coverage run $test > /dev/null; else python $test > /dev/null; fi ; done
+    - for test in tests/test_*.py; do echo $test ; if [[ $COVERAGE == "true" ]]; then coverage run -a $test > /dev/null; else python $test > /dev/null; fi ; done
+
+after_success:
+    - if [[ $COVERAGE == "true" ]]; then bash <(curl -s https://codecov.io/bash); else echo ''; fi
