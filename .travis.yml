@@ -18,6 +18,7 @@ matrix:
           dist: trusty
           sudo: false
           env:
+            - COVERAGE="true"
 
         - python: '3.1'
           dist: trusty
@@ -48,7 +49,6 @@ matrix:
           dist: trusty
           sudo: false
           env:
-            - COVERAGE="true"
 
         - python: '3.7'
           dist: xenial
