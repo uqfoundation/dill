@@ -163,7 +163,7 @@ Requirements
 
 ``dill`` requires:
 
-    - ``python``, **version >= 2.5** or **version >= 3.1**, or ``pypy``
+    - ``python``, **version >= 2.6** or **version >= 3.1**, or ``pypy``
 
 Optional requirements:
 
@@ -244,13 +244,12 @@ setup(name='dill',
       platforms = ['Linux', 'Windows', 'Mac'],
       url = 'https://pypi.org/project/dill',
       download_url = 'https://github.com/uqfoundation/dill/releases/download/dill-%s/dill-%s.tar.gz',
-      python_requires='>=2.5, !=3.0.*',
+      python_requires='>=2.6, !=3.0.*',
       classifiers = ['Development Status :: 5 - Production/Stable',
                      'Intended Audience :: Developers',
                      'Intended Audience :: Science/Research',
                      'License :: OSI Approved :: BSD License',
                      'Programming Language :: Python :: 2',
-                     'Programming Language :: Python :: 2.5',
                      'Programming Language :: Python :: 2.6',
                      'Programming Language :: Python :: 2.7',
                      'Programming Language :: Python :: 3',
