@@ -1,8 +1,5 @@
 dill
 ====
-
-[![Travis Build Status](https://img.shields.io/travis/uqfoundation/dill.svg?label=build&logo=travis&branch=master)](https://travis-ci.org/uqfoundation/dill)
-
 serialize all of python
 
 About Dill
@@ -74,6 +71,8 @@ The latest released version of ``dill`` is available from:
 
 
 Development Version
+[![Travis Build Status](https://img.shields.io/travis/uqfoundation/dill.svg?label=build&logo=travis&branch=master)](https://travis-ci.org/uqfoundation/dill)
+[![codecov](https://codecov.io/gh/uqfoundation/dill/branch/master/graph/badge.svg)](https://codecov.io/gh/uqfoundation/dill)
 -------------------
 You can get the latest development version with all the shiny new features at:
     https://github.com/uqfoundation
