@@ -1,5 +1,8 @@
 dill
 ====
+
+[![Travis Build Status](https://img.shields.io/travis/uqfoundation/dill.svg?label=build&logo=travis&branch=master)](https://travis-ci.org/uqfoundation/dill)
+
 serialize all of python
 
 About Dill
