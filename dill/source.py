@@ -851,7 +851,7 @@ def _closuredimport(func, alias='', builtin=False):
         else: # we have to "hack" a bit... and maybe be lucky
             encl = outermost(func)
             # pattern: 'func = enclosing(fobj'
-            pat = r'.*[\w\s]=\s*'+getname(encl)+'\\('+getname(fobj)
+            pat = r'.*[\w\s]=\s*'+getname(encl)+r'\('+getname(fobj)
             mod = getname(getmodule(encl))
             #HACK: get file containing 'outer' function; is func there?
             lines,_ = findsource(encl)
