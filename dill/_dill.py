@@ -35,10 +35,10 @@ import os
 import sys
 diff = None
 _use_diff = False
-PY3 = (sys.hexversion >= 0x30000f0)
+PY3 = (sys.hexversion >= 0x3000000)
 # OLDER: 3.0 <= x < 3.4 *OR* x < 2.7.10  #NOTE: guessing relevant versions
-OLDER = (PY3 and sys.hexversion < 0x30400f0) or (sys.hexversion < 0x2070af0)
-PY34 = (0x30400f0 <= sys.hexversion < 0x30500f0)
+OLDER = (PY3 and sys.hexversion < 0x3040000) or (sys.hexversion < 0x2070ab1)
+PY34 = (0x3040000 <= sys.hexversion < 0x3050000)
 if PY3: #XXX: get types from .objtypes ?
     import builtins as __builtin__
     from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
@@ -239,9 +239,10 @@ FILE_FMODE = 2
 ### Shorthands (modified from python2.5/lib/pickle.py)
 def copy(obj, *args, **kwds):
     """use pickling to 'copy' an object"""
-    return loads(dumps(obj, *args, **kwds))
+    ignore = kwds.pop('ignore', Unpickler._ignore)
+    return loads(dumps(obj, *args, **kwds), ignore=ignore)
 
-def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None):#, strictio=None):
+def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
     """pickle an object to a file"""
     from .settings import settings
     strictio = False #FIXME: strict=True needs cleanup
@@ -250,7 +251,7 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None):#, stri
     if fmode is None: fmode = settings['fmode']
     if recurse is None: recurse = settings['recurse']
     stack.clear()  # clear record of 'recursion-sensitive' pickled objects
-    pik = Pickler(file, protocol)
+    pik = Pickler(file, protocol, **kwds)
     pik._main = _main_module
     # apply kwd settings
     pik._byref = bool(byref)
@@ -290,17 +291,17 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None):#, stri
     stack.clear()  # clear record of 'recursion-sensitive' pickled objects
     return
 
-def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None):#, strictio=None):
+def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
     """pickle an object to a string"""
     file = StringIO()
-    dump(obj, file, protocol, byref, fmode, recurse)#, strictio)
+    dump(obj, file, protocol, byref, fmode, recurse, **kwds)#, strictio)
     return file.getvalue()
 
-def load(file, ignore=None):
+def load(file, ignore=None, **kwds):
     """unpickle an object from a file"""
     from .settings import settings
     if ignore is None: ignore = settings['ignore']
-    pik = Unpickler(file)
+    pik = Unpickler(file, **kwds)
     pik._main = _main_module
     # apply kwd settings
     pik._ignore = bool(ignore)
@@ -313,10 +314,10 @@ def load(file, ignore=None):
    #_main_module.__dict__.update(obj.__dict__) #XXX: should update globals ?
     return obj
 
-def loads(str, ignore=None):
+def loads(str, ignore=None, **kwds):
     """unpickle an object from a string"""
     file = StringIO(str)
-    return load(file, ignore)
+    return load(file, ignore, **kwds)
 
 # def dumpzs(obj, protocol=None):
 #     """pickle an object to a compressed string"""
@@ -375,7 +376,7 @@ def _restore_modules(main_module):
         exec("from %s import %s" % (module, name), main_module.__dict__)
 
 #NOTE: 06/03/15 renamed main_module to main
-def dump_session(filename='/tmp/session.pkl', main=None, byref=False):
+def dump_session(filename='/tmp/session.pkl', main=None, byref=False, **kwds):
     """pickle the current state of __main__ to a file"""
     from .settings import settings
     protocol = settings['protocol']
@@ -387,8 +388,8 @@ def dump_session(filename='/tmp/session.pkl', main=None, byref=False):
     try:
         if byref:
             main = _stash_modules(main)
-        pickler = Pickler(f, protocol)
-        pickler._main = main
+        pickler = Pickler(f, protocol, **kwds)
+        pickler._main = main     #FIXME: dill.settings are disabled
         pickler._byref = False   # disable pickling by name reference
         pickler._recurse = False # disable pickling recursion for globals
         pickler._session = True  # is best indicator of when pickling a session
@@ -398,15 +399,15 @@ def dump_session(filename='/tmp/session.pkl', main=None, byref=False):
             f.close()
     return
 
-def load_session(filename='/tmp/session.pkl', main=None):
+def load_session(filename='/tmp/session.pkl', main=None, **kwds):
     """update the __main__ module with the state from the session file"""
     if main is None: main = _main_module
     if hasattr(filename, 'read'):
         f = filename
     else:
         f = open(filename, 'rb')
-    try:
-        unpickler = Unpickler(f)
+    try: #FIXME: dill.settings are disabled
+        unpickler = Unpickler(f, **kwds)
         unpickler._main = main
         unpickler._session = True
         module = unpickler.load()
@@ -1455,7 +1456,7 @@ def check(obj, *args, **kwds):
    # == undocumented ==
    # python -- the string path or executable name of the selected python
    # verbose -- if True, be verbose about printing warning messages
-   # all other args and kwds are passed to dill.dumps
+   # all other args and kwds are passed to dill.dumps #FIXME: ignore on load
     verbose = kwds.pop('verbose', False)
     python = kwds.pop('python', None)
     if python is None:

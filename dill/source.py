@@ -126,7 +126,7 @@ def findsource(object):
             if sys.platform[:3] == 'win':
                 err += ", please install 'pyreadline'"
         if err:
-            raise IOError(msg)
+            raise IOError(err)
         lbuf = readline.get_current_history_length()
         lines = [readline.get_history_item(i)+'\n' for i in range(1,lbuf)]
     else:
@@ -851,7 +851,7 @@ def _closuredimport(func, alias='', builtin=False):
         else: # we have to "hack" a bit... and maybe be lucky
             encl = outermost(func)
             # pattern: 'func = enclosing(fobj'
-            pat = r'.*[\w\s]=\s*'+getname(encl)+'\\('+getname(fobj)
+            pat = r'.*[\w\s]=\s*'+getname(encl)+r'\('+getname(fobj)
             mod = getname(getmodule(encl))
             #HACK: get file containing 'outer' function; is func there?
             lines,_ = findsource(encl)
