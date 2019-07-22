@@ -798,7 +798,8 @@ def _getattr(objclass, name, repr_str):
     except:
         try:
             attr = objclass.__dict__
-            if type(attr) is DictProxyType:
+            if (sys.hexversion < 0x30300f0 and type(attr) is DictProxyType) or \
+               (sys.hexversion >= 0x30300f0 and type(attr) is MappingProxyType):
                 attr = attr[name]
             else:
                 attr = getattr(objclass,name)
