@@ -2,7 +2,7 @@
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
 # Copyright (c) 2008-2016 California Institute of Technology.
-# Copyright (c) 2016-2018 The Uncertainty Quantification Foundation.
+# Copyright (c) 2016-2019 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
@@ -57,7 +57,10 @@ def get_seq(obj, cache={str: False, frozenset: False, list: True, set: True,
     """
     Gets all the items in a sequence or return None
     """
-    o_type = type(obj)
+    try:
+        o_type = obj.__class__
+    except AttributeError:
+        o_type = type(obj)
     hsattr = hasattr
     if o_type in cache:
         if cache[o_type]:

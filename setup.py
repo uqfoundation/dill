@@ -2,15 +2,15 @@
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
 # Copyright (c) 2008-2016 California Institute of Technology.
-# Copyright (c) 2016-2018 The Uncertainty Quantification Foundation.
+# Copyright (c) 2016-2019 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 import os
 
 # set version numbers
-stable_version = '0.2.8.2'
-target_version = '0.2.9'
+stable_version = '0.3.0'
+target_version = '0.3.1'
 is_release = stable_version == target_version
 
 # check if easy_install is available
@@ -164,11 +164,11 @@ Requirements
 ``dill`` requires:
 
     - ``python``, **version 2.7** or **version >= 3.4**, or ``pypy``
-    - ``pyreadline``, **version >= 1.7.1** (on windows)
 
 Optional requirements:
 
     - ``setuptools``, **version >= 0.6**
+    - ``pyreadline``, **version >= 1.7.1** (on windows)
     - ``objgraph``, **version >= 1.7.2**
 
 
@@ -274,8 +274,12 @@ if has_setuptools:
 """
     if sys.platform[:3] == 'win':
         setup_code += """
-      install_requires = ['pyreadline%s'],
-""" % (pyreadline_version)
+      extras_require = {'readline': ['pyreadline%s'], 'graph': ['objgraph%s']},
+""" % (pyreadline_version, objgraph_version)
+    else:
+        setup_code += """
+      extras_require = {'readline': [], 'graph': ['objgraph%s']},
+""" % (objgraph_version)
 
 # add the scripts, and close 'setup' call
 setup_code += """    

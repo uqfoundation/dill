@@ -2,7 +2,7 @@
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
 # Copyright (c) 2008-2016 California Institute of Technology.
-# Copyright (c) 2016-2018 The Uncertainty Quantification Foundation.
+# Copyright (c) 2016-2019 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
@@ -140,9 +140,9 @@ def test_numpy():
     from numpy import array
     x = array([1,2,3])
     assert getimportable(x) == 'from numpy import array\narray([1, 2, 3])\n'
-    assert getimportable(array) == 'from numpy.core.multiarray import array\n'
+    assert getimportable(array) == 'from %s import array\n' % array.__module__
     assert getimportable(x, byname=False) == 'from numpy import array\narray([1, 2, 3])\n'
-    assert getimportable(array, byname=False) == 'from numpy.core.multiarray import array\n'
+    assert getimportable(array, byname=False) == 'from %s import array\n' % array.__module__
   except ImportError: pass
 
 #NOTE: if before likely_import(pow), will cause pow to throw AssertionError

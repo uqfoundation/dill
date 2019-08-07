@@ -2,7 +2,7 @@
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
 # Copyright (c) 2008-2015 California Institute of Technology.
-# Copyright (c) 2016-2018 The Uncertainty Quantification Foundation.
+# Copyright (c) 2016-2019 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 """
@@ -35,9 +35,10 @@ import os
 import sys
 diff = None
 _use_diff = False
-PY3 = (sys.hexversion >= 0x30000f0)
+PY3 = (sys.hexversion >= 0x3000000)
 # OLDER: 3.0 <= x < 3.4 *OR* x < 2.7.10  #NOTE: guessing relevant versions
-OLDER = (PY3 and sys.hexversion < 0x30400f0) or (sys.hexversion < 0x2070af0)
+OLDER = (PY3 and sys.hexversion < 0x3040000) or (sys.hexversion < 0x2070ab1)
+PY34 = (0x3040000 <= sys.hexversion < 0x3050000)
 if PY3: #XXX: get types from .objtypes ?
     import builtins as __builtin__
     from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
@@ -234,9 +235,10 @@ FILE_FMODE = 2
 ### Shorthands (modified from python2.5/lib/pickle.py)
 def copy(obj, *args, **kwds):
     """use pickling to 'copy' an object"""
-    return loads(dumps(obj, *args, **kwds))
+    ignore = kwds.pop('ignore', Unpickler._ignore)
+    return loads(dumps(obj, *args, **kwds), ignore=ignore)
 
-def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None):#, strictio=None):
+def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
     """pickle an object to a file"""
     from .settings import settings
     strictio = False #FIXME: strict=True needs cleanup
@@ -245,7 +247,7 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None):#, stri
     if fmode is None: fmode = settings['fmode']
     if recurse is None: recurse = settings['recurse']
     stack.clear()  # clear record of 'recursion-sensitive' pickled objects
-    pik = Pickler(file, protocol)
+    pik = Pickler(file, protocol, **kwds)
     pik._main = _main_module
     # apply kwd settings
     pik._byref = bool(byref)
@@ -285,17 +287,17 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None):#, stri
     stack.clear()  # clear record of 'recursion-sensitive' pickled objects
     return
 
-def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None):#, strictio=None):
+def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
     """pickle an object to a string"""
     file = StringIO()
-    dump(obj, file, protocol, byref, fmode, recurse)#, strictio)
+    dump(obj, file, protocol, byref, fmode, recurse, **kwds)#, strictio)
     return file.getvalue()
 
-def load(file, ignore=None):
+def load(file, ignore=None, **kwds):
     """unpickle an object from a file"""
     from .settings import settings
     if ignore is None: ignore = settings['ignore']
-    pik = Unpickler(file)
+    pik = Unpickler(file, **kwds)
     pik._main = _main_module
     # apply kwd settings
     pik._ignore = bool(ignore)
@@ -308,10 +310,10 @@ def load(file, ignore=None):
    #_main_module.__dict__.update(obj.__dict__) #XXX: should update globals ?
     return obj
 
-def loads(str, ignore=None):
+def loads(str, ignore=None, **kwds):
     """unpickle an object from a string"""
     file = StringIO(str)
-    return load(file, ignore)
+    return load(file, ignore, **kwds)
 
 # def dumpzs(obj, protocol=None):
 #     """pickle an object to a compressed string"""
@@ -370,7 +372,7 @@ def _restore_modules(main_module):
         exec("from {} import {}".format(module, name), main_module.__dict__)
 
 #NOTE: 06/03/15 renamed main_module to main
-def dump_session(filename='/tmp/session.pkl', main=None, byref=False):
+def dump_session(filename='/tmp/session.pkl', main=None, byref=False, **kwds):
     """pickle the current state of __main__ to a file"""
     from .settings import settings
     protocol = settings['protocol']
@@ -382,8 +384,8 @@ def dump_session(filename='/tmp/session.pkl', main=None, byref=False):
     try:
         if byref:
             main = _stash_modules(main)
-        pickler = Pickler(f, protocol)
-        pickler._main = main
+        pickler = Pickler(f, protocol, **kwds)
+        pickler._main = main     #FIXME: dill.settings are disabled
         pickler._byref = False   # disable pickling by name reference
         pickler._recurse = False # disable pickling recursion for globals
         pickler._session = True  # is best indicator of when pickling a session
@@ -393,15 +395,15 @@ def dump_session(filename='/tmp/session.pkl', main=None, byref=False):
             f.close()
     return
 
-def load_session(filename='/tmp/session.pkl', main=None):
+def load_session(filename='/tmp/session.pkl', main=None, **kwds):
     """update the __main__ module with the state from the session file"""
     if main is None: main = _main_module
     if hasattr(filename, 'read'):
         f = filename
     else:
         f = open(filename, 'rb')
-    try:
-        unpickler = Unpickler(f)
+    try: #FIXME: dill.settings are disabled
+        unpickler = Unpickler(f, **kwds)
         unpickler._main = main
         unpickler._session = True
         module = unpickler.load()
@@ -776,12 +778,9 @@ def _create_array(f, args, state, npdict=None):
     return array
 
 def _create_namedtuple(name, fieldnames, modulename):
-    mod = _import_module(modulename, safe=True)
-    if mod is not None:
-        try:
-            return getattr(mod, name)
-        except:
-            pass
+    class_ = _import_module(modulename + '.' + name, safe=True)
+    if class_ is not None:
+        return class_
     import collections
     t = collections.namedtuple(name, fieldnames)
     t.__module__ = modulename
@@ -849,11 +848,22 @@ def _locate_function(obj, session=False):
 def save_code(pickler, obj):
     log.info("Co: %s" % obj)
     if PY3:
-        args = (
-            obj.co_argcount, obj.co_kwonlyargcount, obj.co_nlocals,
-            obj.co_stacksize, obj.co_flags, obj.co_code, obj.co_consts,
-            obj.co_names, obj.co_varnames, obj.co_filename, obj.co_name,
-            obj.co_firstlineno, obj.co_lnotab, obj.co_freevars, obj.co_cellvars
+        if hasattr(obj, "co_posonlyargcount"):
+            args = (
+                obj.co_argcount, obj.co_posonlyargcount,
+                obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+                obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+                obj.co_varnames, obj.co_filename, obj.co_name,
+                obj.co_firstlineno, obj.co_lnotab, obj.co_freevars,
+                obj.co_cellvars
+        )
+        else:
+            args = (
+                obj.co_argcount, obj.co_kwonlyargcount, obj.co_nlocals,
+                obj.co_stacksize, obj.co_flags, obj.co_code, obj.co_consts,
+                obj.co_names, obj.co_varnames, obj.co_filename,
+                obj.co_name, obj.co_firstlineno, obj.co_lnotab,
+                obj.co_freevars, obj.co_cellvars
         )
     else:
         args = (
@@ -953,7 +963,7 @@ def save_attrgetter(pickler, obj):
 
 def _save_file(pickler, obj, open_):
     if obj.closed:
-        position = None
+        position = 0
     else:
         obj.flush()
         if obj in (sys.__stdout__, sys.__stderr__, sys.__stdin__):
@@ -1009,7 +1019,7 @@ if InputType:
     def save_stringi(pickler, obj):
         log.info("Io: %s" % obj)
         if obj.closed:
-            value = ''; position = None
+            value = ''; position = 0
         else:
             value = obj.getvalue(); position = obj.tell()
         pickler.save_reduce(_create_stringi, (value, position, \
@@ -1021,7 +1031,7 @@ if InputType:
     def save_stringo(pickler, obj):
         log.info("Io: %s" % obj)
         if obj.closed:
-            value = ''; position = None
+            value = ''; position = 0
         else:
             value = obj.getvalue(); position = obj.tell()
         pickler.save_reduce(_create_stringo, (value, position, \
@@ -1422,7 +1432,7 @@ def check(obj, *args, **kwds):
    # == undocumented ==
    # python -- the string path or executable name of the selected python
    # verbose -- if True, be verbose about printing warning messages
-   # all other args and kwds are passed to dill.dumps
+   # all other args and kwds are passed to dill.dumps #FIXME: ignore on load
     verbose = kwds.pop('verbose', False)
     python = kwds.pop('python', None)
     if python is None:
@@ -1445,10 +1455,11 @@ def check(obj, *args, **kwds):
     return
 
 # use to protect against missing attributes
-def is_dill(pickler):
+def is_dill(pickler, child=None):
     "check the dill-ness of your pickler"
-    return 'dill' in pickler.__module__
-   #return hasattr(pickler,'_main')
+    if (child is False) or PY34 or (not hasattr(pickler.__class__, 'mro')):
+        return 'dill' in pickler.__module__
+    return Pickler in pickler.__class__.mro()
 
 def _extend():
     """extend pickle with all of dill's registered types"""
