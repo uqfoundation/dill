@@ -580,13 +580,15 @@ def _load_type(name):
 def _create_type(typeobj, *args):
     return typeobj(*args)
 
-def _create_function(fcode, fglobals, fname=None, fdefaults=None, \
-                                      fclosure=None, fdict=None):
+def _create_function(fcode, fglobals, fname=None, fdefaults=None,
+                     fclosure=None, fdict=None, fkwdefaults=None):
     # same as FunctionType, but enable passing __dict__ to new function,
     # __dict__ is the storehouse for attributes added after function creation
     if fdict is None: fdict = dict()
     func = FunctionType(fcode, fglobals or dict(), fname, fdefaults, fclosure)
     func.__dict__.update(fdict) #XXX: better copy? option to copy?
+    if fkwdefaults is not None:
+        func.__kwdefaults__ = fkwdefaults
     return func
 
 def _create_ftype(ftypeobj, func, args, kwds):
@@ -1389,10 +1391,11 @@ def save_function(pickler, obj):
             _super = ('super' in getattr(obj.__code__,'co_names',())) and (_byref is not None)
             if _super: pickler._byref = True
             if _memo: pickler._recurse = False
+            fkwdefaults = getattr(obj, '__kwdefaults__', None)
             pickler.save_reduce(_create_function, (obj.__code__,
                                 globs, obj.__name__,
                                 obj.__defaults__, obj.__closure__,
-                                obj.__dict__), obj=obj)
+                                obj.__dict__, fkwdefaults), obj=obj)
         else:
             _super = ('super' in getattr(obj.func_code,'co_names',())) and (_byref is not None) and getattr(pickler, '_recurse', False)
             if _super: pickler._byref = True
