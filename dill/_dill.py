@@ -38,6 +38,7 @@ _use_diff = False
 PY3 = (sys.hexversion >= 0x3000000)
 # OLDER: 3.0 <= x < 3.4 *OR* x < 2.7.10  #NOTE: guessing relevant versions
 OLDER = (PY3 and sys.hexversion < 0x3040000) or (sys.hexversion < 0x2070ab1)
+OLD33 = (sys.hexversion < 0x3030000)
 PY34 = (0x3040000 <= sys.hexversion < 0x3050000)
 if PY3: #XXX: get types from .objtypes ?
     import builtins as __builtin__
@@ -49,8 +50,7 @@ if PY3: #XXX: get types from .objtypes ?
         from threading import _RLock as RLockType
    #from io import IOBase
     from types import CodeType, FunctionType, MethodType, GeneratorType, \
-        TracebackType, FrameType, ModuleType, BuiltinMethodType, \
-        MappingProxyType
+        TracebackType, FrameType, ModuleType, BuiltinMethodType
     BufferType = memoryview #XXX: unregistered
     ClassType = type # no 'old-style' classes
     EllipsisType = type(Ellipsis)
@@ -59,8 +59,10 @@ if PY3: #XXX: get types from .objtypes ?
     SliceType = slice
     TypeType = type # 'new-style' classes #XXX: unregistered
     XRangeType = range
-    if sys.hexversion < 0x30300f0:
+    if OLD33:
         DictProxyType = type(object.__dict__)
+    else:
+        from types import MappingProxyType as DictProxyType
 else:
     import __builtin__
     from pickle import Pickler as StockPickler, Unpickler as StockUnpickler
@@ -800,8 +802,7 @@ def _getattr(objclass, name, repr_str):
     except:
         try:
             attr = objclass.__dict__
-            if (sys.hexversion < 0x30300f0 and type(attr) is DictProxyType) or \
-               (sys.hexversion >= 0x30300f0 and type(attr) is MappingProxyType):
+            if type(attr) is DictProxyType:
                 attr = attr[name]
             else:
                 attr = getattr(objclass,name)
@@ -1145,11 +1146,11 @@ def save_cell(pickler, obj):
     return
 
 if not IS_PYPY:
-    if sys.hexversion >= 0x30300f0:
-        @register(MappingProxyType)
-        def save_mappingproxy(pickler, obj):
+    if not OLD33:
+        @register(DictProxyType)
+        def save_dictproxy(pickler, obj):
             log.info("Mp: %s" % obj)
-            pickler.save_reduce(MappingProxyType, (obj.copy(),), obj=obj)
+            pickler.save_reduce(DictProxyType, (obj.copy(),), obj=obj)
             log.info("# Mp")
             return
     else:
