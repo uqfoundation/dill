@@ -49,7 +49,8 @@ if PY3: #XXX: get types from .objtypes ?
         from threading import _RLock as RLockType
    #from io import IOBase
     from types import CodeType, FunctionType, MethodType, GeneratorType, \
-        TracebackType, FrameType, ModuleType, BuiltinMethodType
+        TracebackType, FrameType, ModuleType, BuiltinMethodType, \
+        MappingProxyType
     BufferType = memoryview #XXX: unregistered
     ClassType = type # no 'old-style' classes
     EllipsisType = type(Ellipsis)
@@ -58,7 +59,8 @@ if PY3: #XXX: get types from .objtypes ?
     SliceType = slice
     TypeType = type # 'new-style' classes #XXX: unregistered
     XRangeType = range
-    DictProxyType = type(object.__dict__)
+    if sys.hexversion < 0x30300f0:
+        DictProxyType = type(object.__dict__)
 else:
     import __builtin__
     from pickle import Pickler as StockPickler, Unpickler as StockUnpickler
@@ -798,7 +800,8 @@ def _getattr(objclass, name, repr_str):
     except:
         try:
             attr = objclass.__dict__
-            if type(attr) is DictProxyType:
+            if (sys.hexversion < 0x30300f0 and type(attr) is DictProxyType) or \
+               (sys.hexversion >= 0x30300f0 and type(attr) is MappingProxyType):
                 attr = attr[name]
             else:
                 attr = getattr(objclass,name)
@@ -1141,22 +1144,30 @@ def save_cell(pickler, obj):
     log.info("# Ce")
     return
 
-# The following function is based on 'saveDictProxy' from spickle
-# Copyright (c) 2011 by science+computing ag
-# License: http://www.apache.org/licenses/LICENSE-2.0
 if not IS_PYPY:
-    @register(DictProxyType)
-    def save_dictproxy(pickler, obj):
-        log.info("Dp: %s" % obj)
-        attr = obj.get('__dict__')
-       #pickler.save_reduce(_create_dictproxy, (attr,'nested'), obj=obj)
-        if type(attr) == GetSetDescriptorType and attr.__name__ == "__dict__" \
-        and getattr(attr.__objclass__, "__dict__", None) == obj:
-            pickler.save_reduce(getattr, (attr.__objclass__,"__dict__"),obj=obj)
-            log.info("# Dp")
+    if sys.hexversion >= 0x30300f0:
+        @register(MappingProxyType)
+        def save_mappingproxy(pickler, obj):
+            log.info("Mp: %s" % obj)
+            pickler.save_reduce(MappingProxyType, (obj.copy(),), obj=obj)
+            log.info("# Mp")
             return
-        # all bad below... so throw ReferenceError or TypeError
-        raise ReferenceError("%s does not reference a class __dict__" % obj)
+    else:
+        # The following function is based on 'saveDictProxy' from spickle
+        # Copyright (c) 2011 by science+computing ag
+        # License: http://www.apache.org/licenses/LICENSE-2.0
+        @register(DictProxyType)
+        def save_dictproxy(pickler, obj):
+            log.info("Dp: %s" % obj)
+            attr = obj.get('__dict__')
+           #pickler.save_reduce(_create_dictproxy, (attr,'nested'), obj=obj)
+            if type(attr) == GetSetDescriptorType and attr.__name__ == "__dict__" \
+            and getattr(attr.__objclass__, "__dict__", None) == obj:
+                pickler.save_reduce(getattr, (attr.__objclass__,"__dict__"),obj=obj)
+                log.info("# Dp")
+                return
+            # all bad below... so throw ReferenceError or TypeError
+            raise ReferenceError("%s does not reference a class __dict__" % obj)
 
 @register(SliceType)
 def save_slice(pickler, obj):
