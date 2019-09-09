@@ -84,4 +84,6 @@ def test_dictproxy():
 
 if __name__ == '__main__':
     test_weakref()
-    test_dictproxy()
+    from dill._dill import IS_PYPY
+    if not IS_PYPY:
+        test_dictproxy()
