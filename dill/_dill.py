@@ -946,7 +946,7 @@ def save_rlock(pickler, obj):
     return
 
 if not IS_PYPY:
-    @register(SocketType)
+    #@register(SocketType) #FIXME: causes multiprocess test_pickling FAIL
     def save_socket(pickler, obj):
         log.info("So: %s" % obj)
         pickler.save_reduce(*reduce_socket(obj))
