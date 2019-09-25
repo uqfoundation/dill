@@ -241,56 +241,16 @@ FILE_FMODE = 2
 ### Shorthands (modified from python2.5/lib/pickle.py)
 def copy(obj, *args, **kwds):
     """use pickling to 'copy' an object"""
-    ignore = kwds.pop('ignore', Unpickler._ignore)
+    ignore = kwds.pop('ignore', Unpickler.settings['ignore'])
     return loads(dumps(obj, *args, **kwds), ignore=ignore)
 
 def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
     """pickle an object to a file"""
     from .settings import settings
-    strictio = False #FIXME: strict=True needs cleanup
-    if protocol is None: protocol = settings['protocol']
-    if byref is None: byref = settings['byref']
-    if fmode is None: fmode = settings['fmode']
-    if recurse is None: recurse = settings['recurse']
-    stack.clear()  # clear record of 'recursion-sensitive' pickled objects
-    pik = Pickler(file, protocol, **kwds)
-    pik._main = _main_module
-    # apply kwd settings
-    pik._byref = bool(byref)
-    pik._strictio = bool(strictio)
-    pik._fmode = fmode
-    pik._recurse = bool(recurse)
-    # register if the object is a numpy ufunc
-    # thanks to Paul Kienzle for pointing out ufuncs didn't pickle
-    if NumpyUfuncType and numpyufunc(obj):
-        @register(type(obj))
-        def save_numpy_ufunc(pickler, obj):
-            log.info("Nu: %s" % obj)
-            StockPickler.save_global(pickler, obj)
-            log.info("# Nu")
-            return
-        # NOTE: the above 'save' performs like:
-        #   import copy_reg
-        #   def udump(f): return f.__name__
-        #   def uload(name): return getattr(numpy, name)
-        #   copy_reg.pickle(NumpyUfuncType, udump, uload)
-    # register if the object is a subclassed numpy array instance
-    if NumpyArrayType and ndarraysubclassinstance(obj):
-        @register(type(obj))
-        def save_numpy_array(pickler, obj):
-            log.info("Nu: (%s, %s)" % (obj.shape,obj.dtype))
-            npdict = getattr(obj, '__dict__', None)
-            f, args, state = obj.__reduce__()
-            pickler.save_reduce(_create_array, (f,args,state,npdict), obj=obj)
-            log.info("# Nu")
-            return
-    # end hack
-    if GENERATOR_FAIL and type(obj) == GeneratorType:
-        msg = "Can't pickle %s: attribute lookup builtins.generator failed" % GeneratorType
-        raise PicklingError(msg)
-    else:
-        pik.dump(obj)
-    stack.clear()  # clear record of 'recursion-sensitive' pickled objects
+    protocol = settings['protocol'] if protocol is None else int(protocol)
+    _kwds = kwds.copy()
+    _kwds.update(dict(byref=byref, fmode=fmode, recurse=recurse))
+    Pickler(file, protocol, **_kwds).dump(obj)
     return
 
 def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
@@ -301,20 +261,7 @@ def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, s
 
 def load(file, ignore=None, **kwds):
     """unpickle an object from a file"""
-    from .settings import settings
-    if ignore is None: ignore = settings['ignore']
-    pik = Unpickler(file, **kwds)
-    pik._main = _main_module
-    # apply kwd settings
-    pik._ignore = bool(ignore)
-    obj = pik.load()
-    if type(obj).__module__ == getattr(_main_module, '__name__', '__main__'):
-        if not ignore:
-            # point obj class to main
-            try: obj.__class__ = getattr(pik._main, type(obj).__name__)
-            except (AttributeError,TypeError): pass # defined in a file
-   #_main_module.__dict__.update(obj.__dict__) #XXX: should update globals ?
-    return obj
+    return Unpickler(file, ignore=ignore, **kwds).load()
 
 def loads(str, ignore=None, **kwds):
     """unpickle an object from a string"""
@@ -438,36 +385,66 @@ class MetaCatchingDict(dict):
 
 
 ### Extend the Picklers
-class Pickler(StockPickler):
+class Pickler(StockPickler, object):
     """python's Pickler extended to interpreter sessions"""
     dispatch = MetaCatchingDict(StockPickler.dispatch.copy())
-    _main = None
     _session = False
     from .settings import settings
-    _byref = settings['byref']
-    _strictio = False
-    _fmode = settings['fmode']
-    _recurse = settings['recurse']
 
     def __init__(self, *args, **kwds):
-        _byref = kwds.pop('byref', Pickler._byref)
-       #_strictio = kwds.pop('strictio', Pickler._strictio)
-        _fmode = kwds.pop('fmode', Pickler._fmode)
-        _recurse = kwds.pop('recurse', Pickler._recurse)
+        settings = Pickler.settings
+        _byref = kwds.pop('byref', None)
+       #_strictio = kwds.pop('strictio', None)
+        _fmode = kwds.pop('fmode', None)
+        _recurse = kwds.pop('recurse', None)
         StockPickler.__init__(self, *args, **kwds)
         self._main = _main_module
         self._diff_cache = {}
-        self._byref = _byref
-       #self._strictio = _strictio
-        self._fmode = _fmode
-        self._recurse = _recurse
+        self._byref = settings['byref'] if _byref is None else _byref
+        self._strictio = False #_strictio
+        self._fmode = settings['fmode'] if _fmode is None else _fmode
+        self._recurse = settings['recurse'] if _recurse is None else _recurse
+
+    def dump(self, obj): #NOTE: if settings change, need to update attributes
+        stack.clear()  # clear record of 'recursion-sensitive' pickled objects
+        # register if the object is a numpy ufunc
+        # thanks to Paul Kienzle for pointing out ufuncs didn't pickle
+        if NumpyUfuncType and numpyufunc(obj):
+            @register(type(obj))
+            def save_numpy_ufunc(pickler, obj):
+                log.info("Nu: %s" % obj)
+                StockPickler.save_global(pickler, obj)
+                log.info("# Nu")
+                return
+            # NOTE: the above 'save' performs like:
+            #   import copy_reg
+            #   def udump(f): return f.__name__
+            #   def uload(name): return getattr(numpy, name)
+            #   copy_reg.pickle(NumpyUfuncType, udump, uload)
+        # register if the object is a subclassed numpy array instance
+        if NumpyArrayType and ndarraysubclassinstance(obj):
+            @register(type(obj))
+            def save_numpy_array(pickler, obj):
+                log.info("Nu: (%s, %s)" % (obj.shape,obj.dtype))
+                npdict = getattr(obj, '__dict__', None)
+                f, args, state = obj.__reduce__()
+                pickler.save_reduce(_create_array, (f,args,state,npdict), obj=obj)
+                log.info("# Nu")
+                return
+        # end hack
+        if GENERATOR_FAIL and type(obj) == GeneratorType:
+            msg = "Can't pickle %s: attribute lookup builtins.generator failed" % GeneratorType
+            raise PicklingError(msg)
+        else:
+            super(Pickler, self).dump(obj)
+        stack.clear()  # clear record of 'recursion-sensitive' pickled objects
+        return
+    dump.__doc__ = StockPickler.dump.__doc__
     pass
 
-class Unpickler(StockUnpickler):
+class Unpickler(StockUnpickler, object):
     """python's Unpickler extended to interpreter sessions and more types"""
     from .settings import settings
-    _ignore = settings['ignore']
-    _main = None
     _session = False
 
     def find_class(self, module, name):
@@ -479,10 +456,22 @@ class Unpickler(StockUnpickler):
         return StockUnpickler.find_class(self, module, name)
 
     def __init__(self, *args, **kwds):
-        _ignore = kwds.pop('ignore', Unpickler._ignore)
+        settings = Pickler.settings
+        _ignore = kwds.pop('ignore', None)
         StockUnpickler.__init__(self, *args, **kwds)
         self._main = _main_module
-        self._ignore = _ignore
+        self._ignore = settings['ignore'] if _ignore is None else _ignore
+
+    def load(self): #NOTE: if settings change, need to update attributes
+        obj = super(Unpickler, self).load()
+        if type(obj).__module__ == getattr(_main_module, '__name__', '__main__'):
+            if not self._ignore:
+                # point obj class to main
+                try: obj.__class__ = getattr(self._main, type(obj).__name__)
+                except (AttributeError,TypeError): pass # defined in a file
+       #_main_module.__dict__.update(obj.__dict__) #XXX: should update globals ?
+        return obj
+    load.__doc__ = StockUnpickler.load.__doc__
     pass
 
 '''
