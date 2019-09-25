@@ -385,7 +385,7 @@ class MetaCatchingDict(dict):
 
 
 ### Extend the Picklers
-class Pickler(StockPickler, object):
+class Pickler(StockPickler):
     """python's Pickler extended to interpreter sessions"""
     dispatch = MetaCatchingDict(StockPickler.dispatch.copy())
     _session = False
@@ -436,13 +436,13 @@ class Pickler(StockPickler, object):
             msg = "Can't pickle %s: attribute lookup builtins.generator failed" % GeneratorType
             raise PicklingError(msg)
         else:
-            super(Pickler, self).dump(obj)
+            StockPickler.dump(self, obj)
         stack.clear()  # clear record of 'recursion-sensitive' pickled objects
         return
     dump.__doc__ = StockPickler.dump.__doc__
     pass
 
-class Unpickler(StockUnpickler, object):
+class Unpickler(StockUnpickler):
     """python's Unpickler extended to interpreter sessions and more types"""
     from .settings import settings
     _session = False
@@ -463,7 +463,7 @@ class Unpickler(StockUnpickler, object):
         self._ignore = settings['ignore'] if _ignore is None else _ignore
 
     def load(self): #NOTE: if settings change, need to update attributes
-        obj = super(Unpickler, self).load()
+        obj = StockUnpickler.load(self)
         if type(obj).__module__ == getattr(_main_module, '__name__', '__main__'):
             if not self._ignore:
                 # point obj class to main
