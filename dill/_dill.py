@@ -218,6 +218,12 @@ except ImportError:
     else:
         from StringIO import StringIO
     InputType = OutputType = None
+if not IS_PYPY:
+    from socket import socket as SocketType
+    try: #FIXME: additionally calls ForkingPickler.register several times
+        from multiprocessing.reduction import _reduce_socket as reduce_socket
+    except ImportError:
+        from multiprocessing.reduction import reduce_socket
 try:
     __IPYTHON__ is True # is ipython
     ExitType = None     # IPython.core.autocall.ExitAutocall
@@ -938,6 +944,14 @@ def save_rlock(pickler, obj):
     pickler.save_reduce(_create_rlock, (count,owner,), obj=obj)
     log.info("# RL")
     return
+
+if not IS_PYPY:
+    @register(SocketType)
+    def save_socket(pickler, obj):
+        log.info("So: %s" % obj)
+        pickler.save_reduce(*reduce_socket(obj))
+        log.info("# So")
+        return
 
 @register(ItemGetterType)
 def save_itemgetter(pickler, obj):
