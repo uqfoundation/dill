@@ -72,6 +72,18 @@ def test_weakref():
     #   print ("PASS: %s" % obj)
       assert not res
 
+def test_dictproxy():
+    from dill._dill import DictProxyType
+    try:
+        m = DictProxyType({"foo": "bar"})
+    except:
+        m = type.__dict__
+    mp = dill.copy(m)   
+    assert mp.items() == m.items()
+
 
 if __name__ == '__main__':
     test_weakref()
+    from dill._dill import IS_PYPY
+    if not IS_PYPY:
+        test_dictproxy()
