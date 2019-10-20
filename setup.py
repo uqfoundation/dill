@@ -125,7 +125,7 @@ The latest released version of ``dill`` is available from:
 ``dill`` is distributed under a 3-clause BSD license.
 
     >>> import dill
-    >>> print (dill.license())
+    >>> dill.license()
 
 
 Development Version 
@@ -163,7 +163,7 @@ Requirements
 
 ``dill`` requires:
 
-    - ``python``, **version >= 2.6** or **version >= 3.1**, or ``pypy``
+    - ``python``, **version >= 2.6** or **version >= 3.2**, or ``pypy``
 
 Optional requirements:
 
@@ -253,13 +253,13 @@ setup(name='dill',
                      'Programming Language :: Python :: 2.6',
                      'Programming Language :: Python :: 2.7',
                      'Programming Language :: Python :: 3',
-                     'Programming Language :: Python :: 3.1',
                      'Programming Language :: Python :: 3.2',
                      'Programming Language :: Python :: 3.3',
                      'Programming Language :: Python :: 3.4',
                      'Programming Language :: Python :: 3.5',
                      'Programming Language :: Python :: 3.6',
                      'Programming Language :: Python :: 3.7',
+                     'Programming Language :: Python :: 3.8',
                      'Topic :: Scientific/Engineering',
                      'Topic :: Software Development'],
 
