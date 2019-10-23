@@ -57,7 +57,12 @@ matrix:
           sudo: true
           env:
 
-        - python: '3.8-dev'
+        - python: '3.8'
+          dist: xenial
+          sudo: true
+          env:
+
+        - python: '3.9-dev'
           dist: xenial
           sudo: true
           env:
@@ -83,7 +88,7 @@ matrix:
         - python: '3.1'
         - python: '3.2'
         - python: '3.3'
-        - python: '3.8-dev'
+        - python: '3.9-dev'
         - python: 'nightly'
         - python: 'pypy3'
     fast_finish: true
