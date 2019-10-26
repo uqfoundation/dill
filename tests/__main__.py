@@ -13,6 +13,9 @@ try:
     python = pox.which_python(version=True, fullpath=False) or 'python'
 except ImportError:
     python = 'python'
+import subprocess as sp
+from sys import platform
+shell = platform[:3] == 'win'
 
 suite = os.path.dirname(__file__) or os.path.curdir
 tests = glob.glob(suite + os.path.sep + 'test_*.py')
@@ -21,7 +24,8 @@ tests = glob.glob(suite + os.path.sep + 'test_*.py')
 if __name__ == '__main__':
 
     for test in tests:
-        print('.', end='')
-        os.system('{0} {1}'.format(python, test))
+        p = sp.Popen([python, test], shell=shell).wait()
+        if not p:
+            print('.', end='')
     print('')
 
