@@ -2,7 +2,7 @@
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
 # Copyright (c) 2008-2016 California Institute of Technology.
-# Copyright (c) 2016-2018 The Uncertainty Quantification Foundation.
+# Copyright (c) 2016-2019 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 #
@@ -22,13 +22,15 @@ __all__ = ['findsource', 'getsourcelines', 'getsource', 'indent', 'outdent', \
            '_wrap', 'dumpsource', 'getname', '_namespace', 'getimport', \
            '_importable', 'importable','isdynamic', 'isfrommain']
 
-import re
 import linecache
+import re
+from inspect import (getblock, getfile, getmodule, getsourcefile, indentsize,
+                     isbuiltin, isclass, iscode, isframe, isfunction, ismethod,
+                     ismodule, istraceback)
 from tokenize import TokenError
-from inspect import ismodule, isclass, ismethod, isfunction, istraceback
-from inspect import isframe, iscode, getfile, getmodule, getsourcefile
-from inspect import getblock, indentsize, isbuiltin
+
 from ._dill import PY3
+
 
 def isfrommain(obj):
     "check if object was built in __main__"
@@ -93,8 +95,8 @@ def _matchlambda(func, line):
     _ = _.split(_[0])  # 't' #XXX: remove matching values if starts the same?
     _f = code.split(code[0])  # '\x88'
     #NOTE: should be same code different order, with different first element
-    _ = dict(re.match('([\W\D\S])(.*)', _[i]).groups() for i in range(1,len(_)))
-    _f = dict(re.match('([\W\D\S])(.*)', _f[i]).groups() for i in range(1,len(_f)))
+    _ = dict(re.match(r'([\W\D\S])(.*)', _[i]).groups() for i in range(1,len(_)))
+    _f = dict(re.match(r'([\W\D\S])(.*)', _f[i]).groups() for i in range(1,len(_f)))
     if (_.keys() == _f.keys()) and (sorted(_.values()) == sorted(_f.values())):
         return True
     return False
@@ -115,7 +117,16 @@ def findsource(object):
     except TypeError: file = None 
     # use readline when working in interpreter (i.e. __main__ and not file)
     if module and module.__name__ == '__main__' and not file:
-        import readline
+        try: 
+            import readline
+            err = ''
+        except:
+            import sys
+            err = sys.exc_info()[1].args[0]
+            if sys.platform[:3] == 'win':
+                err += ", please install 'pyreadline'"
+        if err:
+            raise IOError(err)
         lbuf = readline.get_current_history_length()
         lines = [readline.get_history_item(i)+'\n' for i in range(1,lbuf)]
     else:
@@ -140,12 +151,13 @@ def findsource(object):
             lines = linecache.getlines(file)
 
     if not lines:
-        raise IOError('could not get source code')
+        raise IOError('could not extract source code')
 
     #FIXME: all below may fail if exec used (i.e. exec('f = lambda x:x') )
     if ismodule(object):
         return lines, 0
 
+    #NOTE: beneficial if search goes from end to start of buffer history
     name = pat1 = obj = ''
     pat2 = r'^(\s*@)'
 #   pat1b = r'^(\s*%s\W*=)' % name #FIXME: finds 'f = decorate(f)', not exec
@@ -839,7 +851,7 @@ def _closuredimport(func, alias='', builtin=False):
         else: # we have to "hack" a bit... and maybe be lucky
             encl = outermost(func)
             # pattern: 'func = enclosing(fobj'
-            pat = '.*[\w\s]=\s*'+getname(encl)+'\('+getname(fobj)
+            pat = r'.*[\w\s]=\s*'+getname(encl)+r'\('+getname(fobj)
             mod = getname(getmodule(encl))
             #HACK: get file containing 'outer' function; is func there?
             lines,_ = findsource(encl)
@@ -866,7 +878,7 @@ def _closuredimport(func, alias='', builtin=False):
             lines,_ = findsource(name)
             # pattern: 'func = enclosing('
             candidate = [line for line in lines if getname(name) in line and \
-                         re.match('.*[\w\s]=\s*'+getname(name)+'\(', line)]
+                         re.match(r'.*[\w\s]=\s*'+getname(name)+r'\(', line)]
             if not len(candidate): raise TypeError('import could not be found')
             candidate = candidate[-1]
             name = candidate.split('=',1)[0].split()[-1].strip()

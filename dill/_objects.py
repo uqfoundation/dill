@@ -2,7 +2,7 @@
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
 # Copyright (c) 2008-2016 California Institute of Technology.
-# Copyright (c) 2016-2018 The Uncertainty Quantification Foundation.
+# Copyright (c) 2016-2019 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 """
@@ -484,7 +484,10 @@ x['CSVDictReaderType'] = csv.DictReader(_cstrI)
 x['CSVDictWriterType'] = csv.DictWriter(_cstrO,{})
 # cryptographic services (CH 14)
 x['HashType'] = hashlib.md5()
-x['HMACType'] = hmac.new(_in)
+if (hex(sys.hexversion) < '0x30800a1'):
+    x['HMACType'] = hmac.new(_in)
+else:
+    x['HMACType'] = hmac.new(_in, digestmod='md5')
 # generic operating system services (CH 15)
 if HAS_CURSES: pass
     #x['CursesWindowType'] = _curwin = curses.initscr() #FIXME: messes up tty

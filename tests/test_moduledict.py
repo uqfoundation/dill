@@ -2,7 +2,7 @@
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
 # Copyright (c) 2008-2016 California Institute of Technology.
-# Copyright (c) 2016-2018 The Uncertainty Quantification Foundation.
+# Copyright (c) 2016-2019 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
@@ -48,7 +48,7 @@ def test_doctest():
     doctest.testmod()
 
 
-if __name__ is '__main__':
+if __name__ == '__main__':
     test_decorated()
     test_normal()
     test_doctest()

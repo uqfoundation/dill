@@ -2,15 +2,15 @@
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
 # Copyright (c) 2008-2016 California Institute of Technology.
-# Copyright (c) 2016-2018 The Uncertainty Quantification Foundation.
+# Copyright (c) 2016-2019 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 import os
 
 # set version numbers
-stable_version = '0.2.8.2'
-target_version = '0.2.9'
+stable_version = '0.3.1.1'
+target_version = '0.3.2'
 is_release = stable_version == target_version
 
 # check if easy_install is available
@@ -125,7 +125,7 @@ The latest released version of ``dill`` is available from:
 ``dill`` is distributed under a 3-clause BSD license.
 
     >>> import dill
-    >>> print (dill.license())
+    >>> dill.license()
 
 
 Development Version 
@@ -163,12 +163,12 @@ Requirements
 
 ``dill`` requires:
 
-    - ``python``, **version >= 2.5** or **version >= 3.1**, or ``pypy``
-    - ``pyreadline``, **version >= 1.7.1** (on windows)
+    - ``python``, **version >= 2.6** or **version >= 3.2**, or ``pypy``
 
 Optional requirements:
 
     - ``setuptools``, **version >= 0.6**
+    - ``pyreadline``, **version >= 1.7.1** (on windows)
     - ``objgraph``, **version >= 1.7.2**
 
 
@@ -244,23 +244,22 @@ setup(name='dill',
       platforms = ['Linux', 'Windows', 'Mac'],
       url = 'https://pypi.org/project/dill',
       download_url = 'https://github.com/uqfoundation/dill/releases/download/dill-%s/dill-%s.tar.gz',
-      python_requires='>=2.5, !=3.0.*',
+      python_requires='>=2.6, !=3.0.*',
       classifiers = ['Development Status :: 5 - Production/Stable',
                      'Intended Audience :: Developers',
                      'Intended Audience :: Science/Research',
                      'License :: OSI Approved :: BSD License',
                      'Programming Language :: Python :: 2',
-                     'Programming Language :: Python :: 2.5',
                      'Programming Language :: Python :: 2.6',
                      'Programming Language :: Python :: 2.7',
                      'Programming Language :: Python :: 3',
-                     'Programming Language :: Python :: 3.1',
                      'Programming Language :: Python :: 3.2',
                      'Programming Language :: Python :: 3.3',
                      'Programming Language :: Python :: 3.4',
                      'Programming Language :: Python :: 3.5',
                      'Programming Language :: Python :: 3.6',
                      'Programming Language :: Python :: 3.7',
+                     'Programming Language :: Python :: 3.8',
                      'Topic :: Scientific/Engineering',
                      'Topic :: Software Development'],
 
@@ -279,13 +278,18 @@ if has_setuptools:
 """
     if sys.platform[:3] == 'win':
         setup_code += """
-      install_requires = ['pyreadline%s'],
-""" % (pyreadline_version)
+      extras_require = {'readline': ['pyreadline%s'], 'graph': ['objgraph%s']},
+""" % (pyreadline_version, objgraph_version)
     # verrrry unlikely that this is still relevant
     elif hex(sys.hexversion) < '0x20500f0':
         setup_code += """
       install_requires = ['ctypes%s'],
-""" % (ctypes_version)
+      extras_require = {'readline': [], 'graph': ['objgraph%s']},
+""" % (ctypes_version, objgraph_version)
+    else:
+        setup_code += """
+      extras_require = {'readline': [], 'graph': ['objgraph%s']},
+""" % (objgraph_version)
 
 # add the scripts, and close 'setup' call
 setup_code += """    
