@@ -879,14 +879,14 @@ def save_code(pickler, obj):
 
 @register(dict)
 def save_module_dict(pickler, obj):
-    if is_dill(pickler) and obj == pickler._main.__dict__ and not pickler._session:
+    if is_dill(pickler, child=False) and obj == pickler._main.__dict__ and not pickler._session:
         log.info("D1: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if PY3:
             pickler.write(bytes('c__builtin__\n__main__\n', 'UTF-8'))
         else:
             pickler.write('c__builtin__\n__main__\n')
         log.info("# D1")
-    elif (not is_dill(pickler)) and (obj == _main_module.__dict__):
+    elif (not is_dill(pickler, child=False)) and (obj == _main_module.__dict__):
         log.info("D3: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if PY3:
             pickler.write(bytes('c__main__\n__dict__\n', 'UTF-8'))
@@ -904,7 +904,7 @@ def save_module_dict(pickler, obj):
         log.info("# D4")
     else:
         log.info("D2: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
-        if is_dill(pickler) and pickler._session:
+        if is_dill(pickler, child=False) and pickler._session:
             # we only care about session the first pass thru
             pickler._session = False
         StockPickler.save_dict(pickler, obj)
@@ -979,13 +979,13 @@ def _save_file(pickler, obj, open_):
             position = -1
         else:
             position = obj.tell()
-    if is_dill(pickler) and pickler._fmode == FILE_FMODE:
+    if is_dill(pickler, child=True) and pickler._fmode == FILE_FMODE:
         f = open_(obj.name, "r")
         fdata = f.read()
         f.close()
     else:
         fdata = ""
-    if is_dill(pickler):
+    if is_dill(pickler, child=True):
         strictio = pickler._strictio
         fmode = pickler._fmode
     else:
@@ -1074,11 +1074,11 @@ def save_builtin_method(pickler, obj):
             module = obj.__self__
             _t = "B3"
             log.info("{}: {}".format(_t, obj))
-        if is_dill(pickler):
+        if is_dill(pickler, child=True):
             _recurse = pickler._recurse
             pickler._recurse = False
         pickler.save_reduce(_get_attr, (module, obj.__name__), obj=obj)
-        if is_dill(pickler):
+        if is_dill(pickler, child=True):
             pickler._recurse = _recurse
         log.info("# %s" % _t)
     else:
@@ -1273,7 +1273,7 @@ def save_module(pickler, obj):
         else:
             builtin_mod = True
         if obj.__name__ not in ("builtins", "dill") \
-           and not builtin_mod or is_dill(pickler) and obj is pickler._main:
+           and not builtin_mod or is_dill(pickler, child=True) and obj is pickler._main:
             log.info("M1: %s" % obj)
             _main_dict = obj.__dict__.copy() #XXX: better no copy? option to copy?
             [_main_dict.pop(item, None) for item in singletontypes
@@ -1304,7 +1304,7 @@ def save_type(pickler, obj):
     elif obj.__module__ == '__main__':
         if issubclass(type(obj), type):
         #   try: # used when pickling the class as code (or the interpreter)
-            if is_dill(pickler) and not pickler._byref:
+            if is_dill(pickler, child=True) and not pickler._byref:
                 # thanks to Tom Stepleton pointing out pickler._session unneeded
                 _t = 'T2'
                 log.info("{}: {}".format(_t, obj))
