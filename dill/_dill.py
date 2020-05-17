@@ -494,12 +494,14 @@ def pickle(t, func):
     return
 
 def register(t):
+    """register type to Pickler's dispatch table """
     def proxy(func):
         Pickler.dispatch[t] = func
         return func
     return proxy
 
 def _revert_extension():
+    """drop dill-registered types from pickle's dispatch table"""
     for type, func in list(StockPickler.dispatch.items()):
         if func.__module__ == __name__:
             del StockPickler.dispatch[type]
