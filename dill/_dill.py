@@ -590,6 +590,23 @@ def _create_function(fcode, fglobals, fname=None, fdefaults=None,
         func.__kwdefaults__ = fkwdefaults
     return func
 
+def _create_code(*args):
+    if PY3 and hasattr(args[-3], 'encode'): #FIXME: from PY2 fails (optcode)
+        args = list(args)
+        args[-3] = args[-3].encode() # co_lnotab
+        args[-10] = args[-10].encode() # co_code
+    if hasattr(CodeType, 'co_posonlyargcount'):
+        if len(args) == 16: return CodeType(*args)
+        elif len(args) == 15: return CodeType(args[0], 0, *args[1:])
+        return CodeType(args[0], 0, 0, *args[1:])
+    elif hasattr(CodeType, 'co_kwonlyargcount'):
+        if len(args) == 16: return CodeType(args[0], *args[2:])
+        elif len(args) == 15: return CodeType(*args)
+        return CodeType(args[0], 0, *args[1:])
+    if len(args) == 16: return CodeType(args[0], *args[3:])
+    elif len(args) == 15: return CodeType(args[0], *args[2:])
+    return CodeType(*args)
+
 def _create_ftype(ftypeobj, func, args, kwds):
     if kwds is None:
         kwds = {}
@@ -875,7 +892,8 @@ def save_code(pickler, obj):
             obj.co_filename, obj.co_name, obj.co_firstlineno, obj.co_lnotab,
             obj.co_freevars, obj.co_cellvars
         )
-    pickler.save_reduce(CodeType, args, obj=obj)
+
+    pickler.save_reduce(_create_code, args, obj=obj)
     log.info("# Co")
     return
 
