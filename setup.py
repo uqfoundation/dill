@@ -7,6 +7,15 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 import os
+import sys
+# drop support for older python
+unsupported = None
+if sys.version_info < (2, 7):
+    unsupported = 'Versions of Python before 2.7 are not supported'
+elif (3, 0) <= sys.version_info < (3, 5):
+    unsupported = 'Versions of Python before 3.5 are not supported'
+if unsupported:
+    raise ValueError(unsupported)
 
 # set version numbers
 stable_version = '0.3.1.1'
@@ -78,9 +87,7 @@ a trustworthy source.
 
 ``dill`` is part of ``pathos``, a python framework for heterogeneous computing.
 ``dill`` is in active development, so any user feedback, bug reports, comments,
-or suggestions are highly appreciated.  A list of known issues is maintained
-at http://trac.mystic.cacr.caltech.edu/project/pathos/query.html, with a public
-ticket list at https://github.com/uqfoundation/dill/issues.
+or suggestions are highly appreciated.  A list of issues is located at https://github.com/uqfoundation/dill/issues, with a legacy list maintained at https://uqfoundation.github.io/pathos-issues.html.
 
 
 Major Features
@@ -163,7 +170,7 @@ Requirements
 
 ``dill`` requires:
 
-    - ``python``, **version >= 2.6** or **version >= 3.2**, or ``pypy``
+    - ``python``, **version >= 2.7** or **version >= 3.5**, or ``pypy``
 
 Optional requirements:
 
@@ -203,9 +210,9 @@ acknowledge use of ``dill`` by citing the following in your publication::
 
     Michael McKerns and Michael Aivazis,
     "pathos: a framework for heterogeneous computing", 2010- ;
-    http://trac.mystic.cacr.caltech.edu/project/pathos
+    https://uqfoundation.github.io/pathos.html
 
-Please see http://trac.mystic.cacr.caltech.edu/project/pathos or
+Please see https://uqfoundation.github.io/pathos.html or
 http://arxiv.org/pdf/1202.1056 for further information.
 
 """ % {'relver' : stable_version, 'thisver' : this_version}
@@ -271,7 +278,6 @@ setup(name='dill',
 ctypes_version = '>=1.0.1'
 objgraph_version = '>=1.7.2'
 pyreadline_version = '>=1.7.1'
-import sys
 if has_setuptools:
     setup_code += """
       zip_safe=False,
