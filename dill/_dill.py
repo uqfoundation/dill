@@ -419,7 +419,8 @@ class Pickler(StockPickler):
             @register(type(obj))
             def save_numpy_ufunc(pickler, obj):
                 log.info("Nu: %s" % obj)
-                StockPickler.save_global(pickler, obj)
+                name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
+                StockPickler.save_global(pickler, obj, name=name)
                 log.info("# Nu")
                 return
             # NOTE: the above 'save' performs like:
@@ -494,12 +495,14 @@ def pickle(t, func):
     return
 
 def register(t):
+    """register type to Pickler's dispatch table """
     def proxy(func):
         Pickler.dispatch[t] = func
         return func
     return proxy
 
 def _revert_extension():
+    """drop dill-registered types from pickle's dispatch table"""
     for type, func in list(StockPickler.dispatch.items()):
         if func.__module__ == __name__:
             del StockPickler.dispatch[type]
@@ -589,6 +592,23 @@ def _create_function(fcode, fglobals, fname=None, fdefaults=None,
     if fkwdefaults is not None:
         func.__kwdefaults__ = fkwdefaults
     return func
+
+def _create_code(*args):
+    if PY3 and hasattr(args[-3], 'encode'): #FIXME: from PY2 fails (optcode)
+        args = list(args)
+        args[-3] = args[-3].encode() # co_lnotab
+        args[-10] = args[-10].encode() # co_code
+    if hasattr(CodeType, 'co_posonlyargcount'):
+        if len(args) == 16: return CodeType(*args)
+        elif len(args) == 15: return CodeType(args[0], 0, *args[1:])
+        return CodeType(args[0], 0, 0, *args[1:])
+    elif hasattr(CodeType, 'co_kwonlyargcount'):
+        if len(args) == 16: return CodeType(args[0], *args[2:])
+        elif len(args) == 15: return CodeType(*args)
+        return CodeType(args[0], 0, *args[1:])
+    if len(args) == 16: return CodeType(args[0], *args[3:])
+    elif len(args) == 15: return CodeType(args[0], *args[2:])
+    return CodeType(*args)
 
 def _create_ftype(ftypeobj, func, args, kwds):
     if kwds is None:
@@ -875,7 +895,8 @@ def save_code(pickler, obj):
             obj.co_filename, obj.co_name, obj.co_firstlineno, obj.co_lnotab,
             obj.co_freevars, obj.co_cellvars
         )
-    pickler.save_reduce(CodeType, args, obj=obj)
+
+    pickler.save_reduce(_create_code, args, obj=obj)
     log.info("# Co")
     return
 
@@ -924,7 +945,8 @@ def save_classobj(pickler, obj): #FIXME: enable pickler._byref
         log.info("# C1")
     else:
         log.info("C2: %s" % obj)
-        StockPickler.save_global(pickler, obj)
+        name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
+        StockPickler.save_global(pickler, obj, name=name)
         log.info("# C2")
     return
 
@@ -1085,7 +1107,8 @@ def save_builtin_method(pickler, obj):
         log.info("# %s" % _t)
     else:
         log.info("B2: %s" % obj)
-        StockPickler.save_global(pickler, obj)
+        name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
+        StockPickler.save_global(pickler, obj, name=name)
         log.info("# B2")
     return
 
@@ -1325,7 +1348,8 @@ def save_type(pickler, obj):
         #   except: # punt to StockPickler (pickle by class reference)
             else:
                 log.info("T5: %s" % obj)
-                StockPickler.save_global(pickler, obj)
+                name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
+                StockPickler.save_global(pickler, obj, name=name)
                 log.info("# T5")
                 return
         else:
@@ -1353,7 +1377,8 @@ def save_type(pickler, obj):
        #print (obj.__dict__)
        #print ("%s\n%s" % (type(obj), obj.__name__))
        #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
-        StockPickler.save_global(pickler, obj)
+        name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
+        StockPickler.save_global(pickler, obj, name=name)
         log.info("# T4")
     return
 
@@ -1432,7 +1457,8 @@ def save_function(pickler, obj):
         log.info("# F1")
     else:
         log.info("F2: %s" % obj)
-        StockPickler.save_global(pickler, obj) #NOTE: also takes name=...
+        name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
+        StockPickler.save_global(pickler, obj, name=name)
         log.info("# F2")
     return
 
