@@ -555,6 +555,7 @@ _reverse_typemap.update({
     'PyBufferedReaderType': PyBufferedReaderType,
     'PyBufferedWriterType': PyBufferedWriterType,
     'PyTextWrapperType': PyTextWrapperType,
+    'SliceType': SliceType,
 })
 if ExitType:
     _reverse_typemap['ExitType'] = ExitType
