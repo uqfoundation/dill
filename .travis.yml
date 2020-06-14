@@ -3,28 +3,10 @@ language: python
 
 matrix:
     include:
-        - python: '2.5'
-          env:
-
-        - python: '2.6'
-          env:
-
         - python: '2.7'
           env:
             - COVERAGE="true"
             - NUMPY="true"
-
-        - python: '3.1'
-          env:
-
-        - python: '3.2'
-          env:
-
-        - python: '3.3'
-          env:
-
-        - python: '3.4'
-          env:
 
         - python: '3.5'
           env:
@@ -56,12 +38,6 @@ matrix:
           env:
 
     allow_failures:
-        - python: '2.5'
-        - python: '2.6'
-        - python: '3.1'
-        - python: '3.2'
-        - python: '3.3'
-        - python: '3.4'
         - python: '3.9-dev'
         - python: 'nightly'
         - python: 'pypy3'

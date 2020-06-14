@@ -1,5 +1,7 @@
 include LICENSE
-include README
+include README*
 include tox.ini
 include scripts/*
 include tests/*py
+recursive-include docs *
+include .*
