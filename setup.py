@@ -18,7 +18,7 @@ if unsupported:
     raise ValueError(unsupported)
 
 # set version numbers
-stable_version = '0.3.1.1'
+stable_version = '0.3.2'
 target_version = '0.3.2'
 is_release = stable_version == target_version
 
