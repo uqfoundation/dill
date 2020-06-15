@@ -5,3 +5,5 @@ include scripts/*
 include tests/*py
 recursive-include docs *
 include .*
+prune .git
+prune .coverage
