@@ -66,7 +66,7 @@ About Dill
 ``dill`` extends python's ``pickle`` module for serializing and de-serializing
 python objects to the majority of the built-in python types. Serialization
 is the process of converting an object to a byte stream, and the inverse
-of which is converting a byte stream back to on python object hierarchy.
+of which is converting a byte stream back to a python object hierarchy.
 
 ``dill`` provides the user the same interface as the ``pickle`` module, and
 also includes some additional features. In addition to pickling python
