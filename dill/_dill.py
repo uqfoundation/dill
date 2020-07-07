@@ -48,6 +48,11 @@ if PY3: #XXX: get types from .objtypes ?
         from _thread import RLock as RLockType
     else:
         from threading import _RLock as RLockType
+    # monkey patch for _thread._local
+    try:
+        from _thread import _local as LocalType
+    except ImportError:
+        from _threading_local import local as LocalType
    #from io import IOBase
     from types import CodeType, FunctionType, MethodType, GeneratorType, \
         TracebackType, FrameType, ModuleType, BuiltinMethodType
@@ -89,7 +94,7 @@ if sys.hexversion < 0x03030000:
     FileNotFoundError = IOError
 if PY3 and sys.hexversion < 0x03040000:
     GENERATOR_FAIL = True
-else: GENERATOR_FAIL = False    
+else: GENERATOR_FAIL = False
 try:
     import ctypes
     HAS_CTYPES = True
@@ -617,6 +622,13 @@ def _create_ftype(ftypeobj, func, args, kwds):
         args = ()
     return ftypeobj(func, *args, **kwds)
 
+def _create_local(impl, *args, **kwargs): #XXX: ignores 'blocking'
+    local = LocalType()
+    if local:
+        if impl:
+            local.__setattr__('_local__impl', impl)
+    return local
+
 def _create_lock(locked, *args): #XXX: ignores 'blocking'
     from threading import Lock
     lock = Lock()
@@ -948,6 +960,23 @@ def save_classobj(pickler, obj): #FIXME: enable pickler._byref
         name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
         StockPickler.save_global(pickler, obj, name=name)
         log.info("# C2")
+    return
+
+@register(LocalType)
+def save_local(pickler, obj):
+    log.info("Loc: %s" % obj)
+    impl = obj.__getattribute__('_local__impl')
+    if impl:
+        try:
+            dct = impl.get_dict()
+        except KeyError:
+            dct = impl.create_dict()
+            args, kwargs = impl.localargs
+            obj.__init__(*args, **kwargs)
+        with impl.locallock:
+            obj.__setattr__('__dict__', dct)
+    pickler.save_reduce(_create_local, (impl,), obj=obj)
+    log.info("# Loc")
     return
 
 @register(LockType)
