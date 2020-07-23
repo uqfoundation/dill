@@ -44,6 +44,9 @@ if PY3: #XXX: get types from .objtypes ?
     import builtins as __builtin__
     from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
     from _thread import LockType
+    from sqlalchemy.cprocessors import UnicodeResultProcessor
+    from psycopg2.extensions import connection as ConnectionType
+    from psycopg2.extensions import cursor as CursorType
     if (sys.hexversion >= 0x30200f0):
         from _thread import RLock as RLockType
     else:
@@ -89,7 +92,7 @@ if sys.hexversion < 0x03030000:
     FileNotFoundError = IOError
 if PY3 and sys.hexversion < 0x03040000:
     GENERATOR_FAIL = True
-else: GENERATOR_FAIL = False    
+else: GENERATOR_FAIL = False
 try:
     import ctypes
     HAS_CTYPES = True
@@ -617,6 +620,25 @@ def _create_ftype(ftypeobj, func, args, kwds):
         args = ()
     return ftypeobj(func, *args, **kwds)
 
+def _create_unicodeProcessor(*args, **kwargs): #XXX: process is readonly
+    from sqlalchemy.cprocessors import UnicodeResultProcessor
+    p = UnicodeResultProcessor('utf8')
+    return p
+
+def _create_pgcursor(user, passwd, db, host, port, *args, **kwargs):
+    from psycopg2.extensions import connection
+    dsn = "user=%s password=%s host=%s dbname=%s port=%s"%(user, passwd, host,
+                                                           db, port)
+    conn = connection(dsn)
+    return conn.cursor()
+
+def _create_pgconnection(user, passwd, db, host, port, *args, **kwargs):
+    from psycopg2.extensions import connection
+    dsn = "user=%s password=%s host=%s dbname=%s port=%s"%(user, passwd, host,
+                                                           db, port)
+    conn = connection(dsn)
+    return conn
+
 def _create_lock(locked, *args): #XXX: ignores 'blocking'
     from threading import Lock
     lock = Lock()
@@ -948,6 +970,40 @@ def save_classobj(pickler, obj): #FIXME: enable pickler._byref
         name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
         StockPickler.save_global(pickler, obj, name=name)
         log.info("# C2")
+    return
+
+@register(CursorType)
+def save_pgcursor(pickler, obj):
+    log.info("Pgcur: %s" % obj)
+    dsn_parms = obj.connection.info.dsn_parameters
+    user = dsn_parms["user"]
+    password = obj.connection.info.password
+    dbname = dsn_parms["dbname"]
+    host = dsn_parms["host"]
+    port = dsn_parms["port"]
+    pickler.save_reduce(_create_pgcursor, (user, password, dbname,
+                                               host, port, ), obj=obj)
+    log.info("# Pgcur")
+    return
+
+@register(ConnectionType)
+def save_pgconnection(pickler, obj):
+    log.info("Pgcon: %s" % obj)
+    user = obj.info.dsn_parameters["user"]
+    password = obj.info.password
+    dbname = obj.info.dsn_parameters["dbname"]
+    host = obj.info.dsn_parameters["host"]
+    port = obj.info.dsn_parameters["port"]
+    pickler.save_reduce(_create_pgconnection, (user, password, dbname,
+                                               host, port, ), obj=obj)
+    log.info("# Pgcon")
+    return
+
+@register(UnicodeResultProcessor)
+def save_processor(pickler, obj):
+    log.info("SqlUni: %s" % obj)
+    pickler.save_reduce(_create_unicodeProcessor, (), obj=obj)
+    log.info("# SqlUni")
     return
 
 @register(LockType)
