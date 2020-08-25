@@ -90,6 +90,14 @@ if sys.hexversion < 0x03030000:
 if PY3 and sys.hexversion < 0x03040000:
     GENERATOR_FAIL = True
 else: GENERATOR_FAIL = False    
+if PY3:
+    import importlib.machinery
+    EXTENSION_SUFFIXES = tuple(importlib.machinery.EXTENSION_SUFFIXES)
+else:
+    import imp
+    EXTENSION_SUFFIXES = tuple(suffix
+                               for (suffix, _, s_type) in imp.get_suffixes()
+                               if s_type == imp.C_EXTENSION)
 try:
     import ctypes
     HAS_CTYPES = True
@@ -1303,9 +1311,10 @@ def save_module(pickler, obj):
         if hasattr(obj, "__file__"):
             names = ["base_prefix", "base_exec_prefix", "exec_prefix",
                      "prefix", "real_prefix"]
-            builtin_mod = any([obj.__file__.startswith(os.path.normpath(getattr(sys, name)))
-                           for name in names if hasattr(sys, name)])
-            builtin_mod = builtin_mod or 'site-packages' in obj.__file__
+            builtin_mod = any(obj.__file__.startswith(os.path.normpath(getattr(sys, name)))
+                              for name in names if hasattr(sys, name))
+            builtin_mod = (builtin_mod or obj.__file__.endswith(EXTENSION_SUFFIXES) or
+                           'site-packages' in obj.__file__)
         else:
             builtin_mod = True
         if obj.__name__ not in ("builtins", "dill") \
