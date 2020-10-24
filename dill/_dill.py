@@ -89,7 +89,7 @@ if sys.hexversion < 0x03030000:
     FileNotFoundError = IOError
 if PY3 and sys.hexversion < 0x03040000:
     GENERATOR_FAIL = True
-else: GENERATOR_FAIL = False    
+else: GENERATOR_FAIL = False
 if PY3:
     import importlib.machinery
     EXTENSION_SUFFIXES = tuple(importlib.machinery.EXTENSION_SUFFIXES)
@@ -242,24 +242,32 @@ except NameError:
     singletontypes = []
 
 ### File modes
-# Pickles the file handle, preserving mode. The position of the unpickled
-# object is as for a new file handle.
+#: Pickles the file handle, preserving mode. The position of the unpickled
+#: object is as for a new file handle.
 HANDLE_FMODE = 0
-# Pickles the file contents, creating a new file if on load the file does
-# not exist. The position = min(pickled position, EOF) and mode is chosen
-# as such that "best" preserves behavior of the original file.
+#: Pickles the file contents, creating a new file if on load the file does
+#: not exist. The position = min(pickled position, EOF) and mode is chosen
+#: as such that "best" preserves behavior of the original file.
 CONTENTS_FMODE = 1
-# Pickles the entire file (handle and contents), preserving mode and position.
+#: Pickles the entire file (handle and contents), preserving mode and position.
 FILE_FMODE = 2
 
 ### Shorthands (modified from python2.5/lib/pickle.py)
 def copy(obj, *args, **kwds):
-    """use pickling to 'copy' an object"""
+    """
+    Use pickling to 'copy' an object.
+
+    See :func:`dumps` and :func:`loads` for keyword arguments.
+    """
     ignore = kwds.pop('ignore', Unpickler.settings['ignore'])
     return loads(dumps(obj, *args, **kwds), ignore=ignore)
 
 def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
-    """pickle an object to a file"""
+    """
+    Pickle an object to a file.
+
+    See :func:`dumps` for keyword arguments.
+    """
     from .settings import settings
     protocol = settings['protocol'] if protocol is None else int(protocol)
     _kwds = kwds.copy()
@@ -268,17 +276,52 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, **kwds)
     return
 
 def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
-    """pickle an object to a string"""
+    """
+    Pickle an object to a string.
+
+    *protocol* is the pickler protocol, as defined for Python *pickle*.
+
+    If *byref=True*, then dill behaves a lot more like pickle as certain
+    objects (like modules) are pickled by reference as opposed to attempting
+    to pickle the object itself.
+
+    If *recurse=True*, then objects referred to in the global dictionary
+    are recursively traced and pickled, instead of the default behavior
+    of attempting to store the entire global dictionary. This is needed for
+    functions defined via *exec()*.
+
+    *fmode* (:const:`HANDLE_FMODE`, :const:`CONTENTS_FMODE`,
+    or :const:`FILE_FMODE`) indicates how file handles will be pickled.
+    For example, when pickling a data file handle for transfer to a remote
+    compute service, *FILE_FMODE* will include the file contents in the
+    pickle and cursor position so that a remote method can operate
+    transparently on an object with an open file handle.
+
+    Default values for keyword arguments can be set in :mod:`dill.settings`.
+    """
     file = StringIO()
     dump(obj, file, protocol, byref, fmode, recurse, **kwds)#, strictio)
     return file.getvalue()
 
 def load(file, ignore=None, **kwds):
-    """unpickle an object from a file"""
+    """
+    Unpickle an object from a file.
+
+    See :func:`loads` for keyword arguments.
+    """
     return Unpickler(file, ignore=ignore, **kwds).load()
 
 def loads(str, ignore=None, **kwds):
-    """unpickle an object from a string"""
+    """
+    Unpickle an object from a string.
+
+    If *ignore=False* then objects whose class is defined in the module
+    *__main__* are updated to reference the existing class in *__main__*,
+    otherwise they are left to refer to the reconstructed type, which may
+    be different.
+
+    Default values for keyword arguments can be set in :mod:`dill.settings`.
+    """
     file = StringIO(str)
     return load(file, ignore, **kwds)
 
@@ -519,7 +562,8 @@ def _revert_extension():
 
 def use_diff(on=True):
     """
-    reduces size of pickles by only including object which have changed.
+    Reduces size of pickles by only including object which have changed.
+
     Decreases pickle size but increases CPU time needed.
     Also helps avoid some unpicklable objects.
     MUST be called at start of script, otherwise changes will not be recorded.
@@ -1473,13 +1517,25 @@ def save_function(pickler, obj):
 
 # quick sanity checking
 def pickles(obj,exact=False,safe=False,**kwds):
-    """quick check if object pickles with dill"""
+    """
+    Quick check if object pickles with dill.
+
+    If *exact=True* then an equality test is done to check if the reconstructed
+    object matches the original object.
+
+    If *safe=True* then any exception will raised in copy signal that the
+    object is not picklable, otherwise only pickling errors will be trapped.
+
+    Additional keyword arguments are as :func:`dumps` and :func:`loads`.
+    """
     if safe: exceptions = (Exception,) # RuntimeError, ValueError
     else:
         exceptions = (TypeError, AssertionError, PicklingError, UnpicklingError)
     try:
         pik = copy(obj, **kwds)
+        #FIXME: should check types match first, then check content if "exact"
         try:
+            #FIXME: should be "(pik == obj).all()" for numpy comparison, though that'll fail if shapes differ
             result = bool(pik.all() == obj.all())
         except AttributeError:
             result = pik == obj
@@ -1494,7 +1550,15 @@ def pickles(obj,exact=False,safe=False,**kwds):
         return False
 
 def check(obj, *args, **kwds):
-    """check pickling of an object across another process"""
+    """
+    Check pickling of an object across another process.
+
+    *python* is the path to the python interpreter (defaults to sys.executable)
+
+    Set *verbose=True* to print the unpickled object in the other process.
+
+    Additional keyword arguments are as :func:`dumps` and :func:`loads`.
+    """
    # == undocumented ==
    # python -- the string path or executable name of the selected python
    # verbose -- if True, be verbose about printing warning messages
@@ -1514,6 +1578,12 @@ def check(obj, *args, **kwds):
     finally:
         if fail and verbose:
             print("DUMP FAILED")
+    #FIXME: fails if python interpreter path contains spaces
+    # Use the following instead (which also processes the 'ignore' keyword):
+    #    ignore = kwds.pop('ignore', None)
+    #    unpickle = "dill.loads(%s, ignore=%s)"%(repr(_obj), repr(ignore))
+    #    cmd = [python, "-c", "import dill; print(%s)"%unpickle]
+    #    msg = "SUCCESS" if not subprocess.call(cmd) else "LOAD FAILED"
     msg = "%s -c import dill; print(dill.loads(%s))" % (python, repr(_obj))
     msg = "SUCCESS" if not subprocess.call(msg.split(None,2)) else "LOAD FAILED"
     if verbose:

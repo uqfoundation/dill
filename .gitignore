@@ -2,3 +2,7 @@
 .cache/
 *.egg-info/
 *.pyc
+/docs/build
+/build
+/README
+/dill/info.py
