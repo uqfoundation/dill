@@ -23,7 +23,7 @@ matrix:
           dist: xenial
           env:
 
-        - python: '3.9-dev'
+        - python: '3.9'
           dist: xenial
           env:
 
@@ -42,7 +42,6 @@ matrix:
           env:
 
     allow_failures:
-        - python: '3.9-dev'
         - python: '3.10-dev'
         - python: 'nightly'
         - python: 'pypy3'
