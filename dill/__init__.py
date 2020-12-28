@@ -7,20 +7,8 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 # get version numbers, license, and long description
-try:
-    from .info import this_version as __version__
-    from .info import readme as __doc__, license as __license__
-except ImportError:
-    msg = """First run 'python setup.py build' to build dill."""
-    raise ImportError(msg)
 
 __author__ = 'Mike McKerns'
-
-__doc__ = """
-""" + __doc__
-
-__license__ = """
-""" + __license__
 
 from ._dill import dump, dumps, load, loads, dump_session, load_session, \
     Pickler, Unpickler, register, copy, pickle, pickles, check, \

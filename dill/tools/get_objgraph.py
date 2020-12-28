@@ -28,7 +28,7 @@ from dill import load_types
 load_types(pickleable=True,unpickleable=True)
 from dill import objects
 
-if __name__ == "__main__":
+def get_objgraph():
     import sys
     if len(sys.argv) != 2:
         print ("Please provide exactly one file or type name (e.g. 'IntType')")
