@@ -7,6 +7,9 @@ matrix:
           env:
             - COVERAGE="true"
 
+        - python: '3.5'
+          env:
+
         - python: '3.6'
           env:
             - COVERAGE="true"
