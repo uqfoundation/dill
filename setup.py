@@ -12,8 +12,8 @@ import sys
 unsupported = None
 if sys.version_info < (2, 7):
     unsupported = 'Versions of Python before 2.7 are not supported'
-elif (3, 0) <= sys.version_info < (3, 5):
-    unsupported = 'Versions of Python before 3.5 are not supported'
+elif (3, 0) <= sys.version_info < (3, 6):
+    unsupported = 'Versions of Python before 3.6 are not supported'
 if unsupported:
     raise ValueError(unsupported)
 
@@ -170,7 +170,7 @@ Requirements
 
 ``dill`` requires:
 
-    - ``python``, **version == 2.7** or **version >= 3.5**, or ``pypy``
+    - ``python``, **version == 2.7** or **version >= 3.6**, or ``pypy``
 
 Optional requirements:
 
@@ -251,22 +251,18 @@ setup(name='dill',
       platforms = ['Linux', 'Windows', 'Mac'],
       url = 'https://pypi.org/project/dill',
       download_url = 'https://github.com/uqfoundation/dill/releases/download/dill-%s/dill-%s.tar.gz',
-      python_requires='>=2.6, !=3.0.*',
+      python_requires='>=2.7, !=3.0.*',
       classifiers = ['Development Status :: 5 - Production/Stable',
                      'Intended Audience :: Developers',
                      'Intended Audience :: Science/Research',
                      'License :: OSI Approved :: BSD License',
                      'Programming Language :: Python :: 2',
-                     'Programming Language :: Python :: 2.6',
                      'Programming Language :: Python :: 2.7',
                      'Programming Language :: Python :: 3',
-                     'Programming Language :: Python :: 3.2',
-                     'Programming Language :: Python :: 3.3',
-                     'Programming Language :: Python :: 3.4',
-                     'Programming Language :: Python :: 3.5',
                      'Programming Language :: Python :: 3.6',
                      'Programming Language :: Python :: 3.7',
                      'Programming Language :: Python :: 3.8',
+                     'Programming Language :: Python :: 3.9',
                      'Topic :: Scientific/Engineering',
                      'Topic :: Software Development'],
 

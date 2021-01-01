@@ -8,10 +8,12 @@
 
 from dill.detect import baditems, badobjects, badtypes, errors, parent, at, globalvars
 from dill import settings
-from dill._dill import IS_PYPY
+from dill._dill import IS_PYPY, PY3
 from pickle import PicklingError
 
 import inspect
+
+PY2 = not PY3
 
 def test_bad_things():
     f = inspect.currentframe()
@@ -19,7 +21,7 @@ def test_bad_things():
     #assert baditems(globals()) == [f] #XXX
     assert badobjects(f) is f
     assert badtypes(f) == type(f)
-    assert type(errors(f)) is PicklingError if IS_PYPY else TypeError
+    assert type(errors(f)) is PicklingError if (IS_PYPY and PY2) else TypeError
     d = badtypes(f, 1)
     assert isinstance(d, dict)
     assert list(badobjects(f, 1).keys()) == list(d.keys())
@@ -113,9 +115,9 @@ def test_getstate():
 
 #97 serialize lambdas in test files
 def test_deleted():
+    global sin
     from dill import dumps, loads
     from math import sin, pi
-    global sin
 
     def sinc(x):
         return sin(x)/x
