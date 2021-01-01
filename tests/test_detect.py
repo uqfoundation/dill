@@ -115,9 +115,9 @@ def test_getstate():
 
 #97 serialize lambdas in test files
 def test_deleted():
-    global sin
     from dill import dumps, loads
     from math import sin, pi
+    global sin
 
     def sinc(x):
         return sin(x)/x
