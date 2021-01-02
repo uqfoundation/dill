@@ -8,12 +8,11 @@
 
 from dill.detect import baditems, badobjects, badtypes, errors, parent, at, globalvars
 from dill import settings
-from dill._dill import IS_PYPY, PY3
+from dill._dill import IS_PYPY, IS_PYPY2
 from pickle import PicklingError
 
 import inspect
-
-PY2 = not PY3
+import sys
 
 def test_bad_things():
     f = inspect.currentframe()
@@ -21,15 +20,16 @@ def test_bad_things():
     #assert baditems(globals()) == [f] #XXX
     assert badobjects(f) is f
     assert badtypes(f) == type(f)
-    assert type(errors(f)) is PicklingError if (IS_PYPY and PY2) else TypeError
+    assert type(errors(f)) is PicklingError if IS_PYPY2 else TypeError
     d = badtypes(f, 1)
     assert isinstance(d, dict)
     assert list(badobjects(f, 1).keys()) == list(d.keys())
     assert list(errors(f, 1).keys()) == list(d.keys())
     s = set([(err.__class__.__name__,err.args[0]) for err in list(errors(f, 1).values())])
     a = dict(s)
-    #assert len(s) is len(a) # TypeError (and possibly PicklingError) #FIXME
-    n = 1 if (IS_PYPY and PY2) else 2
+    if 0x30602f0 <= sys.hexversion < 0x30603f0: #XXX: travis-ci
+        assert len(s) is len(a) # TypeError (and possibly PicklingError)
+    n = 1 if IS_PYPY2 else 2
     assert len(a) is n if 'PicklingError' in a.keys() else n-1
 
 def test_parent():

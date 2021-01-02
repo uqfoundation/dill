@@ -106,6 +106,7 @@ try:
 except ImportError:
     HAS_CTYPES = False
     IS_PYPY = False
+IS_PYPY2 = IS_PYPY and not PY3
 NumpyUfuncType = None
 NumpyArrayType = None
 try:

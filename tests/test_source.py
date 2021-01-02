@@ -8,7 +8,7 @@
 
 from dill.source import getsource, getname, _wrap, likely_import
 from dill.source import getimportable
-
+from dill._dill import IS_PYPY
 
 import sys
 PY3 = sys.version_info[0] >= 3
@@ -87,12 +87,12 @@ def test_dynamic():
 def test_classes():
   try: #XXX: should this be a 'special case'?
     from StringIO import StringIO
-    x = "from StringIO import StringIO\n"
-    y = x
+    y = "from StringIO import StringIO\n"
+    x = y
   except ImportError:
     from io import BytesIO as StringIO
-    x = "from io import BytesIO\n"
     y = "from _io import BytesIO\n"
+    x = y if (IS_PYPY and PY3) else "from io import BytesIO\n"
   s = StringIO()
 
   assert likely_import(StringIO) == x
