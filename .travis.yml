@@ -7,10 +7,8 @@ matrix:
           env:
             - COVERAGE="true"
 
-        - python: '3.5'
-          env:
-
         - python: '3.6'
+          dist: xenial
           env:
             - COVERAGE="true"
             - NUMPY="true"
@@ -39,12 +37,12 @@ matrix:
           env:
 
         - python: 'pypy3'
+          dist: xenial
           env:
 
     allow_failures:
         - python: '3.10-dev'
         - python: 'nightly'
-        - python: 'pypy3'
     fast_finish: true
 
 cache:
