@@ -227,7 +227,7 @@ except ImportError:
     else:
         from StringIO import StringIO
     InputType = OutputType = None
-if not IS_PYPY:
+if not IS_PYPY2:
     from socket import socket as SocketType
     try: #FIXME: additionally calls ForkingPickler.register several times
         from multiprocessing.reduction import _reduce_socket as reduce_socket
@@ -976,7 +976,7 @@ def save_rlock(pickler, obj):
     log.info("# RL")
     return
 
-if not IS_PYPY:
+if not IS_PYPY2:
     #@register(SocketType) #FIXME: causes multiprocess test_pickling FAIL
     def save_socket(pickler, obj):
         log.info("So: %s" % obj)
