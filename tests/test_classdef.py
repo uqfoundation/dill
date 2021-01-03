@@ -142,20 +142,23 @@ def test_array_subclass():
                 return np.asarray(self), self.color
 
         a1 = TestArray(np.zeros(100), color='green')
-        assert dill.pickles(a1)
-        assert a1.__dict__ == dill.copy(a1).__dict__
+        if dill._dill.PY3 and not dill._dill.IS_PYPY:
+            assert dill.pickles(a1)
+            assert a1.__dict__ == dill.copy(a1).__dict__
 
         a2 = a1[0:9]
-        assert dill.pickles(a2)
-        assert a2.__dict__ == dill.copy(a2).__dict__
+        if dill._dill.PY3 and not dill._dill.IS_PYPY:
+            assert dill.pickles(a2)
+            assert a2.__dict__ == dill.copy(a2).__dict__
 
         class TestArray2(np.ndarray):
             color = 'blue'
 
         a3 = TestArray2([1,2,3,4,5])
         a3.color = 'green'
-        assert dill.pickles(a3)
-        assert a3.__dict__ == dill.copy(a3).__dict__
+        if dill._dill.PY3 and not dill._dill.IS_PYPY:
+            assert dill.pickles(a3)
+            assert a3.__dict__ == dill.copy(a3).__dict__
 
     except ImportError: pass
 
