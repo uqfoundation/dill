@@ -12,7 +12,7 @@ of which is converting a byte stream back to a python object hierarchy.
 ``dill`` provides the user the same interface as the ``pickle`` module, and
 also includes some additional features. In addition to pickling python
 objects, ``dill`` provides the ability to save the state of an interpreter
-session in a single command.  Hence, it would be feasable to save a
+session in a single command.  Hence, it would be feasible to save a
 interpreter session, close the interpreter, ship the pickled file to
 another computer, open a new interpreter, unpickle the session and
 thus continue from the 'saved' state of the original interpreter
