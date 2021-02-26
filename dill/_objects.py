@@ -216,8 +216,8 @@ if HAS_CTYPES:
     a['CSizeTType'] = ctypes.c_size_t()
     a['CLibraryLoaderType'] = ctypes.cdll
     a['StructureType'] = _Struct
-    if not IS_PYPY:
-        a['BigEndianStructureType'] = ctypes.BigEndianStructure()
+    # if not IS_PYPY:
+    #     a['BigEndianStructureType'] = ctypes.BigEndianStructure()
 #NOTE: also LittleEndianStructureType and UnionType... abstract classes
 #NOTE: remember for ctypesobj.contents creates a new python object
 #NOTE: ctypes.c_int._objects is memberdescriptor for object's __dict__
