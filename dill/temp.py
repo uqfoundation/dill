@@ -25,9 +25,9 @@ def capture(stream='stdout'):
     """builds a context that temporarily replaces the given stream name
 
     >>> with capture('stdout') as out:
-    ...   print "foo!"
+    ...   print ("foo!")
     ... 
-    >>> print out.getvalue()
+    >>> print (out.getvalue())
     foo!
 
     """
