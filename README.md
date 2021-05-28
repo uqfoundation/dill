@@ -60,6 +60,45 @@ Major Features
 * interactively diagnose pickling errors
 
 
+Basic Usage
+-----------
+
+``dill`` is a drop-in replacement for ``pickle``. Existing code can be
+updated to allow complete pickling using::
+
+    import dill as pickle
+
+or::
+
+    from dill import dumps, loads
+
+There are a number of options to control serialization which are provided
+as keyword arguments to several ``dill`` functions:
+
+* with *protocol*, the pickle protocol level can be set. This uses the
+  same value as the ``pickle`` module, *HIGHEST_PROTOCOL* or *DEFAULT_PROTOCOL*.
+* with *byref=True*, ``dill`` to behave a lot more like pickle with
+  certain objects (like modules) pickled by reference as opposed to
+  attempting to pickle the object itself.
+* with *recurse=True*, objects referred to in the global dictionary are
+  recursively traced and pickled, instead of the default behavior of
+  attempting to store the entire global dictionary.
+* with *fmode*, the contents of the file can be pickled along with the file
+  handle, which is useful if the object is being sent over the wire to a
+  remote system which does not have the original file on disk. Options are
+  *HANDLE_FMODE* for just the handle, *CONTENTS_FMODE* for the file content
+  and *FILE_FMODE* for content and handle.
+* with *ignore=False*, objects reconstructed with types defined in the
+  top-level script environment use the existing type in the environment
+  rather than a possibly different reconstructed type.
+
+The default serialization can be set globally in *dill.settings*.
+For example to set *recurse=True* use::
+
+    import dill.settings
+    dill.settings['recurse'] = True
+
+
 Current Release
 ---------------
 The latest released version of ``dill`` is available from:

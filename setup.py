@@ -71,7 +71,7 @@ of which is converting a byte stream back to a python object hierarchy.
 ``dill`` provides the user the same interface as the ``pickle`` module, and
 also includes some additional features. In addition to pickling python
 objects, ``dill`` provides the ability to save the state of an interpreter
-session in a single command.  Hence, it would be feasable to save a
+session in a single command.  Hence, it would be feasable to save an
 interpreter session, close the interpreter, ship the pickled file to
 another computer, open a new interpreter, unpickle the session and
 thus continue from the 'saved' state of the original interpreter
@@ -133,7 +133,7 @@ or::
     from dill import dumps, loads
 
 There are a number of options to control serialization which are provided
-as keyword arguments to dill functions:
+as keyword arguments to several ``dill`` functions:
 
 * with *protocol*, the pickle protocol level can be set. This uses the
   same value as the ``pickle`` module, *HIGHEST_PROTOCOL* or *DEFAULT_PROTOCOL*.
@@ -152,13 +152,11 @@ as keyword arguments to dill functions:
   top-level script environment use the existing type in the environment
   rather than a possibly different reconstructed type.
 
-The default serialization can be set in *dill.settings*. For example to set
-*recurse=True* use::
+The default serialization can be set globally in *dill.settings*.
+For example to set *recurse=True* use::
 
-    from dill import loads, dumps
     import dill.settings
-    dill.settings.recurse = True
-
+    dill.settings['recurse'] = True
 
 
 Current Release

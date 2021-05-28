@@ -256,7 +256,7 @@ FILE_FMODE = 2
 ### Shorthands (modified from python2.5/lib/pickle.py)
 def copy(obj, *args, **kwds):
     """
-    Use pickling to 'copy' an object.
+    Use pickling to 'copy' an object (i.e. `loads(dumps(obj))`).
 
     See :func:`dumps` and :func:`loads` for keyword arguments.
     """
