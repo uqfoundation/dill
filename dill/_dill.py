@@ -644,6 +644,10 @@ def _create_function(fcode, fglobals, fname=None, fdefaults=None,
     func.__dict__.update(fdict) #XXX: better copy? option to copy?
     if fkwdefaults is not None:
         func.__kwdefaults__ = fkwdefaults
+    # 'recurse' only stores referenced modules/objects in fglobals,
+    # thus we need to make sure that we have __builtins__ as well
+    if "__builtins__" not in func.__globals__:
+        func.__globals__["__builtins__"] = globals()["__builtins__"]
     return func
 
 def _create_code(*args):
