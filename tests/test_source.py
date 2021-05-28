@@ -12,6 +12,8 @@ from dill._dill import IS_PYPY
 
 import sys
 PY3 = sys.version_info[0] >= 3
+IS_PYPY3 = IS_PYPY and PY3
+PY310b = '0x30a00b1'
 
 f = lambda x: x**2
 def g(x): return f(x) - x
@@ -92,7 +94,7 @@ def test_classes():
   except ImportError:
     from io import BytesIO as StringIO
     y = "from _io import BytesIO\n"
-    x = y if (IS_PYPY and PY3) else "from io import BytesIO\n"
+    x = y if (IS_PYPY3 or hex(sys.hexversion) >= PY310b) else "from io import BytesIO\n"
   s = StringIO()
 
   assert likely_import(StringIO) == x
