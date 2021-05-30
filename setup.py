@@ -232,10 +232,8 @@ locally or globally::
 ``dill`` also includes source code inspection, as an alternate to pickling::
 
     >>> import dill.source
-    >>> dill.source.getsource(squared)
-    'squared = lambda x: x**2\n'
-    >>> dill.source.getsource(sum, force=True, builtin=True)
-    'from builtins import sum\n'
+    >>> print(dill.source.getsource(squared))
+    squared = lambda x:x**2
 
 To aid in debugging pickling issues, use *dill.detect* which provides
 tools like pickle tracing::
