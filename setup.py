@@ -179,8 +179,8 @@ Optional requirements:
     - ``objgraph``, **version >= 1.7.2**
 
 
-Examples
-========
+Basic Usage
+===========
 
 ``dill`` is a drop-in replacement for ``pickle``. Existing code can be
 updated to allow complete pickling using::

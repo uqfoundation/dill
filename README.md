@@ -80,8 +80,8 @@ You can get the latest development version with all the shiny new features at:
 If you have a new contribution, please submit a pull request.
 
 
-Examples
---------
+Basic Usage
+-----------
 ``dill`` is a drop-in replacement for ``pickle``. Existing code can be
 updated to allow complete pickling using::
 
