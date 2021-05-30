@@ -120,45 +120,6 @@ Major Features
     - interactively diagnose pickling errors
 
 
-Basic Usage
-===========
-
-``dill`` is a drop-in replacement for ``pickle``. Existing code can be
-updated to allow complete pickling using::
-
-    import dill as pickle
-
-or::
-
-    from dill import dumps, loads
-
-There are a number of options to control serialization which are provided
-as keyword arguments to several ``dill`` functions:
-
-* with *protocol*, the pickle protocol level can be set. This uses the
-  same value as the ``pickle`` module, *HIGHEST_PROTOCOL* or *DEFAULT_PROTOCOL*.
-* with *byref=True*, ``dill`` to behave a lot more like pickle with
-  certain objects (like modules) pickled by reference as opposed to
-  attempting to pickle the object itself.
-* with *recurse=True*, objects referred to in the global dictionary are
-  recursively traced and pickled, instead of the default behavior of
-  attempting to store the entire global dictionary.
-* with *fmode*, the contents of the file can be pickled along with the file
-  handle, which is useful if the object is being sent over the wire to a
-  remote system which does not have the original file on disk. Options are
-  *HANDLE_FMODE* for just the handle, *CONTENTS_FMODE* for the file content
-  and *FILE_FMODE* for content and handle.
-* with *ignore=False*, objects reconstructed with types defined in the
-  top-level script environment use the existing type in the environment
-  rather than a possibly different reconstructed type.
-
-The default serialization can be set globally in *dill.settings*.
-For example to set *recurse=True* use::
-
-    import dill.settings
-    dill.settings['recurse'] = True
-
-
 Current Release
 ===============
 
@@ -216,6 +177,90 @@ Optional requirements:
     - ``setuptools``, **version >= 0.6**
     - ``pyreadline``, **version >= 1.7.1** (on windows)
     - ``objgraph``, **version >= 1.7.2**
+
+
+Examples
+========
+
+``dill`` is a drop-in replacement for ``pickle``. Existing code can be
+updated to allow complete pickling using::
+
+    >>> import dill as pickle
+
+or::
+
+    >>> from dill import dumps, loads
+
+``dumps`` converts the object to a unique byte string, and ``loads`` performs
+the inverse operation::
+
+    >>> squared = lambda x: x**2
+    >>> loads(dumps(squared))(3)
+    9
+
+There are a number of options to control serialization which are provided
+as keyword arguments to several ``dill`` functions:
+
+* with *protocol*, the pickle protocol level can be set. This uses the
+  same value as the ``pickle`` module, *HIGHEST_PROTOCOL* or *DEFAULT_PROTOCOL*.
+* with *byref=True*, ``dill`` to behave a lot more like pickle with
+  certain objects (like modules) pickled by reference as opposed to
+  attempting to pickle the object itself.
+* with *recurse=True*, objects referred to in the global dictionary are
+  recursively traced and pickled, instead of the default behavior of
+  attempting to store the entire global dictionary.
+* with *fmode*, the contents of the file can be pickled along with the file
+  handle, which is useful if the object is being sent over the wire to a
+  remote system which does not have the original file on disk. Options are
+  *HANDLE_FMODE* for just the handle, *CONTENTS_FMODE* for the file content
+  and *FILE_FMODE* for content and handle.
+* with *ignore=False*, objects reconstructed with types defined in the
+  top-level script environment use the existing type in the environment
+  rather than a possibly different reconstructed type.
+
+The default serialization can also be set globally in *dill.settings*.
+Thus, we can modify how ``dill`` handles references to the global dictionary
+locally or globally::
+
+    >>> import dill.settings
+    >>> dumps(absolute) == dumps(absolute, recurse=True)
+    False
+    >>> dill.settings['recurse'] = True
+    >>> dumps(absolute) == dumps(absolute, recurse=True)
+    True
+
+``dill`` also includes source code inspection, as an alternate to pickling::
+
+    >>> import dill.source
+    >>> dill.source.getsource(squared)
+    'squared = lambda x: x**2\n'
+    >>> dill.source.getsource(sum, force=True, builtin=True)
+    'from builtins import sum\n'
+
+To aid in debugging pickling issues, use *dill.detect* which provides
+tools like pickle tracing::
+
+    >>> import dill.detect
+    >>> dill.detect.trace(True)
+    >>> f = dumps(squared)
+    F1: <function <lambda> at 0x108899e18>
+    F2: <function _create_function at 0x108db7488>
+    # F2
+    Co: <code object <lambda> at 0x10866a270, file "<stdin>", line 1>
+    F2: <function _create_code at 0x108db7510>
+    # F2
+    # Co
+    D1: <dict object at 0x10862b3f0>
+    # D1
+    D2: <dict object at 0x108e42ee8>
+    # D2
+    # F1
+    >>> dill.detect.trace(False)
+
+With trace, we see how ``dill`` stored the lambda (``F1``) by first storing
+``_create_function``, the underlying code object (``Co``) and ``_create_code``
+(which is used to handle code objects), then we handle the reference to
+the global dict (``D2``).  A ``#`` marks when the object is actually stored.
 
 
 More Information

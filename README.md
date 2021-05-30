@@ -60,17 +60,43 @@ Major Features
 * interactively diagnose pickling errors
 
 
-Basic Usage
------------
+Current Release
+---------------
+The latest released version of ``dill`` is available from:
+    https://pypi.org/project/dill
 
+``dill`` is distributed under a 3-clause BSD license.
+
+
+Development Version
+[![Documentation Status](https://readthedocs.org/projects/dill/badge/?version=latest)](https://dill.readthedocs.io/en/latest/?badge=latest)
+[![Travis Build Status](https://img.shields.io/travis/uqfoundation/dill.svg?label=build&logo=travis&branch=master)](https://travis-ci.org/uqfoundation/dill)
+[![codecov](https://codecov.io/gh/uqfoundation/dill/branch/master/graph/badge.svg)](https://codecov.io/gh/uqfoundation/dill)
+[![Downloads](https://pepy.tech/badge/dill)](https://pepy.tech/project/dill)
+-------------------
+You can get the latest development version with all the shiny new features at:
+    https://github.com/uqfoundation
+
+If you have a new contribution, please submit a pull request.
+
+
+Examples
+--------
 ``dill`` is a drop-in replacement for ``pickle``. Existing code can be
 updated to allow complete pickling using::
 
-    import dill as pickle
+    >>> import dill as pickle
 
 or::
 
-    from dill import dumps, loads
+    >>> from dill import dumps, loads
+
+``dumps`` converts the object to a unique byte string, and ``loads`` performs
+the inverse operation::
+
+    >>> squared = lambda x: x**2
+    >>> loads(dumps(squared))(3)
+    9
 
 There are a number of options to control serialization which are provided
 as keyword arguments to several ``dill`` functions:
@@ -92,31 +118,49 @@ as keyword arguments to several ``dill`` functions:
   top-level script environment use the existing type in the environment
   rather than a possibly different reconstructed type.
 
-The default serialization can be set globally in *dill.settings*.
-For example to set *recurse=True* use::
+The default serialization can also be set globally in *dill.settings*.
+Thus, we can modify how ``dill`` handles references to the global dictionary
+locally or globally::
 
-    import dill.settings
-    dill.settings['recurse'] = True
+    >>> import dill.settings
+    >>> dumps(absolute) == dumps(absolute, recurse=True)
+    False
+    >>> dill.settings['recurse'] = True
+    >>> dumps(absolute) == dumps(absolute, recurse=True)
+    True
 
+``dill`` also includes source code inspection, as an alternate to pickling::
 
-Current Release
----------------
-The latest released version of ``dill`` is available from:
-    https://pypi.org/project/dill
+    >>> import dill.source
+    >>> dill.source.getsource(squared)
+    'squared = lambda x: x**2\n'
+    >>> dill.source.getsource(sum, force=True, builtin=True)
+    'from builtins import sum\n'
 
-``dill`` is distributed under a 3-clause BSD license.
+To aid in debugging pickling issues, use *dill.detect* which provides
+tools like pickle tracing::
 
+    >>> import dill.detect
+    >>> dill.detect.trace(True)
+    >>> f = dumps(squared)
+    F1: <function <lambda> at 0x108899e18>
+    F2: <function _create_function at 0x108db7488>
+    # F2
+    Co: <code object <lambda> at 0x10866a270, file "<stdin>", line 1>
+    F2: <function _create_code at 0x108db7510>
+    # F2
+    # Co
+    D1: <dict object at 0x10862b3f0>
+    # D1
+    D2: <dict object at 0x108e42ee8>
+    # D2
+    # F1
+    >>> dill.detect.trace(False)
 
-Development Version
-[![Documentation Status](https://readthedocs.org/projects/dill/badge/?version=latest)](https://dill.readthedocs.io/en/latest/?badge=latest)
-[![Travis Build Status](https://img.shields.io/travis/uqfoundation/dill.svg?label=build&logo=travis&branch=master)](https://travis-ci.org/uqfoundation/dill)
-[![codecov](https://codecov.io/gh/uqfoundation/dill/branch/master/graph/badge.svg)](https://codecov.io/gh/uqfoundation/dill)
-[![Downloads](https://pepy.tech/badge/dill)](https://pepy.tech/project/dill)
--------------------
-You can get the latest development version with all the shiny new features at:
-    https://github.com/uqfoundation
-
-If you have a new contribution, please submit a pull request.
+With trace, we see how ``dill`` stored the lambda (``F1``) by first storing
+``_create_function``, the underlying code object (``Co``) and ``_create_code``
+(which is used to handle code objects), then we handle the reference to
+the global dict (``D2``).  A ``#`` marks when the object is actually stored.
 
 
 More Information
