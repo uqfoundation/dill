@@ -1,46 +1,43 @@
-dist: trusty
+dist: focal
 language: python
 
 matrix:
     include:
         - python: '2.7'
+          dist: bionic
           env:
             - COVERAGE="true"
 
         - python: '3.6'
-          dist: xenial
           env:
             - COVERAGE="true"
             - NUMPY="true"
 
         - python: '3.7'
-          dist: xenial
           env:
 
         - python: '3.8'
-          dist: xenial
           env:
 
         - python: '3.9'
-          dist: xenial
           env:
 
         - python: '3.10-dev'
-          dist: xenial
           env:
 
         - python: 'nightly'
-          dist: xenial
           env:
 
         - python: 'pypy'
-          env:
-
-        - python: 'pypy3'
           dist: xenial
           env:
 
+        - python: 'pypy3'
+          env:
+
     allow_failures:
+        - python: '2.7'
+        - python: 'pypy'
         - python: '3.10-dev'
         - python: 'nightly'
     fast_finish: true

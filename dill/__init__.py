@@ -119,7 +119,7 @@ def license():
 
 def citation():
     """print citation"""
-    print (__doc__[-485:-115])
+    print (__doc__[-491:-118])
     return
 
 del odict
