@@ -6,6 +6,7 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 import dill
+import os
 import sys
 dill.settings['recurse'] = True
 
@@ -29,6 +30,14 @@ def function_c(c, c1=1):
 def function_d(d, d1, d2=1):
     return d + d1 + d2
 
+
+def lambda_a():
+    pkl = os.path.join(
+        os.path.dirname(__file__),
+        "lambda.pkl")
+    with open(pkl,"rb") as fh:
+        fn = dill.load(fh)
+    assert fn is not None
 
 if is_py3():
     exec('''
@@ -65,3 +74,4 @@ assert dill.loads(dumped_func_e)(1, 2, 3, e2=4, e3=5) == 15''')
 
 if __name__ == '__main__':
     test_functions()
+    lambda_a()
