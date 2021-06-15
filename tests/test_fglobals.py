@@ -42,5 +42,7 @@ def test_method_with_internal_import_should_work():
 
 
 if __name__ == "__main__":
-    test_doc_dill_issue_219()
+    import sys
+    if (sys.version_info[:3] != (3,10,0) or sys.version_info[3] != 'alpha'):
+        test_doc_dill_issue_219()
     test_method_with_internal_import_should_work()

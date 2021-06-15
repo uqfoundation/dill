@@ -9,7 +9,7 @@
 import sys
 import dill
 import test_mixins as module
-try: from imp import reload
+try: from importlib import reload
 except ImportError: pass
 dill.settings['recurse'] = True
 
