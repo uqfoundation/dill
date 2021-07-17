@@ -32,6 +32,7 @@ def _trace(boolean):
 stack = dict()  # record of 'recursion-sensitive' pickled objects
 
 import os
+import io
 import sys
 diff = None
 _use_diff = False
@@ -1535,6 +1536,57 @@ def save_function(pickler, obj):
         StockPickler.save_global(pickler, obj, name=name)
         log.info("# F2")
     return
+
+try:
+    import pandas
+    @register(pandas.DataFrame)
+    def save_pandas_df(pickler, obj):
+        try:
+            import pyarrow
+            buf = io.BytesIO()
+            obj.to_parquet(buf, index=obj.index.names[0] is not None)
+            buf.seek(0)
+            buf = buf.read()
+            options = dict()
+        except ImportError:
+            import tempfile
+
+            with tempfile.TemporaryDirectory() as tmpd:
+                buf = os.path.join(tmpd, 'pandas.df.pickle')
+                obj.to_pickle(buf, compression='gzip')
+                with open(buf, 'rb') as tmpf:
+                    buf = tmpf.read()
+
+            options = dict(compression='gzip')
+        except Exception as e:
+            raise e
+
+        pickler.save_reduce(
+            _create_pandas_df,
+            (
+                buf, options
+            ),
+            obj=obj
+        )
+
+    def _create_pandas_df(buffer, options=None):
+        if not isinstance(buffer, io.BytesIO):
+            try:
+                buffer = io.BytesIO(buffer)
+            except Exception as e:
+                raise ValueError("Cannot create pandas.DataFrame from %s" % (buffer,))
+
+        buffer.seek(0)
+        # Check Arrow
+        if buffer.read(3) == b'PAR':
+            _pandas_read = pandas.read_parquet
+        else:
+            _pandas_read = pandas.read_pickle
+
+        buffer.seek(0)
+        return _pandas_read(buffer, **options if isinstance(options, dict) else dict())
+except ImportError:
+    pass
 
 # quick sanity checking
 def pickles(obj,exact=False,safe=False,**kwds):
