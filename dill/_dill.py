@@ -1540,45 +1540,41 @@ try:
     import pandas
     @register(pandas.DataFrame)
     def save_pandas_df(pickler, obj):
-        import io
-        try:
-            import pyarrow
-            buf = io.BytesIO()
-            obj.to_parquet(buf, index=obj.index.names[0] is not None)
-            buf.seek(0)
-            buf = buf.read()
-            read_format, options = "read_parquet", dict()
-        except ImportError:
-            import tempfile
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpd:
+            buf = os.path.join(tmpd, 'pdf.pickle')
+            obj.to_pickle(buf, compression='gzip', protocol=DEFAULT_PROTOCOL)
+            with open(buf, 'rb') as tmpf:
+                buf = tmpf.read()
 
-            with tempfile.TemporaryDirectory() as tmpd:
-                buf = os.path.join(tmpd, 'pandas.df.pickle')
-                obj.to_pickle(buf, compression='gzip', protocol=DEFAULT_PROTOCOL)
-                with open(buf, 'rb') as tmpf:
-                    buf = tmpf.read()
-
-            read_format, options = "read_pickle", dict(compression='gzip')
-        except Exception as e:
-            raise e
-
+        options = dict(compression='gzip')
         pickler.save_reduce(
             _create_pandas_df,
             (
-                buf, read_format, options
+                buf, options
             ),
             obj=obj
         )
 
-    def _create_pandas_df(buffer, read_format="read_pickle", options=None):
-        import io
+    def _create_pandas_df(buffer, options=None):
         if not isinstance(buffer, io.BytesIO):
-            try:
+            if isinstance(buffer, bytes):
                 buffer = io.BytesIO(buffer)
-            except Exception as e:
-                raise ValueError("Cannot create pandas.DataFrame from %s" % (buffer,))
+            elif isinstance(buffer, str):
+                buffer = io.BytesIO(buffer.decode())
+            elif hasattr(buffer, 'read'):
+                buffer = buffer.read()
+                if isinstance(buffer, bytes):
+                    buffer = io.BytesIO(buffer)
+                elif isinstance(buffer, str):
+                    buffer = io.BytesIO(buffer.decode())
+                else:
+                    raise PicklingError("Cannot create pandas.DataFrame from %s, wrong buffer type" % (type(buffer),))
+            else:
+                raise PicklingError("Cannot create pandas.DataFrame from %s, wrong buffer type" % (type(buffer),))
 
         buffer.seek(0)
-        return getattr(pandas, read_format)(buffer, **options if isinstance(options, dict) else dict())
+        return pandas.read_pickle(buffer, **options if isinstance(options, dict) else dict())
 except ImportError:
     pass
 
