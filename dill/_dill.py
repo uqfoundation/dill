@@ -32,7 +32,6 @@ def _trace(boolean):
 stack = dict()  # record of 'recursion-sensitive' pickled objects
 
 import os
-import io
 import sys
 diff = None
 _use_diff = False
@@ -1541,6 +1540,7 @@ try:
     import pandas
     @register(pandas.DataFrame)
     def save_pandas_df(pickler, obj):
+        import io
         try:
             import pyarrow
             buf = io.BytesIO()
@@ -1570,6 +1570,7 @@ try:
         )
 
     def _create_pandas_df(buffer, options=None):
+        import io
         if not isinstance(buffer, io.BytesIO):
             try:
                 buffer = io.BytesIO(buffer)
