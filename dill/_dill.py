@@ -1547,7 +1547,7 @@ try:
             obj.to_parquet(buf, index=obj.index.names[0] is not None)
             buf.seek(0)
             buf = buf.read()
-            options = dict()
+            read_format, options = "read_parquet", dict()
         except ImportError:
             import tempfile
 
@@ -1557,19 +1557,19 @@ try:
                 with open(buf, 'rb') as tmpf:
                     buf = tmpf.read()
 
-            options = dict(compression='gzip')
+            read_format, options = "read_pickle", dict(compression='gzip')
         except Exception as e:
             raise e
 
         pickler.save_reduce(
             _create_pandas_df,
             (
-                buf, options
+                buf, read_format, options
             ),
             obj=obj
         )
 
-    def _create_pandas_df(buffer, options=None):
+    def _create_pandas_df(buffer, read_format="read_pickle", options=None):
         import io
         if not isinstance(buffer, io.BytesIO):
             try:
@@ -1578,14 +1578,7 @@ try:
                 raise ValueError("Cannot create pandas.DataFrame from %s" % (buffer,))
 
         buffer.seek(0)
-        # Check Arrow
-        if buffer.read(3) == b'PAR':
-            _pandas_read = pandas.read_parquet
-        else:
-            _pandas_read = pandas.read_pickle
-
-        buffer.seek(0)
-        return _pandas_read(buffer, **options if isinstance(options, dict) else dict())
+        return getattr(pandas, read_format)(buffer, **options if isinstance(options, dict) else dict())
 except ImportError:
     pass
 
