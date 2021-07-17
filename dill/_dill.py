@@ -1553,7 +1553,7 @@ try:
 
             with tempfile.TemporaryDirectory() as tmpd:
                 buf = os.path.join(tmpd, 'pandas.df.pickle')
-                obj.to_pickle(buf, compression='gzip')
+                obj.to_pickle(buf, compression='gzip', protocol=DEFAULT_PROTOCOL)
                 with open(buf, 'rb') as tmpf:
                     buf = tmpf.read()
 
