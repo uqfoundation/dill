@@ -271,9 +271,7 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, **kwds)
     """
     from .settings import settings
     protocol = settings['protocol'] if protocol is None else int(protocol)
-    _kwds = kwds.copy()
-    _kwds.update(dict(byref=byref, fmode=fmode, recurse=recurse))
-    Pickler(file, protocol, **_kwds).dump(obj)
+    Pickler(file, protocol, byref=byref, fmode=fmode, recurse=recurse, **kwds).dump(obj)
     return
 
 def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
