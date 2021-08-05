@@ -642,11 +642,8 @@ def _create_function(fcode, fglobals, fname=None, fdefaults=None,
     func.__dict__.update(fdict) #XXX: better copy? option to copy?
     
     # Force Attributes
-    if isinstance(fattributes, bytes):
+    if fattributes is not None:
         fattributes = loads(fattributes)
-        for k in fattributes:
-            setattr(func, k, fattributes[k])
-    elif isinstance(fattributes, dict):
         for k in fattributes:
             setattr(func, k, fattributes[k])
     
@@ -1496,18 +1493,12 @@ def save_function(pickler, obj):
             if _super: pickler._byref = True
             if _memo: pickler._recurse = False
             
-            fattributes = dict()
-
-            for k in ('__kwdefaults__', '__annotations__'):
-                try:
-                    fattributes[k] = getattr(obj, k)
-                except AttributeError:
-                    pass
+            fattributes = {k: getattr(obj, k, None) for k in ('__kwdefaults__', '__annotations__')}
            
             pickler.save_reduce(_create_function, (obj.__code__,
                                 globs, obj.__name__,
                                 obj.__defaults__, obj.__closure__,
-                                obj.__dict__, dumps(fattributes) if len(fattributes) > 0 else None), obj=obj)
+                                obj.__dict__, dumps(fattributes)), obj=obj)
         else:
             _super = ('super' in getattr(obj.func_code,'co_names',())) and (_byref is not None) and getattr(pickler, '_recurse', False)
             if _super: pickler._byref = True
