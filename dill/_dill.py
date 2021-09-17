@@ -1360,7 +1360,7 @@ def save_module(pickler, obj):
         if hasattr(obj, "__file__"):
             names = ["base_prefix", "base_exec_prefix", "exec_prefix",
                      "prefix", "real_prefix"]
-            builtin_mod = any(obj.__file__.startswith(os.path.realpath(getattr(sys, name)))
+            builtin_mod = any(os.path.realpath(obj.__file__).startswith(os.path.realpath(getattr(sys, name)))
                               for name in names if hasattr(sys, name))
             builtin_mod = (builtin_mod or obj.__file__.endswith(EXTENSION_SUFFIXES) or
                            'site-packages' in obj.__file__)
