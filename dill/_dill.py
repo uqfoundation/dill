@@ -578,6 +578,23 @@ def use_diff(on=True):
             import diff as d
         diff = d
 
+def _create_code(*args):
+    if PY3 and hasattr(args[-3], 'encode'): #FIXME: from PY2 fails (optcode)
+        args = list(args)
+        args[-3] = args[-3].encode() # co_lnotab
+        args[-10] = args[-10].encode() # co_code
+    if hasattr(CodeType, 'co_posonlyargcount'):
+        if len(args) == 16: return CodeType(*args)
+        elif len(args) == 15: return CodeType(args[0], 0, *args[1:])
+        return CodeType(args[0], 0, 0, *args[1:])
+    elif hasattr(CodeType, 'co_kwonlyargcount'):
+        if len(args) == 16: return CodeType(args[0], *args[2:])
+        elif len(args) == 15: return CodeType(*args)
+        return CodeType(args[0], 0, *args[1:])
+    if len(args) == 16: return CodeType(args[0], *args[3:])
+    elif len(args) == 15: return CodeType(args[0], *args[2:])
+    return CodeType(*args)
+
 def _create_typemap():
     import types
     if PY3:
@@ -609,6 +626,7 @@ _reverse_typemap.update({
     'PyBufferedReaderType': PyBufferedReaderType,
     'PyBufferedWriterType': PyBufferedWriterType,
     'PyTextWrapperType': PyTextWrapperType,
+    'CodeType': _create_code,
 })
 if ExitType:
     _reverse_typemap['ExitType'] = ExitType
@@ -649,23 +667,6 @@ def _create_function(fcode, fglobals, fname=None, fdefaults=None,
     if "__builtins__" not in func.__globals__:
         func.__globals__["__builtins__"] = globals()["__builtins__"]
     return func
-
-def _create_code(*args):
-    if PY3 and hasattr(args[-3], 'encode'): #FIXME: from PY2 fails (optcode)
-        args = list(args)
-        args[-3] = args[-3].encode() # co_lnotab
-        args[-10] = args[-10].encode() # co_code
-    if hasattr(CodeType, 'co_posonlyargcount'):
-        if len(args) == 16: return CodeType(*args)
-        elif len(args) == 15: return CodeType(args[0], 0, *args[1:])
-        return CodeType(args[0], 0, 0, *args[1:])
-    elif hasattr(CodeType, 'co_kwonlyargcount'):
-        if len(args) == 16: return CodeType(args[0], *args[2:])
-        elif len(args) == 15: return CodeType(*args)
-        return CodeType(args[0], 0, *args[1:])
-    if len(args) == 16: return CodeType(args[0], *args[3:])
-    elif len(args) == 15: return CodeType(args[0], *args[2:])
-    return CodeType(*args)
 
 def _create_ftype(ftypeobj, func, args, kwds):
     if kwds is None:
