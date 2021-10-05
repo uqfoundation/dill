@@ -38,7 +38,6 @@ matrix:
     allow_failures:
         - python: '2.7'
         - python: 'pypy'
-        - python: '3.10-dev'
         - python: 'nightly'
     fast_finish: true
 
