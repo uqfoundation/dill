@@ -61,6 +61,9 @@ Major Features
 
 
 Current Release
+[![Downloads](https://static.pepy.tech/personalized-badge/dill?period=total&units=international_system&left_color=grey&right_color=blue&left_text=pypi%20downloads)](https://pepy.tech/project/dill)
+[![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/dill?color=blue&label=conda%20downloads)](https://anaconda.org/conda-forge/dill)
+[![Stack Overflow](https://img.shields.io/badge/stackoverflow-get%20help-black.svg)](https://stackoverflow.com/questions/tagged/dill)
 ---------------
 The latest released version of ``dill`` is available from:
     https://pypi.org/project/dill
@@ -69,10 +72,10 @@ The latest released version of ``dill`` is available from:
 
 
 Development Version
+[![Support](https://img.shields.io/badge/support-the%20UQ%20Foundation-purple.svg?style=flat&colorA=grey&colorB=purple)](http://www.uqfoundation.org/pages/donate.html)
 [![Documentation Status](https://readthedocs.org/projects/dill/badge/?version=latest)](https://dill.readthedocs.io/en/latest/?badge=latest)
 [![Build Status](https://travis-ci.com/uqfoundation/dill.svg?label=build&logo=travis&branch=master)](https://travis-ci.com/uqfoundation/dill)
 [![codecov](https://codecov.io/gh/uqfoundation/dill/branch/master/graph/badge.svg)](https://codecov.io/gh/uqfoundation/dill)
-[![Downloads](https://pepy.tech/badge/dill)](https://pepy.tech/project/dill)
 -------------------
 You can get the latest development version with all the shiny new features at:
     https://github.com/uqfoundation
