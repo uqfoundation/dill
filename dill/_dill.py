@@ -653,17 +653,43 @@ def _create_function(fcode, fglobals, fname=None, fdefaults=None,
 def _create_code(*args):
     if PY3 and hasattr(args[-3], 'encode'): #FIXME: from PY2 fails (optcode)
         args = list(args)
-        args[-3] = args[-3].encode() # co_lnotab
-        args[-10] = args[-10].encode() # co_code
-    if hasattr(CodeType, 'co_posonlyargcount'):
-        if len(args) == 16: return CodeType(*args)
+        if len(args) == 20:
+            args[-3] = args[-3].encode() # co_exceptiontable
+            args[-6] = args[-6].encode() # co_lnotab
+            args[-14] = args[-14].encode() # co_code
+            if args[-4] is not None:
+                args[-4] = args[-4].encode() # co_columntable
+            if args[-5] is not None:
+                args[-5] = args[-5].encode() # co_endlinetable
+        else:
+            args[-3] = args[-3].encode() # co_lnotab
+            args[-10] = args[-10].encode() # co_code
+    if hasattr(CodeType, 'co_exceptiontable'):
+        if len(args) == 20: return CodeType(*args)
+        elif len(args) == 16:
+            argz = (None, None, b'')
+            argz = args[:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
+            return CodeType(*argz)
+        elif len(args) == 15:
+            argz = args[1:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
+            return CodeType(args[0], 0, *argz)
+        argz = args[1:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
+        return CodeType(args[0], 0, 0, *argz)
+    elif hasattr(CodeType, 'co_posonlyargcount'):
+        if len(args) == 20:
+            return CodeType(*(args[:12] + args[13:15] + args[18:]))
+        elif len(args) == 16: return CodeType(*args)
         elif len(args) == 15: return CodeType(args[0], 0, *args[1:])
         return CodeType(args[0], 0, 0, *args[1:])
     elif hasattr(CodeType, 'co_kwonlyargcount'):
-        if len(args) == 16: return CodeType(args[0], *args[2:])
+        if len(args) == 20:
+            return CodeType(*(args[:1] + args[2:12] + args[13:15] + args[18:]))
+        elif len(args) == 16: return CodeType(args[0], *args[2:])
         elif len(args) == 15: return CodeType(*args)
         return CodeType(args[0], 0, *args[1:])
-    if len(args) == 16: return CodeType(args[0], *args[3:])
+    if len(args) == 20:
+        return CodeType(*(args[:1] + args[3:12] + args[13:15] + args[18:]))
+    elif len(args) == 16: return CodeType(args[0], *args[3:])
     elif len(args) == 15: return CodeType(args[0], *args[2:])
     return CodeType(*args)
 
@@ -928,7 +954,17 @@ def _locate_function(obj, session=False):
 def save_code(pickler, obj):
     log.info("Co: %s" % obj)
     if PY3:
-        if hasattr(obj, "co_posonlyargcount"):
+        if hasattr(obj, "co_exceptiontable"):
+            args = (
+                obj.co_argcount, obj.co_posonlyargcount,
+                obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+                obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+                obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
+                obj.co_firstlineno, obj.co_lnotab, obj.co_endlinetable,
+                obj.co_columntable, obj.co_exceptiontable, obj.co_freevars,
+                obj.co_cellvars
+        )
+        elif hasattr(obj, "co_posonlyargcount"):
             args = (
                 obj.co_argcount, obj.co_posonlyargcount,
                 obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
