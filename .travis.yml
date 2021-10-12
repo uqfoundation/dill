@@ -28,16 +28,21 @@ matrix:
         - python: 'nightly'
           env:
 
-        - python: 'pypy'
+        - python: 'pypy2.7-7.3.1' # most recent
           dist: xenial
           env:
 
-        - python: 'pypy3'
+        - python: 'pypy3.6-7.3.3' # most recent
+          dist: bionic
+          env:
+
+        - python: 'pypy3.7-7.3.5' # most recent
+          dist: bionic
           env:
 
     allow_failures:
         - python: '2.7'
-        - python: 'pypy'
+        - python: 'pypy2.7-7.3.1'
         - python: 'nightly'
     fast_finish: true
 
