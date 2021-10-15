@@ -7,3 +7,4 @@ recursive-include docs *
 include .*
 prune .git
 prune .coverage
+prune .eggs

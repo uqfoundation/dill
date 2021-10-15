@@ -174,7 +174,7 @@ Requirements
 
 Optional requirements:
 
-    - ``setuptools``, **version >= 0.6**
+    - ``setuptools``, **version >= 40.6.0**
     - ``pyreadline``, **version >= 1.7.1** (on windows)
     - ``objgraph``, **version >= 1.7.2**
 
