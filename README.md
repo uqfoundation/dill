@@ -74,7 +74,7 @@ The latest released version of ``dill`` is available from:
 Development Version
 [![Support](https://img.shields.io/badge/support-the%20UQ%20Foundation-purple.svg?style=flat&colorA=grey&colorB=purple)](http://www.uqfoundation.org/pages/donate.html)
 [![Documentation Status](https://readthedocs.org/projects/dill/badge/?version=latest)](https://dill.readthedocs.io/en/latest/?badge=latest)
-[![Build Status](https://travis-ci.com/uqfoundation/dill.svg?label=build&logo=travis&branch=master)](https://travis-ci.com/uqfoundation/dill)
+[![Build Status](https://travis-ci.com/uqfoundation/dill.svg?label=build&logo=travis&branch=master)](https://travis-ci.com/github/uqfoundation/dill)
 [![codecov](https://codecov.io/gh/uqfoundation/dill/branch/master/graph/badge.svg)](https://codecov.io/gh/uqfoundation/dill)
 -------------------
 You can get the latest development version with all the shiny new features at:
