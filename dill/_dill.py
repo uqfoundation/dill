@@ -108,6 +108,7 @@ except ImportError:
     IS_PYPY = False
 IS_PYPY2 = IS_PYPY and not PY3
 NumpyUfuncType = None
+NumpyDType = None
 NumpyArrayType = None
 try:
     if OLDER:
@@ -116,21 +117,24 @@ try:
     if not importlib.machinery.PathFinder().find_spec('numpy'):
         raise ImportError("No module named 'numpy'")
     NumpyUfuncType = True
+    NumpyDType = True
     NumpyArrayType = True
 except AttributeError:
     try:
         import imp
         imp.find_module('numpy')
         NumpyUfuncType = True
+        NumpyDType = True
         NumpyArrayType = True
     except ImportError:
         pass
 except ImportError:
     pass
 def __hook__():
-    global NumpyArrayType, NumpyUfuncType
+    global NumpyArrayType, NumpyDType, NumpyUfuncType
     from numpy import ufunc as NumpyUfuncType
     from numpy import ndarray as NumpyArrayType
+    from numpy import dtype as NumpyDType
     return True
 if NumpyArrayType: # then has numpy
     def ndarraysubclassinstance(obj):
@@ -164,9 +168,24 @@ if NumpyArrayType: # then has numpy
         except TypeError: return False
         # anything below here is a numpy ufunc
         return True
+    def numpydtype(obj):
+        if type(obj) in (TypeType, ClassType):
+            return False # all classes return False
+        try: # check if is dtype
+            cls = getattr(obj, '__class__', None)
+            if cls is None: return False
+            elif cls is TypeType: return False
+            if 'numpy.dtype' not in str(getattr(obj, 'mro', int.mro)()):
+                return False
+        except ReferenceError: return False # handle 'R3' weakref in 3.x
+        except TypeError: return False
+        # anything below here is a numpy dtype
+        __hook__() # import numpy (so the following works!!!)
+        return type(obj) is type(NumpyDType) # handles subclasses
 else:
     def ndarraysubclassinstance(obj): return False
     def numpyufunc(obj): return False
+    def numpydtype(obj): return False
 
 # make sure to add these 'hand-built' types to _typemap
 if PY3:
@@ -480,6 +499,19 @@ class Pickler(StockPickler):
             #   def udump(f): return f.__name__
             #   def uload(name): return getattr(numpy, name)
             #   copy_reg.pickle(NumpyUfuncType, udump, uload)
+        # register if the object is a numpy dtype
+        if NumpyDType and numpydtype(obj):
+            @register(type(obj))
+            def save_numpy_dtype(pickler, obj):
+                log.info("Dt: %s" % obj)
+                pickler.save_reduce(_create_dtypemeta, (obj.type,), obj=obj)
+                log.info("# Dt")
+                return
+            # NOTE: the above 'save' performs like:
+            #   import copy_reg
+            #   def uload(name): return type(NumpyDType(name))
+            #   def udump(f): return uload, (f.type,)
+            #   copy_reg.pickle(NumpyDTypeType, udump, uload)
         # register if the object is a subclassed numpy array instance
         if NumpyArrayType and ndarraysubclassinstance(obj):
             @register(type(obj))
@@ -882,6 +914,12 @@ def _create_array(f, args, state, npdict=None):
     if npdict is not None: # we also have saved state in __dict__
         array.__dict__.update(npdict)
     return array
+
+def _create_dtypemeta(scalar_type):
+    if NumpyDType is True: __hook__() # a bit hacky I think
+    if scalar_type is None:
+        return NumpyDType
+    return type(NumpyDType(scalar_type))
 
 def _create_namedtuple(name, fieldnames, modulename):
     class_ = _import_module(modulename + '.' + name, safe=True)
