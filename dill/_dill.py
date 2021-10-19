@@ -81,6 +81,7 @@ import __main__ as _main_module
 import marshal
 import gc
 # import zlib
+import abc
 from weakref import ReferenceType, ProxyType, CallableProxyType
 from functools import partial
 from operator import itemgetter, attrgetter
@@ -1455,6 +1456,27 @@ def save_module(pickler, obj):
             log.info("# M2")
         return
     return
+
+@register(abc.ABCMeta)
+def save_abc(pickler, obj):
+    """Use StockePickler to ignore ABC internal state which should not be serialized"""
+
+    name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
+    if '<locals>' in name or obj.__module__ != '__main__':
+        log.info("C2: %s" % obj)
+        _dict = _dict_from_dictproxy(obj.__dict__)
+        (registry, _, _, _) = abc._get_dump(obj)
+        _dict["_abc_impl"] = [reg() for reg in registry]
+        pickler.save_reduce(
+            _create_type,
+            (type(obj), obj.__name__, obj.__bases__, _dict),
+            obj=obj
+        )
+        log.info("# C2")
+    else:
+        log.info("C1: %s" % obj)
+        StockPickler.save_type(pickler, obj)
+        log.info("# C1")
 
 @register(TypeType)
 def save_type(pickler, obj):
