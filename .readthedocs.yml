@@ -1,0 +1,15 @@
+# readthedocs configuration file
+# see https://docs.readthedocs.io/en/stable/config-file/v2.html
+version: 2
+
+# configure
+sphinx:
+  configuration: docs/source/conf.py
+
+# build
+python:
+  version: "3.7"
+  install:
+    - method: pip
+      path: .
+    - requirements: docs/requirements.txt
