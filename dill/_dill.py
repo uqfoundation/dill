@@ -1617,7 +1617,12 @@ def pickles(obj,exact=False,safe=False,**kwds):
             #FIXME: should be "(pik == obj).all()" for numpy comparison, though that'll fail if shapes differ
             result = bool(pik.all() == obj.all())
         except AttributeError:
+            import warnings
+            warnings.filterwarnings('ignore')
             result = pik == obj
+            warnings.resetwarnings()
+        if hasattr(result, 'toarray'): # for unusual types like sparse matrix
+            result = result.toarray().all()
         if result: return True
         if not exact:
             result = type(pik) == type(obj)
