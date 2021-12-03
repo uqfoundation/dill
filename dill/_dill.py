@@ -1496,13 +1496,22 @@ def save_type(pickler, obj):
         pickler.save_reduce(_create_type, (type(obj), obj.__name__,
                                            obj.__bases__, _dict), obj=obj)
         log.info("# %s" % _t)
-    # special cases: NoneType
+    # special cases: NoneType, NotImplementedType, EllipsisType
     elif obj is type(None):
         log.info("T7: %s" % obj)
+        #XXX: pickler.save_reduce(type, (None,), obj=obj)
         if PY3:
             pickler.write(bytes('c__builtin__\nNoneType\n', 'UTF-8'))
         else:
             pickler.write('c__builtin__\nNoneType\n')
+        log.info("# T7")
+    elif obj is NotImplementedType:
+        log.info("T7: %s" % obj)
+        pickler.save_reduce(type, (NotImplemented,), obj=obj)
+        log.info("# T7")
+    elif obj is EllipsisType:
+        log.info("T7: %s" % obj)
+        pickler.save_reduce(type, (Ellipsis,), obj=obj)
         log.info("# T7")
     else:
         log.info("T4: %s" % obj)
