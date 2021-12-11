@@ -87,9 +87,25 @@ def test_partials():
     assert dill.copy(SubMachine())
 
 
+class obj4:
+    def __init__(self):
+        super().__init__()
+        a = self
+        class obj5:
+            def __init__(self):
+                super().__init__()
+                self.a = a
+        self.b = obj5()
+
+
+def test_circular_reference():
+    if not OLD37:
+        assert dill.copy(obj4())
+
 
 if __name__ == '__main__':
     #print(('byref','_super','_recurse','_memo','_stop','OLDER'))
     test_super()
     test_partial()
     test_partials()
+    test_circular_reference()
