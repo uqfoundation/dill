@@ -481,6 +481,7 @@ class Pickler(StockPickler):
         self._strictio = False #_strictio
         self._fmode = settings['fmode'] if _fmode is None else _fmode
         self._recurse = settings['recurse'] if _recurse is None else _recurse
+        self._recursive_cells = {}
 
     def dump(self, obj): #NOTE: if settings change, need to update attributes
         stack.clear()  # clear record of 'recursion-sensitive' pickled objects
@@ -1298,6 +1299,11 @@ elif not IS_PYPY:
 def save_cell(pickler, obj):
     log.info("Ce: %s" % obj)
     f = obj.cell_contents
+    if is_dill(pickler, child=True):
+        recursive_cells = pickler._recursive_cells.get(f)
+        if recursive_cells is not None:
+            recursive_cells.append(obj)
+            f = None
     pickler.save_reduce(_create_cell, (f,), obj=obj)
     log.info("# Ce")
     return
@@ -1470,9 +1476,10 @@ def save_type(pickler, obj):
         log.info("# T6")
         return
     elif obj.__module__ == '__main__':
+        pickler_is_dill = is_dill(pickler, child=True)
         if issubclass(type(obj), type):
         #   try: # used when pickling the class as code (or the interpreter)
-            if is_dill(pickler, child=True) and not pickler._byref:
+            if pickler_is_dill and not pickler._byref and obj not in pickler._recursive_cells:
                 # thanks to Tom Stepleton pointing out pickler._session unneeded
                 _t = 'T2'
                 log.info("%s: %s" % (_t, obj))
@@ -1493,8 +1500,20 @@ def save_type(pickler, obj):
        #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
         for name in _dict.get("__slots__", []):
             del _dict[name]
-        pickler.save_reduce(_create_type, (type(obj), obj.__name__,
+        if pickler_is_dill:
+            pickler._recursive_cells[obj] = []
+        name = getattr(obj, "__qualname__", obj.__name__)
+        pickler.save_reduce(_create_type, (type(obj), name,
                                            obj.__bases__, _dict), obj=obj)
+        if pickler_is_dill:
+            recursive_cells = pickler._recursive_cells.pop(obj)
+            for t in recursive_cells:
+                pickler.save_reduce(setattr, (t, 'cell_contents', obj))
+                # pop None off created by setattr off stack
+                if PY3:
+                    pickler.write(bytes('0', 'UTF-8'))
+                else:
+                    pickler.write('0')
         log.info("# %s" % _t)
     # special cases: NoneType, NotImplementedType, EllipsisType
     elif obj is type(None):
@@ -1570,7 +1589,6 @@ def save_function(pickler, obj):
         if PY3:
             #NOTE: workaround for 'super' (see issue #75)
             _super = ('super' in getattr(obj.__code__,'co_names',())) and (_byref is not None)
-            if _super: pickler._byref = True
             if _memo: pickler._recurse = False
             fkwdefaults = getattr(obj, '__kwdefaults__', None)
             pickler.save_reduce(_create_function, (obj.__code__,
@@ -1579,18 +1597,16 @@ def save_function(pickler, obj):
                                 obj.__dict__, fkwdefaults), obj=obj)
         else:
             _super = ('super' in getattr(obj.func_code,'co_names',())) and (_byref is not None) and getattr(pickler, '_recurse', False)
-            if _super: pickler._byref = True
             if _memo: pickler._recurse = False
             pickler.save_reduce(_create_function, (obj.func_code,
                                 globs, obj.func_name,
                                 obj.func_defaults, obj.func_closure,
                                 obj.__dict__), obj=obj)
-        if _super: pickler._byref = _byref
         if _memo: pickler._recurse = _recurse
        #clear = (_byref, _super, _recurse, _memo)
        #print(clear + (OLDER,))
         #NOTE: workaround for #234; "partial" still is problematic for recurse
-        if OLDER and not _byref and (_super or (not _super and _memo) or (not _super and not _memo and _recurse)): pickler.clear_memo()
+        if OLDER and not _byref and (_memo or (not _memo and _recurse)): pickler.clear_memo()
        #if _memo:
        #    stack.remove(id(obj))
        #   #pickler.clear_memo()
