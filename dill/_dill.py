@@ -39,6 +39,7 @@ PY3 = (sys.hexversion >= 0x3000000)
 # OLDER: 3.0 <= x < 3.4 *OR* x < 2.7.10  #NOTE: guessing relevant versions
 OLDER = (PY3 and sys.hexversion < 0x3040000) or (sys.hexversion < 0x2070ab1)
 OLD33 = (sys.hexversion < 0x3030000)
+OLD37 = (sys.hexversion < 0x3070000)
 PY34 = (0x3040000 <= sys.hexversion < 0x3050000)
 if PY3: #XXX: get types from .objtypes ?
     import builtins as __builtin__
@@ -1299,7 +1300,7 @@ elif not IS_PYPY:
 def save_cell(pickler, obj):
     log.info("Ce: %s" % obj)
     f = obj.cell_contents
-    if is_dill(pickler, child=True):
+    if not OLD37 and is_dill(pickler, child=True):
         recursive_cells = pickler._recursive_cells.get(id(f))
         if recursive_cells is not None:
             recursive_cells.append(obj)
