@@ -1300,7 +1300,7 @@ def save_cell(pickler, obj):
     log.info("Ce: %s" % obj)
     f = obj.cell_contents
     if is_dill(pickler, child=True):
-        recursive_cells = pickler._recursive_cells.get(f)
+        recursive_cells = pickler._recursive_cells.get(id(f))
         if recursive_cells is not None:
             recursive_cells.append(obj)
             f = None
@@ -1479,7 +1479,7 @@ def save_type(pickler, obj):
         pickler_is_dill = is_dill(pickler, child=True)
         if issubclass(type(obj), type):
         #   try: # used when pickling the class as code (or the interpreter)
-            if pickler_is_dill and not pickler._byref and obj not in pickler._recursive_cells:
+            if pickler_is_dill and not pickler._byref and id(obj) not in pickler._recursive_cells:
                 # thanks to Tom Stepleton pointing out pickler._session unneeded
                 _t = 'T2'
                 log.info("%s: %s" % (_t, obj))
@@ -1501,12 +1501,12 @@ def save_type(pickler, obj):
         for name in _dict.get("__slots__", []):
             del _dict[name]
         if pickler_is_dill:
-            pickler._recursive_cells[obj] = []
+            pickler._recursive_cells[id(obj)] = []
         name = getattr(obj, "__qualname__", obj.__name__)
         pickler.save_reduce(_create_type, (type(obj), name,
                                            obj.__bases__, _dict), obj=obj)
         if pickler_is_dill:
-            recursive_cells = pickler._recursive_cells.pop(obj)
+            recursive_cells = pickler._recursive_cells.pop(id(obj))
             for t in recursive_cells:
                 pickler.save_reduce(setattr, (t, 'cell_contents', obj))
                 # pop None off created by setattr off stack
