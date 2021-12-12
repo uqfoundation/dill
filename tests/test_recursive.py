@@ -7,7 +7,7 @@
 
 import dill
 from functools import partial
-from dill._dill import PY3, OLDER, OLD37
+from dill._dill import PY3, OLDER
 _super = super
 
 class obj1(object):
@@ -27,20 +27,17 @@ class obj3(object):
 def test_super():
     assert dill.copy(obj1(), byref=True)
     assert dill.copy(obj1(), byref=True, recurse=True)
-    if not OLD37:
-        assert dill.copy(obj1(), recurse=True) #FIXME: fails __main__.py
+    assert dill.copy(obj1(), recurse=True)
     assert dill.copy(obj1())
 
     assert dill.copy(obj2(), byref=True)
     assert dill.copy(obj2(), byref=True, recurse=True)
-    if not OLD37:
-        assert dill.copy(obj2(), recurse=True) #FIXME: fails __main__.py
+    assert dill.copy(obj2(), recurse=True)
     assert dill.copy(obj2())
 
     assert dill.copy(obj3(), byref=True)
     assert dill.copy(obj3(), byref=True, recurse=True)
-    if not OLD37:
-        assert dill.copy(obj3(), recurse=True) #FIXME: fails __main__.py
+    assert dill.copy(obj3(), recurse=True)
     assert dill.copy(obj3())
 
 
@@ -61,8 +58,7 @@ class Model(object):
 def test_partial():
     assert dill.copy(Machine(), byref=True)
     assert dill.copy(Machine(), byref=True, recurse=True)
-    if not OLDER:
-        assert dill.copy(Machine(), recurse=True)
+    assert dill.copy(Machine(), recurse=True)
     assert dill.copy(Machine())
 
 
@@ -82,8 +78,7 @@ class SubMachine(Machine2):
 def test_partials():
     assert dill.copy(SubMachine(), byref=True)
     assert dill.copy(SubMachine(), byref=True, recurse=True)
-    if not OLD37: #FIXME: fails __main__.py
-        assert dill.copy(SubMachine(), recurse=True)
+    assert dill.copy(SubMachine(), recurse=True)
     assert dill.copy(SubMachine())
 
 
@@ -99,8 +94,7 @@ class obj4:
 
 
 def test_circular_reference():
-    if not OLD37:
-        assert dill.copy(obj4())
+    assert dill.copy(obj4())
 
 
 if __name__ == '__main__':

@@ -39,7 +39,6 @@ PY3 = (sys.hexversion >= 0x3000000)
 # OLDER: 3.0 <= x < 3.4 *OR* x < 2.7.10  #NOTE: guessing relevant versions
 OLDER = (PY3 and sys.hexversion < 0x3040000) or (sys.hexversion < 0x2070ab1)
 OLD33 = (sys.hexversion < 0x3030000)
-OLD37 = (sys.hexversion < 0x3070000)
 PY34 = (0x3040000 <= sys.hexversion < 0x3050000)
 if PY3: #XXX: get types from .objtypes ?
     import builtins as __builtin__
@@ -881,9 +880,19 @@ class _attrgetter_helper(object):
 if PY3:
     def _create_cell(contents):
         return (lambda y: contents).__closure__[0]
+    def _create_reference_cell():
+        # Hacky trick that allows for the creation of cells that can be spookily
+        # edited at a distance
+        contents = None
+        def updater(value):
+            nonlocal contents
+            contents = value
+        updater(updater)
+        return (lambda: contents).__closure__[0]
 else:
     def _create_cell(contents):
         return (lambda y: contents).func_closure[0]
+    # _create_reference_cell not possible in Python 2
 
 def _create_weakref(obj, *args):
     from weakref import ref
@@ -1298,15 +1307,18 @@ elif not IS_PYPY:
 
 @register(CellType)
 def save_cell(pickler, obj):
-    log.info("Ce: %s" % obj)
     f = obj.cell_contents
-    if not OLD37 and is_dill(pickler, child=True):
+    if is_dill(pickler, child=True):
         recursive_cells = pickler._recursive_cells.get(id(f))
         if recursive_cells is not None:
+            log.info("Ce2: %s" % obj)
+            pickler.save_reduce(_create_reference_cell, (), obj=obj)
             recursive_cells.append(obj)
-            f = None
+            log.info("# Ce2")
+            return
+    log.info("Ce1: %s" % obj)
     pickler.save_reduce(_create_cell, (f,), obj=obj)
-    log.info("# Ce")
+    log.info("# Ce1")
     return
 
 if not IS_PYPY:
@@ -1509,7 +1521,7 @@ def save_type(pickler, obj):
         if pickler_is_dill:
             recursive_cells = pickler._recursive_cells.pop(id(obj))
             for t in recursive_cells:
-                pickler.save_reduce(setattr, (t, 'cell_contents', obj))
+                pickler.save_reduce(lambda cell, obj_ptr: cell.cell_contents(obj_ptr), (t, obj))
                 # pop None off created by setattr off stack
                 pickler.write(bytes('0', 'UTF-8'))
         log.info("# %s" % _t)
@@ -1587,7 +1599,6 @@ def save_function(pickler, obj):
         if PY3:
             #NOTE: workaround for 'super' (see issue #75)
             _super = ('super' in getattr(obj.__code__,'co_names',())) and (_byref is not None)
-            if OLD37 and _super: pickler._byref = True
             if _memo: pickler._recurse = False
             fkwdefaults = getattr(obj, '__kwdefaults__', None)
             pickler.save_reduce(_create_function, (obj.__code__,
@@ -1596,18 +1607,16 @@ def save_function(pickler, obj):
                                 obj.__dict__, fkwdefaults), obj=obj)
         else:
             _super = ('super' in getattr(obj.func_code,'co_names',())) and (_byref is not None) and getattr(pickler, '_recurse', False)
-            if OLD37 and _super: pickler._byref = True
             if _memo: pickler._recurse = False
             pickler.save_reduce(_create_function, (obj.func_code,
                                 globs, obj.func_name,
                                 obj.func_defaults, obj.func_closure,
                                 obj.__dict__), obj=obj)
-        if OLD37 and _super: pickler._byref = _byref
         if _memo: pickler._recurse = _recurse
        #clear = (_byref, _super, _recurse, _memo)
        #print(clear + (OLDER,))
         #NOTE: workaround for #234; "partial" still is problematic for recurse
-        if OLDER and not _byref and (_super or (not _super and _memo) or (not _super and not _memo and _recurse)): pickler.clear_memo()
+        if OLDER and not _byref and (_memo or (not _memo and _recurse)): pickler.clear_memo()
        #if _memo:
        #    stack.remove(id(obj))
        #   #pickler.clear_memo()
