@@ -82,11 +82,11 @@ def test_partials():
     assert dill.copy(SubMachine())
 
 
-class obj4:
+class obj4(object):
     def __init__(self):
         super(obj4, self).__init__()
         a = self
-        class obj5:
+        class obj5(object):
             def __init__(self):
                 super(obj5, self).__init__()
                 self.a = a
@@ -94,7 +94,8 @@ class obj4:
 
 
 def test_circular_reference():
-    assert dill.copy(obj4())
+    if PY3:
+        assert dill.copy(obj4())
 
 
 if __name__ == '__main__':
