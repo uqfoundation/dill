@@ -84,11 +84,11 @@ def test_partials():
 
 class obj4:
     def __init__(self):
-        super().__init__()
+        super(obj4, self).__init__()
         a = self
         class obj5:
             def __init__(self):
-                super().__init__()
+                super(obj5, self).__init__()
                 self.a = a
         self.b = obj5()
 
