@@ -1498,7 +1498,7 @@ def save_type(pickler, obj):
         pickler_is_dill = is_dill(pickler, child=True)
         if issubclass(type(obj), type):
         #   try: # used when pickling the class as code (or the interpreter)
-            if PY3 and pickler_is_dill and not pickler._byref and id(obj) not in pickler._recursive_cells:
+            if pickler_is_dill and not pickler._byref and id(obj) not in pickler._recursive_cells:
                 # thanks to Tom Stepleton pointing out pickler._session unneeded
                 _t = 'T2'
                 log.info("%s: %s" % (_t, obj))
