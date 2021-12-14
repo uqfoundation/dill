@@ -7,8 +7,6 @@
 
 import dill
 from functools import partial
-from dill._dill import PY3, OLDER
-_super = super
 
 class obj1(object):
     def __init__(self):
@@ -16,7 +14,7 @@ class obj1(object):
 
 class obj2(object):
     def __init__(self):
-        _super(obj2, self).__init__()
+        super(obj2, self).__init__()
 
 class obj3(object):
     super_ = super
@@ -71,8 +69,7 @@ class Machine2(object):
 
 class SubMachine(Machine2):
     def __init__(self):
-        _super(SubMachine, self).__init__()
-        #super(SubMachine, self).__init__() #XXX: works, except for 3.1-3.3
+        super(SubMachine, self).__init__()
 
 
 def test_partials():
@@ -98,7 +95,6 @@ def test_circular_reference():
 
 
 if __name__ == '__main__':
-    #print(('byref','_super','_recurse','_memo','_stop','OLDER'))
     test_super()
     test_partial()
     test_partials()

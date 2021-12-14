@@ -901,8 +901,6 @@ else:
         contents = Updater()
         return (lambda: contents).func_closure[0]
 
-    # _create_reference_cell not possible in Python 2
-
 def _update_cell(cell, obj_ptr):
     return cell.cell_contents(obj_ptr)
 
@@ -1534,7 +1532,7 @@ def save_type(pickler, obj):
             recursive_cells = pickler._recursive_cells.pop(id(obj))
             for t in recursive_cells:
                 pickler.save_reduce(_update_cell, (t, obj))
-                # pop None off created by setattr off stack
+                # pop None off created by _update_cell off stack
                 if PY3:
                     pickler.write(bytes('0', 'UTF-8'))
                 else:
