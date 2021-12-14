@@ -1524,17 +1524,20 @@ def save_type(pickler, obj):
        #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
         for name in _dict.get("__slots__", []):
             del _dict[name]
-        if PY3 and pickler_is_dill:
+        if pickler_is_dill:
             pickler._recursive_cells[id(obj)] = []
         name = getattr(obj, "__qualname__", obj.__name__)
         pickler.save_reduce(_create_type, (type(obj), name,
                                            obj.__bases__, _dict), obj=obj)
-        if PY3 and pickler_is_dill:
+        if pickler_is_dill:
             recursive_cells = pickler._recursive_cells.pop(id(obj))
             for t in recursive_cells:
                 pickler.save_reduce(_update_cell, (t, obj))
                 # pop None off created by setattr off stack
-                pickler.write(bytes('0', 'UTF-8'))
+                if PY3:
+                    pickler.write(bytes('0', 'UTF-8'))
+                else:
+                    pickler.write('0')
         log.info("# %s" % _t)
     # special cases: NoneType, NotImplementedType, EllipsisType
     elif obj is type(None):

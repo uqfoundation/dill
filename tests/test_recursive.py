@@ -94,8 +94,7 @@ class obj4(object):
 
 
 def test_circular_reference():
-    if PY3:
-        assert dill.copy(obj4())
+    assert dill.copy(obj4())
 
 
 if __name__ == '__main__':
