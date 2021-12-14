@@ -6,6 +6,7 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 import dill
+from dill._dill import PY3
 from functools import partial
 
 class obj1(object):
@@ -91,7 +92,8 @@ class obj4(object):
 
 
 def test_circular_reference():
-    assert dill.copy(obj4())
+    if PY3:
+        assert dill.copy(obj4())
 
 
 if __name__ == '__main__':

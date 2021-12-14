@@ -1318,7 +1318,7 @@ elif not IS_PYPY:
 @register(CellType)
 def save_cell(pickler, obj):
     f = obj.cell_contents
-    if is_dill(pickler, child=True):
+    if PY3 and is_dill(pickler, child=True):
         recursive_cells = pickler._recursive_cells.get(id(f))
         if recursive_cells is not None:
             log.info("Ce2: %s" % obj)
