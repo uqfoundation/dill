@@ -880,14 +880,15 @@ class _attrgetter_helper(object):
 if PY3:
     def _create_cell(contents):
         return (lambda y: contents).__closure__[0]
-    def _create_reference_cell():
-        contents = None
-        v = vars()
-        class Updater(object):
-            def __call__(self, value):
-                v['contents'] = value
-        contents = Updater()
-        return (lambda: contents).__closure__[0]
+    exec('''
+def _create_reference_cell():
+    contents = None
+    def updater(value):
+        nonlocal contents
+        contents = value
+    updater(updater)
+    return (lambda: contents).__closure__[0]
+''')
 else:
     def _create_cell(contents):
         return (lambda y: contents).func_closure[0]
