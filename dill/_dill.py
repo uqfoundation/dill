@@ -39,6 +39,7 @@ PY3 = (sys.hexversion >= 0x3000000)
 # OLDER: 3.0 <= x < 3.4 *OR* x < 2.7.10  #NOTE: guessing relevant versions
 OLDER = (PY3 and sys.hexversion < 0x3040000) or (sys.hexversion < 0x2070ab1)
 OLD33 = (sys.hexversion < 0x3030000)
+OLD37 = (sys.hexversion < 0x3070000)
 PY34 = (0x3040000 <= sys.hexversion < 0x3050000)
 if PY3: #XXX: get types from .objtypes ?
     import builtins as __builtin__
@@ -877,32 +878,52 @@ class _attrgetter_helper(object):
             attrs[index] = ".".join([attrs[index], attr])
         return type(self)(attrs, index)
 
-if PY3:
-    def _create_cell(contents):
-        return (lambda y: contents).__closure__[0]
-    exec('''
-def _create_reference_cell():
-    contents = None
-    def updater(value):
-        nonlocal contents
-        contents = value
-    updater(updater)
-    return (lambda: contents).__closure__[0]
-''')
-else:
-    def _create_cell(contents):
-        return (lambda y: contents).func_closure[0]
-    def _create_reference_cell():
-        contents = None
-        v = vars()
-        class Updater(object):
-            def __call__(self, value):
-                v['contents'] = value
-        contents = Updater()
-        return (lambda: contents).func_closure[0]
 
-def _update_cell(cell, obj_ptr):
-    return cell.cell_contents(obj_ptr)
+if OLD37 and PY3:
+    # Python 3.0 to 3.6 is in a weird case, where it is possible to pickle
+    # recursive cells, we can't assign directly to the cell.
+
+    # A sentinel object to signal that the cell that is going to be created
+    # is either a reference to a value that isn't created yet and will be
+    # updated if passed into _create_cell or is a cell that is genuinely
+    # empty if passed into updater.
+    __CELL_EMPTY = object()
+    eval('''def _create_cell(contents=__CELL_EMPTY):
+    if contents is __CELL_EMPTY:
+        contents = None
+        def updater(value):
+            nonlocal contents
+            if value is __CELL_EMPTY:
+                del contents
+            else:
+                contents = value
+        contents = updater
+    return (lambda: contents).__closure__[0]''')
+
+    def _setattr(object, name, value):
+        if type(object) is CellType and name == 'cell_contents':
+            object.cell_contents(value)
+        else:
+            setattr(object, name, value)
+
+    def _delattr(object, name):
+        if type(object) is CellType and name == 'cell_contents':
+            return object.cell_contents(__CELL_EMPTY)
+        else:
+            delattr(object, name)
+else:
+    if PY3:
+        def _create_cell(contents=None):
+            return (lambda: contents).__closure__[0]
+    else:
+        def _create_cell(contents=None):
+            return (lambda: contents).func_closure[0]
+
+    def _setattr(object, name, value):
+        return setattr(object, name, value)
+    def _delattr(object, name):
+        return delattr(object, name)
+
 
 def _create_weakref(obj, *args):
     from weakref import ref
@@ -1317,12 +1338,24 @@ elif not IS_PYPY:
 
 @register(CellType)
 def save_cell(pickler, obj):
-    f = obj.cell_contents
+    try:
+        f = obj.cell_contents
+    except:
+        log.info("Ce3: %s" % obj)
+        pickler.save_reduce(_create_cell, (), obj=obj)
+        pickler.save_reduce(_delattr, (obj, 'cell_contents'))
+        # pop None off created by _setattr off stack
+        if PY3:
+            pickler.write(bytes('0', 'UTF-8'))
+        else:
+            pickler.write('0') # pragma: no cover
+        log.info("# Ce3")
+        return
     if PY3 and is_dill(pickler, child=True):
         recursive_cells = pickler._recursive_cells.get(id(f))
         if recursive_cells is not None:
             log.info("Ce2: %s" % obj)
-            pickler.save_reduce(_create_reference_cell, (), obj=obj)
+            pickler.save_reduce(_create_cell, (), obj=obj)
             recursive_cells.append(obj)
             log.info("# Ce2")
             return
@@ -1531,12 +1564,12 @@ def save_type(pickler, obj):
         if pickler_is_dill:
             recursive_cells = pickler._recursive_cells.pop(id(obj))
             for t in recursive_cells:
-                pickler.save_reduce(_update_cell, (t, obj))
-                # pop None off created by _update_cell off stack
+                pickler.save_reduce(_setattr, (t, 'cell_contents', obj))
+                # pop None off created by _setattr off stack
                 if PY3:
                     pickler.write(bytes('0', 'UTF-8'))
                 else:
-                    pickler.write('0')
+                    pickler.write('0') # pragma: no cover
         log.info("# %s" % _t)
     # special cases: NoneType, NotImplementedType, EllipsisType
     elif obj is type(None):

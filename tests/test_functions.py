@@ -36,6 +36,14 @@ def function_e(e, *e1, e2=1, e3=2):
     return e + sum(e1) + e2 + e3''')
 
 
+# https://stackoverflow.com/a/45661180
+if is_py3():
+    exec('''def make_empty_cell():
+    if False:
+        del value
+    return (lambda: value).__closure__[0]''')
+
+
 def test_functions():
     dumped_func_a = dill.dumps(function_a)
     assert dill.loads(dumped_func_a)(0) == 0
@@ -53,6 +61,10 @@ def test_functions():
     assert dill.loads(dumped_func_d)(1, 2, d2=3) == 6
 
     if is_py3():
+        empty_cell = make_empty_cell()
+        cell_copy = dill.loads(dill.dumps(empty_cell))
+        assert 'empty' in str(cell_copy)
+
         exec('''
 dumped_func_e = dill.dumps(function_e)
 assert dill.loads(dumped_func_e)(1, 2) == 6
