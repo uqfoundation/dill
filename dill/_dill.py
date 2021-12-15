@@ -888,17 +888,18 @@ if OLD37 and PY3:
     # updated if passed into _create_cell or is a cell that is genuinely
     # empty if passed into updater.
     __CELL_EMPTY = object()
-    eval('''def _create_cell(contents=__CELL_EMPTY):
+    __nonlocal = ('nonlocal',) if PY3 else ('x = ',)
+    exec('''def _create_cell(contents=__CELL_EMPTY):
     if contents is __CELL_EMPTY:
         contents = None
         def updater(value):
-            nonlocal contents
+            %s contents
             if value is __CELL_EMPTY:
                 del contents
             else:
                 contents = value
         contents = updater
-    return (lambda: contents).__closure__[0]''')
+    return (lambda: contents).__closure__[0]''' % __nonlocal)
 
     def _setattr(object, name, value):
         if type(object) is CellType and name == 'cell_contents':
