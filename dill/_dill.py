@@ -448,6 +448,25 @@ def load_session(filename='/tmp/session.pkl', main=None, **kwds):
 
 ### End: Pickle the Interpreter
 
+class BuiltinShim:
+    '''
+    Refers to a shim function in dill._dill if it exists and to a builtin
+    function if it doesn't exist. This choice is made during the unpickle
+    step instead of the pickling process.
+    '''
+    def __init__(self, shim_name, builtin):
+        self.shim_name = shim_name
+        self.builtin = builtin
+        self.__call__ = getattr(globals(), shim_name, builtin)
+    def __copy__(self):
+        return self
+    def __deepcopy__(self, memo):
+        return self
+    def __call__(self, *args, **kwargs):
+        return getattr(globals(), shim_name, builtin)(*args, **kwargs)
+    def __reduce__(self):
+        return (getattr, (sys.modules[__name__], self.shim_name, self.builtin))
+
 class MetaCatchingDict(dict):
     def get(self, key, default=None):
         try:
@@ -920,10 +939,8 @@ else:
         def _create_cell(contents=None):
             return (lambda: contents).func_closure[0]
 
-    def _setattr(object, name, value):
-        return setattr(object, name, value)
-    def _delattr(object, name):
-        return delattr(object, name)
+_setattr_shim = BuiltinShim('_setattr', setattr)
+_delattr_shim = BuiltinShim('_delattr', delattr)
 
 
 def _create_weakref(obj, *args):
@@ -1344,8 +1361,8 @@ def save_cell(pickler, obj):
     except:
         log.info("Ce3: %s" % obj)
         pickler.save_reduce(_create_cell, (), obj=obj)
-        pickler.save_reduce(_delattr, (obj, 'cell_contents'))
-        # pop None off created by _setattr off stack
+        pickler.save_reduce(_delattr_shim, (obj, 'cell_contents'))
+        # pop None off created by _delattr off stack
         if PY3:
             pickler.write(bytes('0', 'UTF-8'))
         else:
@@ -1565,7 +1582,7 @@ def save_type(pickler, obj):
         if pickler_is_dill:
             recursive_cells = pickler._recursive_cells.pop(id(obj))
             for t in recursive_cells:
-                pickler.save_reduce(_setattr, (t, 'cell_contents', obj))
+                pickler.save_reduce(_setattr_shim, (t, 'cell_contents', obj))
                 # pop None off created by _setattr off stack
                 if PY3:
                     pickler.write(bytes('0', 'UTF-8'))
