@@ -462,7 +462,7 @@ class BuiltinShim:
         def __call__(self):
             pass
         def __reduce__(self):
-            return (__import__, ('dill._dill',))
+            return (_import_module, ('dill._dill',))
     dill_module = DillRef()
     def __init__(self, shim_name, builtin):
         self.shim_name = shim_name
