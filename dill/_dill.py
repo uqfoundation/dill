@@ -454,6 +454,16 @@ class BuiltinShim:
     function if it doesn't exist. This choice is made during the unpickle
     step instead of the pickling process.
     '''
+    class DillRef:
+        def __copy__(self):
+            return self
+        def __deepcopy__(self, memo):
+            return self
+        def __call__(self):
+            pass
+        def __reduce__(self):
+            return (__import__, ('dill._dill',))
+    dill_module = DillRef()
     def __init__(self, shim_name, builtin):
         self.shim_name = shim_name
         self.builtin = builtin
@@ -465,7 +475,7 @@ class BuiltinShim:
     def __call__(self, *args, **kwargs):
         return getattr(globals(), shim_name, builtin)(*args, **kwargs)
     def __reduce__(self):
-        return (getattr, (sys.modules[__name__], self.shim_name, self.builtin))
+        return (getattr, (self.dill_module, self.shim_name, self.builtin))
 
 class MetaCatchingDict(dict):
     def get(self, key, default=None):
