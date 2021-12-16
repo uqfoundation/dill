@@ -454,16 +454,6 @@ class BuiltinShim:
     function if it doesn't exist. This choice is made during the unpickle
     step instead of the pickling process.
     '''
-    class DillRef:
-        def __copy__(self):
-            return self
-        def __deepcopy__(self, memo):
-            return self
-        def __call__(self):
-            pass
-        def __reduce__(self):
-            return (_import_module, ('dill._dill',))
-    dill_module = DillRef()
     def __init__(self, shim_name, builtin):
         self.shim_name = shim_name
         self.builtin = builtin
@@ -475,7 +465,7 @@ class BuiltinShim:
     def __call__(self, *args, **kwargs):
         return getattr(globals(), shim_name, builtin)(*args, **kwargs)
     def __reduce__(self):
-        return (getattr, (self.dill_module, self.shim_name, self.builtin))
+        return (getattr, (sys.modules[__name__], self.shim_name, self.builtin))
 
 class MetaCatchingDict(dict):
     def get(self, key, default=None):
@@ -1502,22 +1492,22 @@ def save_weakproxy(pickler, obj):
 @register(ModuleType)
 def save_module(pickler, obj):
     if False: #_use_diff:
-        if obj.__name__ != "dill":
+        if obj.__name__.split('.', 1)[0] != "dill":
             try:
                 changed = diff.whats_changed(obj, seen=pickler._diff_cache)[0]
             except RuntimeError:  # not memorised module, probably part of dill
                 pass
             else:
-                log.info("M1: %s with diff" % obj)
+                log.info("M2: %s with diff" % obj)
                 log.info("Diff: %s", changed.keys())
                 pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
                                     state=changed)
-                log.info("# M1")
+                log.info("# M2")
                 return
 
-        log.info("M2: %s" % obj)
+        log.info("M1: %s" % obj)
         pickler.save_reduce(_import_module, (obj.__name__,), obj=obj)
-        log.info("# M2")
+        log.info("# M1")
     else:
         # if a module file name starts with prefix, it should be a builtin
         # module, so should be pickled as a reference
@@ -1530,7 +1520,7 @@ def save_module(pickler, obj):
                            'site-packages' in obj.__file__)
         else:
             builtin_mod = True
-        if obj.__name__ not in ("builtins", "dill") \
+        if obj.__name__ not in ("builtins", "dill", "dill._dill") \
            and not builtin_mod or is_dill(pickler, child=True) and obj is pickler._main:
             log.info("M1: %s" % obj)
             _main_dict = obj.__dict__.copy() #XXX: better no copy? option to copy?
