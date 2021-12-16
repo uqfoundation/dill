@@ -456,6 +456,10 @@ class sentinel:
         self.name = name
     def __repr__(self):
         return __name__ + '.' + self.name
+    def __copy__(self):
+        return self
+    def __deepcopy__(self, memo):
+        return self
     def __reduce__(self):
         return repr(self)
 
