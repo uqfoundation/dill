@@ -448,12 +448,23 @@ def load_session(filename='/tmp/session.pkl', main=None, **kwds):
 
 ### End: Pickle the Interpreter
 
+class sentinel:
+    """
+    Create a unique sentinel object that is pickled as a constant.
+    """
+    def __init__(self, name):
+        self.name = name
+    def __repr__(self):
+        return __name__ + '.' + self.name
+    def __reduce__(self):
+        return repr(self)
+
 class BuiltinShim:
-    '''
+    """
     Refers to a shim function in dill._dill if it exists and to a builtin
     function if it doesn't exist. This choice is made during the unpickle
     step instead of the pickling process.
-    '''
+    """
     def __init__(self, shim_name, builtin):
         self.shim_name = shim_name
         self.builtin = builtin
@@ -898,22 +909,24 @@ class _attrgetter_helper(object):
         return type(self)(attrs, index)
 
 
+# A sentinel object to signal that the cell that is going to be created
+# is either a reference to a value that isn't created yet and will be
+# updated if passed into _create_cell or is a cell that is genuinely
+# empty if passed into updater.
+# Can be safely replaced with None once breaking changes are allowed.
+_CELL_REF = sentinel('_CELL_REF')
+_CELL_REF_shim = BuiltinShim('_CELL_REF', None)
+
 if OLD37 and PY3:
     # Python 3.0 to 3.6 is in a weird case, where it is possible to pickle
     # recursive cells, we can't assign directly to the cell.
-
-    # A sentinel object to signal that the cell that is going to be created
-    # is either a reference to a value that isn't created yet and will be
-    # updated if passed into _create_cell or is a cell that is genuinely
-    # empty if passed into updater.
-    __CELL_EMPTY = object()
     __nonlocal = ('nonlocal',) if PY3 else ('x = ',)
-    exec('''def _create_cell(contents=__CELL_EMPTY):
-    if contents is __CELL_EMPTY:
+    exec('''def _create_cell(contents=_CELL_REF):
+    if contents is _CELL_REF:
         contents = None
         def updater(value):
             %s contents
-            if value is __CELL_EMPTY:
+            if value is _CELL_REF:
                 del contents
             else:
                 contents = value
@@ -928,15 +941,15 @@ if OLD37 and PY3:
 
     def _delattr(object, name):
         if type(object) is CellType and name == 'cell_contents':
-            return object.cell_contents(__CELL_EMPTY)
+            return object.cell_contents(_CELL_REF)
         else:
             delattr(object, name)
 else:
     if PY3:
-        def _create_cell(contents=None):
+        def _create_cell(contents=_CELL_REF):
             return (lambda: contents).__closure__[0]
     else:
-        def _create_cell(contents=None):
+        def _create_cell(contents=_CELL_REF):
             return (lambda: contents).func_closure[0]
 
 _setattr_shim = BuiltinShim('_setattr', setattr)
@@ -1360,7 +1373,7 @@ def save_cell(pickler, obj):
         f = obj.cell_contents
     except:
         log.info("Ce3: %s" % obj)
-        pickler.save_reduce(_create_cell, (), obj=obj)
+        pickler.save_reduce(_create_cell, (_CELL_REF_shim,), obj=obj)
         pickler.save_reduce(_delattr_shim, (obj, 'cell_contents'))
         # pop None off created by _delattr off stack
         if PY3:
@@ -1373,7 +1386,7 @@ def save_cell(pickler, obj):
         recursive_cells = pickler._recursive_cells.get(id(f))
         if recursive_cells is not None:
             log.info("Ce2: %s" % obj)
-            pickler.save_reduce(_create_cell, (), obj=obj)
+            pickler.save_reduce(_create_cell, (_CELL_REF_shim,), obj=obj)
             recursive_cells.append(obj)
             log.info("# Ce2")
             return
@@ -1529,6 +1542,10 @@ def save_module(pickler, obj):
             pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
                                 state=_main_dict)
             log.info("# M1")
+        elif obj.__name__ == "dill._dill":
+            log.info("M2: %s" % obj)
+            pickler.save_global(obj)
+            log.info("# M2")
         else:
             log.info("M2: %s" % obj)
             pickler.save_reduce(_import_module, (obj.__name__,), obj=obj)
