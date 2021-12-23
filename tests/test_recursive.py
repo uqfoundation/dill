@@ -106,7 +106,8 @@ def f():
 
 
 def test_function_cells():
-    assert dill.copy(f())
+    if PY3:
+        assert dill.copy(f())
 
 
 if __name__ == '__main__':
