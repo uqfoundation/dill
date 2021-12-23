@@ -99,8 +99,19 @@ def test_circular_reference():
         assert type(obj4_copy.b) is type(obj4_copy.b).__init__.__closure__[0].cell_contents
 
 
+def f():
+    def g():
+       return g
+    return g
+
+
+def test_function_cells():
+    assert dill.copy(f())
+
+
 if __name__ == '__main__':
     test_super()
     test_partial()
     test_partials()
     test_circular_reference()
+    test_function_cells()

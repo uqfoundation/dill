@@ -29,8 +29,6 @@ def _trace(boolean):
     else: log.setLevel(logging.WARN)
     return
 
-stack = dict()  # record of 'recursion-sensitive' pickled objects
-
 import os
 import sys
 diff = None
@@ -496,6 +494,33 @@ class MetaCatchingDict(dict):
             raise KeyError()
 
 
+def _enter_recursive_cell_stack(pickler, obj, is_pickler_dill=None):
+    if is_pickler_dill is None:
+        is_pickler_dill = is_dill(pickler, child=True)
+    if is_pickler_dill:
+        # assert id(obj) not in pickler._recursive_cells, str(obj) + ' already pushed on stack!'
+        # if not hasattr(pickler, 'x'): pickler.x = 0
+        # print(pickler.x*' ', 'push', obj, id(obj), pickler._recurse)
+        # pickler.x += 1
+        l = []
+        pickler._recursive_cells[id(obj)] = (len(pickler._recursive_cells), l)
+        return l
+def _exit_recursive_cell_stack(pickler, obj, is_pickler_dill=None):
+    if is_pickler_dill is None:
+        is_pickler_dill = is_dill(pickler, child=True)
+    if is_pickler_dill:
+        # pickler.x -= 1
+        # print(pickler.x*' ', 'pop', obj, id(obj))
+        i, recursive_cells = pickler._recursive_cells.pop(id(obj))
+        # assert i == len(pickler._recursive_cells), 'Stack tampered!'
+        for t in recursive_cells:
+            pickler.save_reduce(_setattr_shim, (t, 'cell_contents', obj))
+            # pop None off created by _setattr off stack
+            if PY3:
+                pickler.write(bytes('0', 'UTF-8'))
+            else:
+                pickler.write('0') # pragma: no cover
+
 ### Extend the Picklers
 class Pickler(StockPickler):
     """python's Pickler extended to interpreter sessions"""
@@ -519,7 +544,6 @@ class Pickler(StockPickler):
         self._recursive_cells = {}
 
     def dump(self, obj): #NOTE: if settings change, need to update attributes
-        stack.clear()  # clear record of 'recursion-sensitive' pickled objects
         # register if the object is a numpy ufunc
         # thanks to Paul Kienzle for pointing out ufuncs didn't pickle
         if NumpyUfuncType and numpyufunc(obj):
@@ -564,7 +588,6 @@ class Pickler(StockPickler):
             raise PicklingError(msg)
         else:
             StockPickler.dump(self, obj)
-        stack.clear()  # clear record of 'recursion-sensitive' pickled objects
         return
     dump.__doc__ = StockPickler.dump.__doc__
     pass
@@ -1144,7 +1167,6 @@ def save_module_dict(pickler, obj):
 
 @register(ClassType)
 def save_classobj(pickler, obj): #FIXME: enable pickler._byref
-   #stack[id(obj)] = len(stack), obj
     if obj.__module__ == '__main__': #XXX: use _main_module.__name__ everywhere?
         log.info("C1: %s" % obj)
         pickler.save_reduce(ClassType, (obj.__name__, obj.__bases__,
@@ -1391,7 +1413,7 @@ def save_cell(pickler, obj):
         if recursive_cells is not None:
             log.info("Ce2: %s" % obj)
             pickler.save_reduce(_create_cell, (_CELL_REF_shim,), obj=obj)
-            recursive_cells.append(obj)
+            recursive_cells[1].append(obj)
             log.info("# Ce2")
             return
     log.info("Ce1: %s" % obj)
@@ -1559,7 +1581,6 @@ def save_module(pickler, obj):
 
 @register(TypeType)
 def save_type(pickler, obj):
-   #stack[id(obj)] = len(stack), obj #XXX: probably don't obj in all cases below
     if obj in _typemap:
         log.info("T1: %s" % obj)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
@@ -1595,20 +1616,11 @@ def save_type(pickler, obj):
        #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
         for name in _dict.get("__slots__", []):
             del _dict[name]
-        if pickler_is_dill:
-            pickler._recursive_cells[id(obj)] = []
         name = getattr(obj, "__qualname__", obj.__name__)
+        _enter_recursive_cell_stack(pickler, obj, pickler_is_dill)
         pickler.save_reduce(_create_type, (type(obj), name,
                                            obj.__bases__, _dict), obj=obj)
-        if pickler_is_dill:
-            recursive_cells = pickler._recursive_cells.pop(id(obj))
-            for t in recursive_cells:
-                pickler.save_reduce(_setattr_shim, (t, 'cell_contents', obj))
-                # pop None off created by _setattr off stack
-                if PY3:
-                    pickler.write(bytes('0', 'UTF-8'))
-                else:
-                    pickler.write('0') # pragma: no cover
+        _exit_recursive_cell_stack(pickler, obj, pickler_is_dill)
         log.info("# %s" % _t)
     # special cases: NoneType, NotImplementedType, EllipsisType
     elif obj is type(None):
@@ -1662,29 +1674,25 @@ def save_classmethod(pickler, obj):
 def save_function(pickler, obj):
     if not _locate_function(obj): #, pickler._session):
         log.info("F1: %s" % obj)
-        if getattr(pickler, '_recurse', False):
+        _recursive_cells = getattr(pickler, '_recursive_cells', ())
+        _byref = getattr(pickler, '_byref', None)
+        _recurse = getattr(pickler, '_recurse', None)
+        _memo = (id(obj) in _recursive_cells) and (_recurse is not None)
+        if _recurse and not _memo:
             # recurse to get all globals referred to by obj
             from .detect import globalvars
             globs = globalvars(obj, recurse=True, builtin=True)
-            # remove objects that have already been serialized
-           #stacktypes = (ClassType, TypeType, FunctionType)
-           #for key,value in list(globs.items()):
-           #    if isinstance(value, stacktypes) and id(value) in stack:
-           #        del globs[key]
-            # ABORT: if self-references, use _recurse=False
-            if id(obj) in stack: # or obj in globs.values():
-                globs = obj.__globals__ if PY3 else obj.func_globals
         else:
             globs = obj.__globals__ if PY3 else obj.func_globals
-        _byref = getattr(pickler, '_byref', None)
-        _recurse = getattr(pickler, '_recurse', None)
-        _memo = (id(obj) in stack) and (_recurse is not None)
-       #print("stack: %s + '%s'" % (set(hex(i) for i in stack),hex(id(obj))))
-        stack[id(obj)] = len(stack), obj
+        #print("stack: %s + '%s'" % (set(hex(i) for i in stack),hex(id(obj))))
+        # stack[id(obj)] = len(stack), obj
+        if _memo:
+            pickler._recurse = False
+        else:
+            _enter_recursive_cell_stack(pickler, obj)
         if PY3:
             #NOTE: workaround for 'super' (see issue #75)
             _super = ('super' in getattr(obj.__code__,'co_names',())) and (_byref is not None)
-            if _memo: pickler._recurse = False
             fkwdefaults = getattr(obj, '__kwdefaults__', None)
             pickler.save_reduce(_create_function, (obj.__code__,
                                 globs, obj.__name__,
@@ -1693,13 +1701,15 @@ def save_function(pickler, obj):
         else:
             _super = ('super' in getattr(obj.func_code,'co_names',())) and (_byref is not None) and getattr(pickler, '_recurse', False)
             if _super: pickler._byref = True
-            if _memo: pickler._recurse = False
             pickler.save_reduce(_create_function, (obj.func_code,
                                 globs, obj.func_name,
                                 obj.func_defaults, obj.func_closure,
                                 obj.__dict__), obj=obj)
             if _super: pickler._byref = _byref
-        if _memo: pickler._recurse = _recurse
+        if _memo:
+            pickler._recurse = _recurse
+        else:
+            _exit_recursive_cell_stack(pickler, obj)
        #clear = (_byref, _super, _recurse, _memo)
        #print(clear + (OLDER,))
         #NOTE: workaround for #234; "partial" still is problematic for recurse
