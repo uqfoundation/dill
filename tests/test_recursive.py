@@ -6,7 +6,7 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 import dill
-from dill._dill import PY3
+from dill._dill import PY3, IS_PYPY2
 from functools import partial
 
 class obj1(object):
@@ -106,7 +106,8 @@ def f():
 
 
 def test_function_cells():
-    assert dill.copy(f())
+    if not IS_PYPY2:
+        assert dill.copy(f())
 
 
 if __name__ == '__main__':

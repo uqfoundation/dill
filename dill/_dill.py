@@ -988,13 +988,13 @@ elif IS_PYPY2:
 
     def _setattr(object, name, value):
         if type(object) is CellType and name == 'cell_contents':
-            __pypy__.internal_repr(object).set(value)
+            raise SyntaxError('Not possible to edit a cell in PyPy2')
         else:
             setattr(object, name, value)
 
     def _delattr(object, name):
         if type(object) is CellType and name == 'cell_contents':
-            __pypy__.internal_repr(object).delete()
+            raise SyntaxError('Not possible to edit a cell in PyPy2')
         else:
             delattr(object, name)
 
@@ -1447,7 +1447,7 @@ def save_cell(pickler, obj):
             pickler.write('0') # pragma: no cover
         log.info("# Ce3")
         return
-    if is_dill(pickler, child=True):
+    if not IS_PYPY2 and is_dill(pickler, child=True):
         recursive_cells = pickler._recursive_cells.get(id(f))
         if recursive_cells is not None:
             log.info("Ce2: %s" % obj)
