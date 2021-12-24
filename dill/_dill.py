@@ -105,8 +105,6 @@ try:
 except ImportError:
     HAS_CTYPES = False
     IS_PYPY = False
-if IS_PYPY:
-    import __pypy__
 IS_PYPY2 = IS_PYPY and not PY3
 NumpyUfuncType = None
 NumpyDType = None
@@ -455,11 +453,11 @@ class sentinel(object):
     def __init__(self, name):
         self.name = name
     def __repr__(self):
-        return __name__ + '.' + self.name
+        return __name__ + '.' + self.name # pragma: no cover
     def __copy__(self):
-        return self
+        return self # pragma: no cover
     def __deepcopy__(self, memo):
-        return self
+        return self # pragma: no cover
     def __reduce__(self):
         return self.name
     def __reduce_ex__(self, protocol):
@@ -476,11 +474,11 @@ class BuiltinShim(object):
         self.builtin = builtin
         self.__call__ = getattr(globals(), shim_name, builtin)
     def __copy__(self):
-        return self
+        return self # pragma: no cover
     def __deepcopy__(self, memo):
-        return self
+        return self # pragma: no cover
     def __call__(self, *args, **kwargs):
-        return getattr(globals(), shim_name, builtin)(*args, **kwargs)
+        return getattr(globals(), shim_name, builtin)(*args, **kwargs) # pragma: no cover
     def __reduce__(self):
         return (getattr, (sys.modules[__name__], self.shim_name, self.builtin))
     def __reduce_ex__(self, protocol):
