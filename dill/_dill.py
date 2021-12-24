@@ -523,7 +523,7 @@ def _exit_recursive_cell_stack(pickler, obj, is_pickler_dill=None):
             if PY3:
                 pickler.write(bytes('0', 'UTF-8'))
             else:
-                pickler.write('0') # pragma: no cover
+                pickler.write('0')
 
 ### Extend the Picklers
 class Pickler(StockPickler):
@@ -968,11 +968,11 @@ if PY3:
 
         exec('''def _delattr(cell, name):
             if type(cell) is CellType and name == 'cell_contents':
-                def cell_deleter(value):
+                def cell_deleter():
                     %s
                     del cell # pylint: disable=unused-variable
                 func = FunctionType(cell_deleter.__code__, globals(), "", None, (cell,)) # same as cell_deleter, but with cell being the cell's contents
-                func(value)
+                func()
             else:
                 delattr(cell, name)''' % __nonlocal)
 
@@ -1445,7 +1445,7 @@ def save_cell(pickler, obj):
         if PY3:
             pickler.write(bytes('0', 'UTF-8'))
         else:
-            pickler.write('0') # pragma: no cover
+            pickler.write('0')
         log.info("# Ce3")
         return
     if is_dill(pickler, child=True):
