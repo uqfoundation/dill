@@ -940,81 +940,84 @@ class _attrgetter_helper(object):
         return type(self)(attrs, index)
 
 
-# A sentinel object to signal that the cell that is going to be created
-# is either a reference to a value that isn't created yet and will be
-# updated if passed into _create_cell or is a cell that is genuinely
-# empty if passed into updater.
-# Can be safely replaced with None once breaking changes are allowed.
-_CELL_REF = sentinel('_CELL_REF')
-_CELL_REF_shim = BuiltinShim('_CELL_REF', None)
 
-if OLD37 and PY3:
-    # Python 3.0 to 3.6 is in a weird case, where it is possible to pickle
-    # recursive cells, we can't assign directly to the cell.
-    __nonlocal = ('nonlocal contents',) if PY3 else ('',)
-    exec('''def _create_cell(contents=_CELL_REF):
-    if contents is _CELL_REF:
-        contents = None
-        def updater(value):
-            %s
-            if value is _CELL_REF:
-                del contents
-            else:
-                contents = value
-        contents = updater
-    return (lambda: contents).__closure__[0]''' % __nonlocal)
+# Used to stay compatible with versions of dill whose _create_cell functions
+# do not have a default value.
+# Can be safely replaced removed entirely (replaced by empty tuples for calls to
+# _create_cell) once breaking changes are allowed.
+_CELL_REF_shim = None
 
-    def _setattr(object, name, value):
-        if type(object) is CellType and name == 'cell_contents':
-            object.cell_contents(value)
-        else:
-            setattr(object, name, value)
-
-    def _delattr(object, name):
-        if type(object) is CellType and name == 'cell_contents':
-            return object.cell_contents(_CELL_REF)
-        else:
-            delattr(object, name)
-
-elif PY3:
-    def _create_cell(contents=_CELL_REF):
+if PY3:
+    def _create_cell(contents=None):
         return (lambda: contents).__closure__[0]
 
-elif IS_PYPY2:
-    def _create_cell(contents=_CELL_REF):
+    if OLD37:
+        # Python 3.0 to 3.6 is in a weird case, where it is possible to pickle
+        # recursive cells, we can't assign directly to the cell.
+        # https://stackoverflow.com/a/59276835
+        __nonlocal = ('nonlocal cell',) if PY3 else ('',)
+        exec('''def _setattr(cell, name, value):
+            if type(cell) is CellType and name == 'cell_contents':
+                def cell_setter(value):
+                    %s
+                    cell = value # pylint: disable=unused-variable
+                func = FunctionType(cell_setter.__code__, globals(), "", None, (cell,)) # same as cell_setter, but with cell being the cell's contents
+                func(value)
+            else:
+                setattr(cell, name, value)''' % __nonlocal)
+
+        exec('''def _delattr(cell, name):
+            if type(cell) is CellType and name == 'cell_contents':
+                def cell_deleter(value):
+                    %s
+                    del cell # pylint: disable=unused-variable
+                func = FunctionType(cell_deleter.__code__, globals(), "", None, (cell,)) # same as cell_deleter, but with cell being the cell's contents
+                func(value)
+            else:
+                delattr(cell, name)''' % __nonlocal)
+
+else:
+    def _create_cell(contents=None):
         return (lambda: contents).func_closure[0]
 
-    def _setattr(object, name, value):
-        if type(object) is CellType and name == 'cell_contents':
-            raise SyntaxError('Not possible to edit a cell in PyPy2')
-        else:
-            setattr(object, name, value)
+    if IS_PYPY:
+        from . import nonlocals as _nonlocals
+        @_nonlocals.export_nonlocals('cellv')
+        def _setattr(cell, name, value):
+            if type(cell) is CellType and name == 'cell_contents':
+                cellv = None
+                @_nonlocals.nonlocals('cellv', closure_override=(cell,))
+                def cell_setter(value):
+                    cellv = value # pylint: disable=unused-variable
+                cell_setter(value)
+            else:
+                setattr(cell, name, value)
 
-    def _delattr(object, name):
-        if type(object) is CellType and name == 'cell_contents':
-            raise SyntaxError('Not possible to edit a cell in PyPy2')
-        else:
-            delattr(object, name)
+        def _delattr(object, name):
+            if type(object) is CellType and name == 'cell_contents':
+                raise NotImplementedError('Empty cells in PyPy2')
+            else:
+                delattr(object, name)
 
-else: # CPython 2
-    def _create_cell(contents=_CELL_REF):
-        return (lambda: contents).func_closure[0]
+    else: # CPython 2
+        def _create_cell(contents=None):
+            return (lambda: contents).func_closure[0]
 
-    _PyCell_Set = ctypes.pythonapi.PyCell_Set
+        _PyCell_Set = ctypes.pythonapi.PyCell_Set
 
-    def _setattr(object, name, value):
-        if type(object) is CellType and name == 'cell_contents':
-            _PyCell_Set.argtypes = (ctypes.py_object, ctypes.py_object)
-            _PyCell_Set(object, value)
-        else:
-            setattr(object, name, value)
+        def _setattr(object, name, value):
+            if type(object) is CellType and name == 'cell_contents':
+                _PyCell_Set.argtypes = (ctypes.py_object, ctypes.py_object)
+                _PyCell_Set(object, value)
+            else:
+                setattr(object, name, value)
 
-    def _delattr(object, name):
-        if type(object) is CellType and name == 'cell_contents':
-            _PyCell_Set.argtypes = (ctypes.py_object, ctypes.c_void_p)
-            _PyCell_Set(object, None)
-        else:
-            delattr(object, name)
+        def _delattr(object, name):
+            if type(object) is CellType and name == 'cell_contents':
+                _PyCell_Set.argtypes = (ctypes.py_object, ctypes.c_void_p)
+                _PyCell_Set(object, None)
+            else:
+                delattr(object, name)
 
 _setattr_shim = BuiltinShim('_setattr', setattr)
 _delattr_shim = BuiltinShim('_delattr', delattr)
@@ -1445,7 +1448,7 @@ def save_cell(pickler, obj):
             pickler.write('0') # pragma: no cover
         log.info("# Ce3")
         return
-    if not IS_PYPY2 and is_dill(pickler, child=True):
+    if is_dill(pickler, child=True):
         recursive_cells = pickler._recursive_cells.get(id(f))
         if recursive_cells is not None:
             log.info("Ce2: %s" % obj)

@@ -92,9 +92,8 @@ class obj4(object):
 
 
 def test_circular_reference():
-    if not IS_PYPY2:
-        assert dill.copy(obj4())
-        obj4_copy = dill.loads(dill.dumps(obj4()))
+    assert dill.copy(obj4())
+    obj4_copy = dill.loads(dill.dumps(obj4()))
     if PY3:
         assert type(obj4_copy) is type(obj4_copy).__init__.__closure__[0].cell_contents
         assert type(obj4_copy.b) is type(obj4_copy.b).__init__.__closure__[0].cell_contents
@@ -107,8 +106,7 @@ def f():
 
 
 def test_function_cells():
-    if not IS_PYPY2:
-        assert dill.copy(f())
+    assert dill.copy(f())
 
 
 if __name__ == '__main__':
