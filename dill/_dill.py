@@ -105,6 +105,8 @@ try:
 except ImportError:
     HAS_CTYPES = False
     IS_PYPY = False
+if IS_PYPY:
+    import __pypy__
 IS_PYPY2 = IS_PYPY and not PY3
 NumpyUfuncType = None
 NumpyDType = None
@@ -446,7 +448,7 @@ def load_session(filename='/tmp/session.pkl', main=None, **kwds):
 
 ### End: Pickle the Interpreter
 
-class sentinel:
+class sentinel(object):
     """
     Create a unique sentinel object that is pickled as a constant.
     """
@@ -459,9 +461,11 @@ class sentinel:
     def __deepcopy__(self, memo):
         return self
     def __reduce__(self):
-        return repr(self)
+        return self.name
+    def __reduce_ex__(self, protocol):
+        return self.name
 
-class BuiltinShim:
+class BuiltinShim(object):
     """
     Refers to a shim function in dill._dill if it exists and to a builtin
     function if it doesn't exist. This choice is made during the unpickle
@@ -479,6 +483,8 @@ class BuiltinShim:
         return getattr(globals(), shim_name, builtin)(*args, **kwargs)
     def __reduce__(self):
         return (getattr, (sys.modules[__name__], self.shim_name, self.builtin))
+    def __reduce_ex__(self, protocol):
+        return self.__reduce__()
 
 class MetaCatchingDict(dict):
     def get(self, key, default=None):
@@ -947,12 +953,12 @@ _CELL_REF_shim = BuiltinShim('_CELL_REF', None)
 if OLD37 and PY3:
     # Python 3.0 to 3.6 is in a weird case, where it is possible to pickle
     # recursive cells, we can't assign directly to the cell.
-    __nonlocal = ('nonlocal',) if PY3 else ('x = ',)
+    __nonlocal = ('nonlocal contents',) if PY3 else ('',)
     exec('''def _create_cell(contents=_CELL_REF):
     if contents is _CELL_REF:
         contents = None
         def updater(value):
-            %s contents
+            %s
             if value is _CELL_REF:
                 del contents
             else:
@@ -971,13 +977,46 @@ if OLD37 and PY3:
             return object.cell_contents(_CELL_REF)
         else:
             delattr(object, name)
-else:
-    if PY3:
-        def _create_cell(contents=_CELL_REF):
-            return (lambda: contents).__closure__[0]
-    else:
-        def _create_cell(contents=_CELL_REF):
-            return (lambda: contents).func_closure[0]
+
+elif PY3:
+    def _create_cell(contents=_CELL_REF):
+        return (lambda: contents).__closure__[0]
+
+elif IS_PYPY2:
+    def _create_cell(contents=_CELL_REF):
+        return (lambda: contents).func_closure[0]
+
+    def _setattr(object, name, value):
+        if type(object) is CellType and name == 'cell_contents':
+            __pypy__.internal_repr(object).set(value)
+        else:
+            setattr(object, name, value)
+
+    def _delattr(object, name):
+        if type(object) is CellType and name == 'cell_contents':
+            __pypy__.internal_repr(object).delete()
+        else:
+            delattr(object, name)
+
+else: # CPython 2
+    def _create_cell(contents=_CELL_REF):
+        return (lambda: contents).func_closure[0]
+
+    _PyCell_Set = ctypes.pythonapi.PyCell_Set
+
+    def _setattr(object, name, value):
+        if type(object) is CellType and name == 'cell_contents':
+            _PyCell_Set.argtypes = (ctypes.py_object, ctypes.py_object)
+            _PyCell_Set(object, value)
+        else:
+            setattr(object, name, value)
+
+    def _delattr(object, name):
+        if type(object) is CellType and name == 'cell_contents':
+            _PyCell_Set.argtypes = (ctypes.py_object, ctypes.c_void_p)
+            _PyCell_Set(object, None)
+        else:
+            delattr(object, name)
 
 _setattr_shim = BuiltinShim('_setattr', setattr)
 _delattr_shim = BuiltinShim('_delattr', delattr)
@@ -1408,7 +1447,7 @@ def save_cell(pickler, obj):
             pickler.write('0') # pragma: no cover
         log.info("# Ce3")
         return
-    if PY3 and is_dill(pickler, child=True):
+    if is_dill(pickler, child=True):
         recursive_cells = pickler._recursive_cells.get(id(f))
         if recursive_cells is not None:
             log.info("Ce2: %s" % obj)
@@ -1568,7 +1607,7 @@ def save_module(pickler, obj):
             pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
                                 state=_main_dict)
             log.info("# M1")
-        elif obj.__name__ == "dill._dill":
+        elif PY3 and obj.__name__ == "dill._dill":
             log.info("M2: %s" % obj)
             pickler.save_global(obj)
             log.info("# M2")
