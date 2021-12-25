@@ -519,7 +519,7 @@ def _exit_recursive_cell_stack(pickler, obj, is_pickler_dill=None):
         # assert i == len(pickler._recursive_cells), 'Stack tampered!'
         for t in recursive_cells:
             pickler.save_reduce(_setattr_shim, (t, 'cell_contents', obj))
-            # pop None off created by _setattr off stack
+            # pop None created by _setattr off stack
             if PY3:
                 pickler.write(bytes('0', 'UTF-8'))
             else:
@@ -951,11 +951,38 @@ if PY3:
     def _create_cell(contents=None):
         return (lambda: contents).__closure__[0]
 
-    if OLD37:
-        # Python 3.0 to 3.6 is in a weird case, where it is possible to pickle
-        # recursive cells, we can't assign directly to the cell.
+else:
+    def _create_cell(contents=None):
+        return (lambda: contents).func_closure[0]
+
+
+if OLD37:
+    if not IS_PYPY and hasattr(ctypes.pythonapi, 'PyCell_Set'):
+        # CPython
+
+        _PyCell_Set = ctypes.pythonapi.PyCell_Set
+
+        def _setattr(object, name, value):
+            if type(object) is CellType and name == 'cell_contents':
+                _PyCell_Set.argtypes = (ctypes.py_object, ctypes.py_object)
+                _PyCell_Set(object, value)
+            else:
+                setattr(object, name, value)
+
+        def _delattr(object, name):
+            if type(object) is CellType and name == 'cell_contents':
+                _PyCell_Set.argtypes = (ctypes.py_object, ctypes.c_void_p)
+                _PyCell_Set(object, None)
+            else:
+                delattr(object, name)
+
+    # General Python (not CPython) up to 3.6 is in a weird case, where it is
+    # possible to pickle recursive cells, but we can't assign directly to the
+    # cell.
+    elif PY3:
+        # Use nonlocal variables to reassign the cell value.
         # https://stackoverflow.com/a/59276835
-        __nonlocal = ('nonlocal cell',) if PY3 else ('',)
+        __nonlocal = ('nonlocal cell',)
         exec('''def _setattr(cell, name, value):
             if type(cell) is CellType and name == 'cell_contents':
                 def cell_setter(value):
@@ -976,11 +1003,9 @@ if PY3:
             else:
                 delattr(cell, name)''' % __nonlocal)
 
-else:
-    def _create_cell(contents=None):
-        return (lambda: contents).func_closure[0]
-
-    if IS_PYPY:
+    else:
+        # Likely PyPy 2.7. Simulate the nonlocal keyword with bytecode
+        # manipulation.
         from . import nonlocals as _nonlocals
         @_nonlocals.export_nonlocals('cellv')
         def _setattr(cell, name, value):
@@ -993,31 +1018,8 @@ else:
             else:
                 setattr(cell, name, value)
 
-        def _delattr(object, name):
-            if type(object) is CellType and name == 'cell_contents':
-                raise NotImplementedError('Empty cells in PyPy2')
-            else:
-                delattr(object, name)
-
-    else: # CPython 2
-        def _create_cell(contents=None):
-            return (lambda: contents).func_closure[0]
-
-        _PyCell_Set = ctypes.pythonapi.PyCell_Set
-
-        def _setattr(object, name, value):
-            if type(object) is CellType and name == 'cell_contents':
-                _PyCell_Set.argtypes = (ctypes.py_object, ctypes.py_object)
-                _PyCell_Set(object, value)
-            else:
-                setattr(object, name, value)
-
-        def _delattr(object, name):
-            if type(object) is CellType and name == 'cell_contents':
-                _PyCell_Set.argtypes = (ctypes.py_object, ctypes.c_void_p)
-                _PyCell_Set(object, None)
-            else:
-                delattr(object, name)
+        # Empty cells are not possible in this case. When unpickling, this
+        # case will throw an error that 'cell_contents' is get only
 
 _setattr_shim = BuiltinShim('_setattr', setattr)
 _delattr_shim = BuiltinShim('_delattr', delattr)
@@ -1440,8 +1442,10 @@ def save_cell(pickler, obj):
     except:
         log.info("Ce3: %s" % obj)
         pickler.save_reduce(_create_cell, (_CELL_REF_shim,), obj=obj)
+        # Call the function _delattr on the cell's cell_contents attribute
+        # The result of this function call will be None
         pickler.save_reduce(_delattr_shim, (obj, 'cell_contents'))
-        # pop None off created by _delattr off stack
+        # pop None created by calling _delattr off stack
         if PY3:
             pickler.write(bytes('0', 'UTF-8'))
         else:
@@ -1724,8 +1728,6 @@ def save_function(pickler, obj):
             globs = globalvars(obj, recurse=True, builtin=True)
         else:
             globs = obj.__globals__ if PY3 else obj.func_globals
-        #print("stack: %s + '%s'" % (set(hex(i) for i in stack),hex(id(obj))))
-        # stack[id(obj)] = len(stack), obj
         if _memo:
             pickler._recurse = False
         else:
