@@ -74,8 +74,8 @@ assert dill.loads(dumped_func_e)(1, 2, e2=3) == 8
 assert dill.loads(dumped_func_e)(1, 2, e2=3, e3=4) == 10
 assert dill.loads(dumped_func_e)(1, 2, 3, e2=4) == 12
 assert dill.loads(dumped_func_e)(1, 2, 3, e2=4, e3=5) == 15''')
-    elif platform.python_implementation() == 'CPython':
-        empty_cell = dill._dill._create_cell()
+    else:
+        empty_cell = dill._dill._create_cell(dill._dill._CELL_EMPTY)
         dill._dill._delattr(empty_cell, 'cell_contents')
         cell_copy = dill.loads(dill.dumps(empty_cell))
         assert 'empty' in str(cell_copy)

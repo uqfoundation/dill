@@ -945,7 +945,10 @@ class _attrgetter_helper(object):
 # do not have a default value.
 # Can be safely replaced removed entirely (replaced by empty tuples for calls to
 # _create_cell) once breaking changes are allowed.
+_CELL_EMPTY = sentinel('_CELL_EMPTY')
+_CELL_EMPTY_shim = BuiltinShim('_CELL_EMPTY', None)
 _CELL_REF_shim = None
+
 
 if PY3:
     def _create_cell(contents=None):
@@ -1006,6 +1009,11 @@ if OLD37:
     else:
         # Likely PyPy 2.7. Simulate the nonlocal keyword with bytecode
         # manipulation.
+        def _create_cell(contents=None):
+            if contents is not _CELL_EMPTY:
+                value = contents
+            return (lambda: value).func_closure[0]
+
         from . import nonlocals as _nonlocals
         @_nonlocals.export_nonlocals('cellv')
         def _setattr(cell, name, value):
@@ -1018,8 +1026,12 @@ if OLD37:
             else:
                 setattr(cell, name, value)
 
-        # Empty cells are not possible in this case. When unpickling, this
-        # case will throw an error that 'cell_contents' is get only
+        def _delattr(cell, name):
+            if type(cell) is CellType and name == 'cell_contents':
+                pass
+            else:
+                delattr(cell, name)
+
 
 _setattr_shim = BuiltinShim('_setattr', setattr)
 _delattr_shim = BuiltinShim('_delattr', delattr)
@@ -1441,7 +1453,7 @@ def save_cell(pickler, obj):
         f = obj.cell_contents
     except:
         log.info("Ce3: %s" % obj)
-        pickler.save_reduce(_create_cell, (_CELL_REF_shim,), obj=obj)
+        pickler.save_reduce(_create_cell, (_CELL_EMPTY_shim,), obj=obj)
         # Call the function _delattr on the cell's cell_contents attribute
         # The result of this function call will be None
         pickler.save_reduce(_delattr_shim, (obj, 'cell_contents'))
