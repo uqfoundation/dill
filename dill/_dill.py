@@ -956,7 +956,9 @@ if PY3:
 
 else:
     def _create_cell(contents=None):
-        return (lambda: contents).func_closure[0]
+        if contents is not _CELL_EMPTY:
+            value = contents
+        return (lambda: value).func_closure[0]
 
 
 if OLD37:
@@ -1009,11 +1011,6 @@ if OLD37:
     else:
         # Likely PyPy 2.7. Simulate the nonlocal keyword with bytecode
         # manipulation.
-        def _create_cell(contents=None):
-            if contents is not _CELL_EMPTY:
-                value = contents
-            return (lambda: value).func_closure[0]
-
         from . import nonlocals as _nonlocals
         @_nonlocals.export_nonlocals('cellv')
         def _setattr(cell, name, value):
