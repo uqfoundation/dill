@@ -7,7 +7,6 @@
 
 import dill
 import sys
-import platform
 dill.settings['recurse'] = True
 
 
@@ -37,12 +36,10 @@ def function_e(e, *e1, e2=1, e3=2):
     return e + sum(e1) + e2 + e3''')
 
 
-# https://stackoverflow.com/a/45661180
-if is_py3():
-    exec('''def make_empty_cell():
+def make_empty_cell():
     if False:
-        del value
-    return (lambda: value).__closure__[0]''')
+        value = None
+    return (lambda: value)
 
 
 def test_functions():
@@ -61,11 +58,18 @@ def test_functions():
     assert dill.loads(dumped_func_d)(1, 2, 3) == 6
     assert dill.loads(dumped_func_d)(1, 2, d2=3) == 6
 
-    if is_py3():
-        empty_cell = make_empty_cell()
-        cell_copy = dill.loads(dill.dumps(empty_cell))
-        assert 'empty' in str(cell_copy)
+    empty_cell = make_empty_cell()
+    cell_copy = dill.loads(dill.dumps(empty_cell))
+    assert 'empty' in str(cell_copy.__closure__[0])
+    try:
+        cell_copy()
+    except:
+        # this is good
+        pass
+    else:
+        raise AssertionError('cell_copy() did not read an empty cell')
 
+    if is_py3():
         exec('''
 dumped_func_e = dill.dumps(function_e)
 assert dill.loads(dumped_func_e)(1, 2) == 6
@@ -74,11 +78,6 @@ assert dill.loads(dumped_func_e)(1, 2, e2=3) == 8
 assert dill.loads(dumped_func_e)(1, 2, e2=3, e3=4) == 10
 assert dill.loads(dumped_func_e)(1, 2, 3, e2=4) == 12
 assert dill.loads(dumped_func_e)(1, 2, 3, e2=4, e3=5) == 15''')
-    else:
-        empty_cell = dill._dill._create_cell(dill._dill._CELL_EMPTY)
-        dill._dill._delattr(empty_cell, 'cell_contents')
-        cell_copy = dill.loads(dill.dumps(empty_cell))
-        assert 'empty' in str(cell_copy)
 
 if __name__ == '__main__':
     test_functions()

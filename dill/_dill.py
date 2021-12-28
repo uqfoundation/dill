@@ -259,6 +259,7 @@ except NameError:
     try: ExitType = type(exit) # apparently 'exit' can be removed
     except NameError: ExitType = None
     singletontypes = []
+from . import shims
 
 ### File modes
 #: Pickles the file handle, preserving mode. The position of the unpickled
@@ -446,44 +447,6 @@ def load_session(filename='/tmp/session.pkl', main=None, **kwds):
 
 ### End: Pickle the Interpreter
 
-class sentinel(object):
-    """
-    Create a unique sentinel object that is pickled as a constant.
-    """
-    def __init__(self, name):
-        self.name = name
-    def __repr__(self):
-        return __name__ + '.' + self.name # pragma: no cover
-    def __copy__(self):
-        return self # pragma: no cover
-    def __deepcopy__(self, memo):
-        return self # pragma: no cover
-    def __reduce__(self):
-        return self.name
-    def __reduce_ex__(self, protocol):
-        return self.name
-
-class BuiltinShim(object):
-    """
-    Refers to a shim function in dill._dill if it exists and to a builtin
-    function if it doesn't exist. This choice is made during the unpickle
-    step instead of the pickling process.
-    """
-    def __init__(self, shim_name, builtin):
-        self.shim_name = shim_name
-        self.builtin = builtin
-        self.__call__ = getattr(globals(), shim_name, builtin)
-    def __copy__(self):
-        return self # pragma: no cover
-    def __deepcopy__(self, memo):
-        return self # pragma: no cover
-    def __call__(self, *args, **kwargs):
-        return getattr(globals(), shim_name, builtin)(*args, **kwargs) # pragma: no cover
-    def __reduce__(self):
-        return (getattr, (sys.modules[__name__], self.shim_name, self.builtin))
-    def __reduce_ex__(self, protocol):
-        return self.__reduce__()
-
 class MetaCatchingDict(dict):
     def get(self, key, default=None):
         try:
@@ -518,7 +481,7 @@ def _exit_recursive_cell_stack(pickler, obj, is_pickler_dill=None):
         i, recursive_cells = pickler._recursive_cells.pop(id(obj))
         # assert i == len(pickler._recursive_cells), 'Stack tampered!'
         for t in recursive_cells:
-            pickler.save_reduce(_setattr_shim, (t, 'cell_contents', obj))
+            pickler.save_reduce(shims._setattr, (t, 'cell_contents', obj))
             # pop None created by _setattr off stack
             if PY3:
                 pickler.write(bytes('0', 'UTF-8'))
@@ -939,17 +902,6 @@ class _attrgetter_helper(object):
             attrs[index] = ".".join([attrs[index], attr])
         return type(self)(attrs, index)
 
-
-
-# Used to stay compatible with versions of dill whose _create_cell functions
-# do not have a default value.
-# Can be safely replaced removed entirely (replaced by empty tuples for calls to
-# _create_cell) once breaking changes are allowed.
-_CELL_EMPTY = sentinel('_CELL_EMPTY')
-_CELL_EMPTY_shim = BuiltinShim('_CELL_EMPTY', None)
-_CELL_REF_shim = None
-
-
 if PY3:
     def _create_cell(contents=None):
         return (lambda: contents).__closure__[0]
@@ -959,79 +911,6 @@ else:
         if contents is not _CELL_EMPTY:
             value = contents
         return (lambda: value).func_closure[0]
-
-
-if OLD37:
-    if not IS_PYPY and hasattr(ctypes.pythonapi, 'PyCell_Set'):
-        # CPython
-
-        _PyCell_Set = ctypes.pythonapi.PyCell_Set
-
-        def _setattr(object, name, value):
-            if type(object) is CellType and name == 'cell_contents':
-                _PyCell_Set.argtypes = (ctypes.py_object, ctypes.py_object)
-                _PyCell_Set(object, value)
-            else:
-                setattr(object, name, value)
-
-        def _delattr(object, name):
-            if type(object) is CellType and name == 'cell_contents':
-                _PyCell_Set.argtypes = (ctypes.py_object, ctypes.c_void_p)
-                _PyCell_Set(object, None)
-            else:
-                delattr(object, name)
-
-    # General Python (not CPython) up to 3.6 is in a weird case, where it is
-    # possible to pickle recursive cells, but we can't assign directly to the
-    # cell.
-    elif PY3:
-        # Use nonlocal variables to reassign the cell value.
-        # https://stackoverflow.com/a/59276835
-        __nonlocal = ('nonlocal cell',)
-        exec('''def _setattr(cell, name, value):
-            if type(cell) is CellType and name == 'cell_contents':
-                def cell_setter(value):
-                    %s
-                    cell = value # pylint: disable=unused-variable
-                func = FunctionType(cell_setter.__code__, globals(), "", None, (cell,)) # same as cell_setter, but with cell being the cell's contents
-                func(value)
-            else:
-                setattr(cell, name, value)''' % __nonlocal)
-
-        exec('''def _delattr(cell, name):
-            if type(cell) is CellType and name == 'cell_contents':
-                def cell_deleter():
-                    %s
-                    del cell # pylint: disable=unused-variable
-                func = FunctionType(cell_deleter.__code__, globals(), "", None, (cell,)) # same as cell_deleter, but with cell being the cell's contents
-                func()
-            else:
-                delattr(cell, name)''' % __nonlocal)
-
-    else:
-        # Likely PyPy 2.7. Simulate the nonlocal keyword with bytecode
-        # manipulation.
-        from . import nonlocals as _nonlocals
-        @_nonlocals.export_nonlocals('cellv')
-        def _setattr(cell, name, value):
-            if type(cell) is CellType and name == 'cell_contents':
-                cellv = None
-                @_nonlocals.nonlocals('cellv', closure_override=(cell,))
-                def cell_setter(value):
-                    cellv = value # pylint: disable=unused-variable
-                cell_setter(value)
-            else:
-                setattr(cell, name, value)
-
-        def _delattr(cell, name):
-            if type(cell) is CellType and name == 'cell_contents':
-                pass
-            else:
-                delattr(cell, name)
-
-
-_setattr_shim = BuiltinShim('_setattr', setattr)
-_delattr_shim = BuiltinShim('_delattr', delattr)
 
 
 def _create_weakref(obj, *args):
@@ -1450,10 +1329,10 @@ def save_cell(pickler, obj):
         f = obj.cell_contents
     except:
         log.info("Ce3: %s" % obj)
-        pickler.save_reduce(_create_cell, (_CELL_EMPTY_shim,), obj=obj)
+        pickler.save_reduce(_create_cell, (shims._CELL_EMPTY,), obj=obj)
         # Call the function _delattr on the cell's cell_contents attribute
         # The result of this function call will be None
-        pickler.save_reduce(_delattr_shim, (obj, 'cell_contents'))
+        pickler.save_reduce(shims._delattr, (obj, 'cell_contents'))
         # pop None created by calling _delattr off stack
         if PY3:
             pickler.write(bytes('0', 'UTF-8'))
@@ -1465,7 +1344,7 @@ def save_cell(pickler, obj):
         recursive_cells = pickler._recursive_cells.get(id(f))
         if recursive_cells is not None:
             log.info("Ce2: %s" % obj)
-            pickler.save_reduce(_create_cell, (_CELL_REF_shim,), obj=obj)
+            pickler.save_reduce(_create_cell, (_CELL_REF,), obj=obj)
             recursive_cells[1].append(obj)
             log.info("# Ce2")
             return

@@ -6,7 +6,7 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 import dill
-from dill._dill import PY3, IS_PYPY2
+from dill._dill import PY3
 from functools import partial
 
 class obj1(object):
