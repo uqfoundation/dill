@@ -11,42 +11,16 @@ Provides shims for compatibility between versions of dill and Python.
 
 import inspect, sys
 
-# "Import" all the types and version conditions from dill._dill
-globals().update(sys.modules['dill._dill'].__dict__)
+_dill = sys.modules['dill._dill']
 
 # The values for the shims for this particular version of dill and Python.
 _dill_true_values = {}
 
-class Sentinel(object):
-    """
-    Create a unique sentinel object that is pickled as a constant.
-    """
-    def __init__(self, name, module=None):
-        self.name = name
-        if _dill_true_values is not None:
-            _dill_true_values[name] = self
-            self.module_name = 'dill._dill'
-        elif module is None:
-            # Use the calling function's module
-            self.module_name = inspect.currentframe().f_back.f_globals['__name__']
-        else:
-            self.module_name = module.__name__
-    def __repr__(self):
-        return self.module_name + '.' + self.name # pragma: no cover
-    def __copy__(self):
-        return self # pragma: no cover
-    def __deepcopy__(self, memo):
-        return self # pragma: no cover
-    def __reduce__(self):
-        return self.name
-    def __reduce_ex__(self, protocol):
-        return self.name
-
 class Shim(object):
     """
-    Refers to a shim function in dill._dill if it exists and to another
-    function if it doesn't exist. This choice is made during the unpickle
-    step instead of the pickling process.
+    A wrapper object that refers to a shim object in the module if it exists and
+    to another object if it doesn't exist. This choice is made during the
+    unpickle step instead of the pickling process.
     """
     def __new__(cls, name, alternative, module=None):
         if callable(alternative):
@@ -55,7 +29,7 @@ class Shim(object):
             return object.__new__(cls)
     def __init__(self, name, alternative, module=None):
         if _dill_true_values is not None:
-            self.module = sys.modules['dill._dill']
+            self.module = _dill
             g = globals()
             if name in g:
                 _dill_true_values[name] = g[name]
@@ -83,26 +57,27 @@ class _CallableShim(Shim):
 # do not have a default value.
 # Can be safely replaced removed entirely (replaced by empty tuples for calls to
 # _create_cell) once breaking changes are allowed.
-_CELL_EMPTY = Sentinel('_CELL_EMPTY')
+_CELL_EMPTY = _dill.Sentinel('_CELL_EMPTY')
 _CELL_EMPTY = Shim('_CELL_EMPTY', None)
 _dill_true_values['_CELL_REF'] = None
 
 
-if OLD37:
-    if HAS_CTYPES and hasattr(ctypes, 'pythonapi') and hasattr(ctypes.pythonapi, 'PyCell_Set'):
+if _dill.OLD37:
+    if _dill.HAS_CTYPES and hasattr(_dill.ctypes, 'pythonapi') and hasattr(_dill.ctypes.pythonapi, 'PyCell_Set'):
         # CPython
+        ctypes = _dill.ctypes
 
         _PyCell_Set = ctypes.pythonapi.PyCell_Set
 
         def _setattr(object, name, value):
-            if type(object) is CellType and name == 'cell_contents':
+            if type(object) is _dill.CellType and name == 'cell_contents':
                 _PyCell_Set.argtypes = (ctypes.py_object, ctypes.py_object)
                 _PyCell_Set(object, value)
             else:
                 setattr(object, name, value)
 
         def _delattr(object, name):
-            if type(object) is CellType and name == 'cell_contents':
+            if type(object) is _dill.CellType and name == 'cell_contents':
                 _PyCell_Set.argtypes = (ctypes.py_object, ctypes.c_void_p)
                 _PyCell_Set(object, None)
             else:
@@ -111,26 +86,26 @@ if OLD37:
     # General Python (not CPython) up to 3.6 is in a weird case, where it is
     # possible to pickle recursive cells, but we can't assign directly to the
     # cell.
-    elif PY3:
+    elif _dill.PY3:
         # Use nonlocal variables to reassign the cell value.
         # https://stackoverflow.com/a/59276835
         __nonlocal = ('nonlocal cell',)
         exec('''def _setattr(cell, name, value):
-            if type(cell) is CellType and name == 'cell_contents':
+            if type(cell) is _dill.CellType and name == 'cell_contents':
                 def cell_setter(value):
                     %s
                     cell = value # pylint: disable=unused-variable
-                func = FunctionType(cell_setter.__code__, globals(), "", None, (cell,)) # same as cell_setter, but with cell being the cell's contents
+                func = _dill.FunctionType(cell_setter.__code__, globals(), "", None, (cell,)) # same as cell_setter, but with cell being the cell's contents
                 func(value)
             else:
                 setattr(cell, name, value)''' % __nonlocal)
 
         exec('''def _delattr(cell, name):
-            if type(cell) is CellType and name == 'cell_contents':
+            if type(cell) is _dill.CellType and name == 'cell_contents':
                 def cell_deleter():
                     %s
                     del cell # pylint: disable=unused-variable
-                func = FunctionType(cell_deleter.__code__, globals(), "", None, (cell,)) # same as cell_deleter, but with cell being the cell's contents
+                func = _dill.FunctionType(cell_deleter.__code__, globals(), "", None, (cell,)) # same as cell_deleter, but with cell being the cell's contents
                 func()
             else:
                 delattr(cell, name)''' % __nonlocal)
@@ -141,7 +116,7 @@ if OLD37:
         from . import _nonlocals
         @_nonlocals.export_nonlocals('cellv')
         def _setattr(cell, name, value):
-            if type(cell) is CellType and name == 'cell_contents':
+            if type(cell) is _dill.CellType and name == 'cell_contents':
                 cellv = None
                 @_nonlocals.nonlocals('cellv', closure_override=(cell,))
                 def cell_setter(value):
@@ -151,7 +126,7 @@ if OLD37:
                 setattr(cell, name, value)
 
         def _delattr(cell, name):
-            if type(cell) is CellType and name == 'cell_contents':
+            if type(cell) is _dill.CellType and name == 'cell_contents':
                 pass
             else:
                 delattr(cell, name)

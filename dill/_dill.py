@@ -259,7 +259,26 @@ except NameError:
     try: ExitType = type(exit) # apparently 'exit' can be removed
     except NameError: ExitType = None
     singletontypes = []
-from . import shims
+
+### Shims for different versions of Python and dill
+class Sentinel(object):
+    """
+    Create a unique sentinel object that is pickled as a constant.
+    """
+    def __init__(self, name, module=None):
+        self.name = name
+    def __repr__(self):
+        return __name__ + '.' + self.name # pragma: no cover
+    def __copy__(self):
+        return self # pragma: no cover
+    def __deepcopy__(self, memo):
+        return self # pragma: no cover
+    def __reduce__(self):
+        return self.name
+    def __reduce_ex__(self, protocol):
+        return self.name
+
+from . import _shims
 
 ### File modes
 #: Pickles the file handle, preserving mode. The position of the unpickled
@@ -481,7 +500,7 @@ def _exit_recursive_cell_stack(pickler, obj, is_pickler_dill=None):
         i, recursive_cells = pickler._recursive_cells.pop(id(obj))
         # assert i == len(pickler._recursive_cells), 'Stack tampered!'
         for t in recursive_cells:
-            pickler.save_reduce(shims._setattr, (t, 'cell_contents', obj))
+            pickler.save_reduce(_shims._setattr, (t, 'cell_contents', obj))
             # pop None created by _setattr off stack
             if PY3:
                 pickler.write(bytes('0', 'UTF-8'))
@@ -1329,10 +1348,10 @@ def save_cell(pickler, obj):
         f = obj.cell_contents
     except:
         log.info("Ce3: %s" % obj)
-        pickler.save_reduce(_create_cell, (shims._CELL_EMPTY,), obj=obj)
+        pickler.save_reduce(_create_cell, (_shims._CELL_EMPTY,), obj=obj)
         # Call the function _delattr on the cell's cell_contents attribute
         # The result of this function call will be None
-        pickler.save_reduce(shims._delattr, (obj, 'cell_contents'))
+        pickler.save_reduce(_shims._delattr, (obj, 'cell_contents'))
         # pop None created by calling _delattr off stack
         if PY3:
             pickler.write(bytes('0', 'UTF-8'))
