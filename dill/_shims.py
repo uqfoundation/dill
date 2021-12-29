@@ -85,8 +85,8 @@ class _CallableShimMixin(object):
     def __call__(self, *args, **kwargs):
         reduction = self.__reduce__()
         func = reduction[0]
-        args = reduction[1]
-        obj = func(args)
+        f_args = reduction[1]
+        obj = func(*f_args)
         return obj(*args, **kwargs)
 
 class GetAttrShim(Shim):
@@ -166,8 +166,7 @@ if _dill.OLD37:
         # Use nonlocal variables to reassign the cell value.
         # https://stackoverflow.com/a/59276835
         __nonlocal = ('nonlocal cell',)
-        exec('''@_assign_to_dill_module
-        def _setattr(cell, name, value):
+        exec('''def _setattr(cell, name, value):
             if type(cell) is _dill.CellType and name == 'cell_contents':
                 def cell_setter(value):
                     %s
@@ -176,9 +175,9 @@ if _dill.OLD37:
                 func(value)
             else:
                 setattr(cell, name, value)''' % __nonlocal)
+        _assign_to_dill_module(_setattr)
 
-        exec('''@_assign_to_dill_module
-        def _delattr(cell, name):
+        exec('''def _delattr(cell, name):
             if type(cell) is _dill.CellType and name == 'cell_contents':
                 def cell_deleter():
                     %s
@@ -187,6 +186,7 @@ if _dill.OLD37:
                 func()
             else:
                 delattr(cell, name)''' % __nonlocal)
+        _assign_to_dill_module(_delattr)
 
     else:
         # Likely PyPy 2.7. Simulate the nonlocal keyword with bytecode
