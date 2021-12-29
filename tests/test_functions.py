@@ -36,7 +36,7 @@ def function_e(e, *e1, e2=1, e3=2):
     return e + sum(e1) + e2 + e3''')
 
 
-def make_empty_cell():
+def function_with_unassigned_variable():
     if False:
         value = None
     return (lambda: value)
@@ -58,7 +58,7 @@ def test_functions():
     assert dill.loads(dumped_func_d)(1, 2, 3) == 6
     assert dill.loads(dumped_func_d)(1, 2, d2=3) == 6
 
-    empty_cell = make_empty_cell()
+    empty_cell = function_with_unassigned_variable()
     cell_copy = dill.loads(dill.dumps(empty_cell))
     assert 'empty' in str(cell_copy.__closure__[0])
     try:

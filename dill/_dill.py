@@ -265,7 +265,7 @@ class Sentinel(object):
     """
     Create a unique sentinel object that is pickled as a constant.
     """
-    def __init__(self, name, module=None):
+    def __init__(self, name):
         self.name = name
     def __repr__(self):
         return __name__ + '.' + self.name # pragma: no cover
@@ -491,6 +491,7 @@ def _enter_recursive_cell_stack(pickler, obj, is_pickler_dill=None):
         l = []
         pickler._recursive_cells[id(obj)] = (len(pickler._recursive_cells), l)
         return l
+
 def _exit_recursive_cell_stack(pickler, obj, is_pickler_dill=None):
     if is_pickler_dill is None:
         is_pickler_dill = is_dill(pickler, child=True)
@@ -927,6 +928,9 @@ if PY3:
 
 else:
     def _create_cell(contents=None):
+        # _CELL_EMPTY is a sentinel object defined in _shims.py for specifying
+        # that a cell is empty. Is only needed in PyPy 2.7, but is included for
+        # compatibility across versions of Python.
         if contents is not _CELL_EMPTY:
             value = contents
         return (lambda: value).func_closure[0]
@@ -1348,6 +1352,14 @@ def save_cell(pickler, obj):
         f = obj.cell_contents
     except:
         log.info("Ce3: %s" % obj)
+        # _shims._CELL_EMPTY is defined in _shims.py to support PyPy 2.7.
+        # It unpickles to a sentinel object _dill._CELL_EMPTY, also created in
+        # _shims.py. This object is not present in Python 3 because the cell's
+        # contents can be deleted in newer versions of Python. The shim object
+        # will instead unpickle to None if unpickled in Python 3.
+
+        # When breaking changes are made to dill, (_shims._CELL_EMPTY,) can
+        # be replaced by ()
         pickler.save_reduce(_create_cell, (_shims._CELL_EMPTY,), obj=obj)
         # Call the function _delattr on the cell's cell_contents attribute
         # The result of this function call will be None
@@ -1363,6 +1375,9 @@ def save_cell(pickler, obj):
         recursive_cells = pickler._recursive_cells.get(id(f))
         if recursive_cells is not None:
             log.info("Ce2: %s" % obj)
+            # _CELL_REF is defined in _shims.py to support older versions of
+            # dill. When breaking changes are made to dill, (_CELL_REF,) can
+            # be replaced by ()
             pickler.save_reduce(_create_cell, (_CELL_REF,), obj=obj)
             recursive_cells[1].append(obj)
             log.info("# Ce2")
@@ -1664,7 +1679,6 @@ def save_function(pickler, obj):
         #NOTE: workaround for #234; "partial" still is problematic for recurse
         if OLDER and not _byref and (_super or (not _super and _memo) or (not _super and not _memo and _recurse)): pickler.clear_memo()
        #if _memo:
-       #    stack.remove(id(obj))
        #   #pickler.clear_memo()
        #   #StockPickler.clear_memo(pickler)
         log.info("# F1")
