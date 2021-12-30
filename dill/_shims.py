@@ -16,11 +16,11 @@ Deprecation of constructor function:
 Assume that we were transitioning _import_module in _dill.py to
 the builtin function importlib.import_module when present.
 
-@_assign_to_dill_module
+@assign_to(_dill)
 def _import_module(import_name):
     ... # code already in _dill.py
 
-_import_module = GetAttrShim(importlib, 'import_module', GetAttrShim(_dill, '_import_module', None))
+_import_module = Getattr(importlib, 'import_module', Getattr(_dill, '_import_module', None))
 
 The code will attempt to find import_module in the importlib module. If not
 present, it will use the _import_module function in _dill.
@@ -31,7 +31,7 @@ CellType.cell_contents behaves differently in Python 3.6 and 3.7. It is
 read-only in Python 3.6 and writable and deletable in 3.7.
 
 if _dill.OLD37 and _dill.HAS_CTYPES and ...:
-    @_assign_to_dill_module
+    @assign_to(_dill)
     def _setattr(object, name, value):
         if type(object) is _dill.CellType and name == 'cell_contents':
             _PyCell_Set.argtypes = (ctypes.py_object, ctypes.py_object)
@@ -40,7 +40,7 @@ if _dill.OLD37 and _dill.HAS_CTYPES and ...:
             setattr(object, name, value)
 ... # more cases below
 
-_setattr = GetAttrShim(_dill, '_setattr', setattr)
+_setattr = Getattr(_dill, '_setattr', setattr)
 
 _dill._setattr will be used when present to emulate Python 3.7 functionality in
 older versions of Python while defaulting to the standard setattr in 3.7+.
@@ -54,22 +54,35 @@ import inspect, sys
 _dill = sys.modules['dill._dill']
 
 
-class Shim(object):
+class Reduce(object):
     """
-    Shim objects are wrappers used for compatibility enforcement during
-    unpickle-time. They should only be used in calls to pickler.save_reduce and
-    other Shim objects. They are only evaluated within unpickler.load.
+    Reduce objects are wrappers used for compatibility enforcement during
+    unpickle-time. They should only be used in calls to pickler.save and
+    other Reduce objects. They are only evaluated within unpickler.load.
+
+    Pickling a Reduce object makes the two implementations equivalent:
+
+    pickler.save(Reduce(*reduction))
+
+    pickler.save_reduce(*reduction, obj=reduction)
     """
-    def __new__(cls, is_callable=False):
+    def __new__(cls, *reduction, **kwargs):
+        """
+        Args:
+            *reduction: a tuple that matches the format given here:
+              https://docs.python.org/3/library/pickle.html#object.__reduce__
+            is_callable: a bool to indicate that the object created by
+              unpickling `reduction` is callable. If true, the current Reduce
+              is allowed to be used as the function in further save_reduce calls
+              or Reduce objects.
+        """
+        is_callable = kwargs.get('is_callable', False) # Pleases Py2. Can be removed later
         if is_callable:
-            if not hasattr(cls, '_Callable'):
-                cls._Callable = type('_Callable', (_CallableShimMixin, cls), {})
-            return object.__new__(cls._Callable)
+            self = object.__new__(_CallableReduce)
         else:
-            return object.__new__(cls)
-    def __init__(self, reduction):
-        super(Shim, self).__init__()
+            self = object.__new__(Reduce)
         self.reduction = reduction
+        return self
     def __copy__(self):
         return self # pragma: no cover
     def __deepcopy__(self, memo):
@@ -79,9 +92,9 @@ class Shim(object):
     def __reduce_ex__(self, protocol):
         return self.__reduce__()
 
-class _CallableShimMixin(object):
-    # A version of Shim for functions. Used to trick pickler.save_reduce into
-    # thinking that Shim objects of functions are themselves meaningful functions.
+class _CallableReduce(Reduce):
+    # A version of Reduce for functions. Used to trick pickler.save_reduce into
+    # thinking that Reduce objects of functions are themselves meaningful functions.
     def __call__(self, *args, **kwargs):
         reduction = self.__reduce__()
         func = reduction[0]
@@ -89,52 +102,56 @@ class _CallableShimMixin(object):
         obj = func(*f_args)
         return obj(*args, **kwargs)
 
-class GetAttrShim(Shim):
+__NO_DEFAULT = _dill.Sentinel('Getattr.NO_DEFAULT')
+
+def Getattr(object, name, default=__NO_DEFAULT):
     """
-    A Shim object that represents the getattr operation. When unpickled, the
-    GetAttrShim will access an attribute 'name' of 'object' and return the value
+    A Reduce object that represents the getattr operation. When unpickled, the
+    Getattr will access an attribute 'name' of 'object' and return the value
     stored there. If the attribute doesn't exist, the default value will be
     returned if present.
+
+    The following statements are equivalent:
+
+    Getattr(collections, 'OrderedDict')
+    Getattr(collections, 'spam', None)
+    Getattr(*args)
+
+    Reduce(getattr, (collections, 'OrderedDict'))
+    Reduce(getattr, (collections, 'spam', None))
+    Reduce(getattr, args)
+
+    During unpickling, the first two will result in collections.OrderedDict and
+    None respectively because the first attribute exists and the second one does
+    not, forcing it to use the default value given in the third argument.
     """
-    NO_DEFAULT = _dill.Sentinel('_shims.GetAttrShim.NO_DEFAULT')
-    def __new__(cls, object, name, default=NO_DEFAULT):
-        return Shim.__new__(cls, is_callable=callable(default))
-    def __init__(self, object, name, default=NO_DEFAULT):
-        if object is None:
-            # Use the calling function's module
-            object = sys.modules[inspect.currentframe().f_back.f_globals['__name__']]
 
-        if default is GetAttrShim.NO_DEFAULT:
-            reduction = (getattr, (object, name))
+    if default is Getattr.NO_DEFAULT:
+        reduction = (getattr, (object, name))
+    else:
+        reduction = (getattr, (object, name, default))
+
+    return Reduce(*reduction, is_callable=callable(default))
+
+Getattr.NO_DEFAULT = __NO_DEFAULT
+del __NO_DEFAULT
+
+def assign_to(module, name=None):
+    def decorator(func):
+        if name is None:
+            fname = func.__name__
         else:
-            reduction = (getattr, (object, name, default))
-
-        super(GetAttrShim, self).__init__(reduction)
-
-        self.object = object
-        self.name = name
-        self.default = default
-    @classmethod
-    def _callable(cls, object, name, default=NO_DEFAULT):
-        return callable(default)
-
-def _assign_to_dill_module(func):
-    _dill.__dict__[func.__name__] = func
-    return func
+            fname = name
+        module.__dict__[fname] = func
+        func.__module__ = module.__name__
+        return func
+    return decorator
 
 ######################
 ## Compatibility Shims are defined below
 ######################
 
-# Used to stay compatible with versions of dill whose _create_cell functions
-# do not have a default value.
-# Can be safely replaced removed entirely (replaced by empty tuples for calls to
-# _create_cell) once breaking changes are allowed.
-if _dill.HAS_CTYPES and not _dill.PY3:
-    _dill._CELL_EMPTY = _dill.Sentinel('_CELL_EMPTY')
-_CELL_EMPTY = GetAttrShim(_dill, '_CELL_EMPTY', None)
-_dill._CELL_REF = None
-
+_CELL_EMPTY = Getattr(_dill, '_CELL_EMPTY', None)
 
 if _dill.OLD37:
     if _dill.HAS_CTYPES and hasattr(_dill.ctypes, 'pythonapi') and hasattr(_dill.ctypes.pythonapi, 'PyCell_Set'):
@@ -143,7 +160,7 @@ if _dill.OLD37:
 
         _PyCell_Set = ctypes.pythonapi.PyCell_Set
 
-        @_assign_to_dill_module
+        @assign_to(_dill)
         def _setattr(object, name, value):
             if type(object) is _dill.CellType and name == 'cell_contents':
                 _PyCell_Set.argtypes = (ctypes.py_object, ctypes.py_object)
@@ -151,7 +168,7 @@ if _dill.OLD37:
             else:
                 setattr(object, name, value)
 
-        @_assign_to_dill_module
+        @assign_to(_dill)
         def _delattr(object, name):
             if type(object) is _dill.CellType and name == 'cell_contents':
                 _PyCell_Set.argtypes = (ctypes.py_object, ctypes.c_void_p)
@@ -175,7 +192,7 @@ if _dill.OLD37:
                 func(value)
             else:
                 setattr(cell, name, value)''' % __nonlocal)
-        _assign_to_dill_module(_setattr)
+        assign_to(_dill)(_setattr)
 
         exec('''def _delattr(cell, name):
             if type(cell) is _dill.CellType and name == 'cell_contents':
@@ -186,31 +203,57 @@ if _dill.OLD37:
                 func()
             else:
                 delattr(cell, name)''' % __nonlocal)
-        _assign_to_dill_module(_delattr)
+        assign_to(_dill)(_delattr)
 
     else:
         # Likely PyPy 2.7. Simulate the nonlocal keyword with bytecode
         # manipulation.
-        from . import _nonlocals
-        @_assign_to_dill_module
-        @_nonlocals.export_nonlocals('cellv')
+
+        # The following function is based on 'cell_set' from 'cloudpickle'
+        # https://github.com/cloudpipe/cloudpickle/blob/5d89947288a18029672596a4d719093cc6d5a412/cloudpickle/cloudpickle.py#L393-L482
+        # Copyright (c) 2012, Regents of the University of California.
+        # Copyright (c) 2009 `PiCloud, Inc. <http://www.picloud.com>`_.
+        # License: https://github.com/cloudpipe/cloudpickle/blob/master/LICENSE
+        @assign_to(_dill)
         def _setattr(cell, name, value):
             if type(cell) is _dill.CellType and name == 'cell_contents':
-                cellv = None
-                @_nonlocals.nonlocals('cellv', closure_override=(cell,))
-                def cell_setter(value):
-                    cellv = value # pylint: disable=unused-variable
-                cell_setter(value)
+                _cell_set = _dill.FunctionType(
+                      _cell_set_template_code, {}, '_cell_set', (), (cell,),)
+                _cell_set(value)
             else:
                 setattr(cell, name, value)
 
-        @_assign_to_dill_module
+        def _cell_set_factory(value):
+            lambda: cell
+            cell = value
+
+        co = _cell_set_factory.__code__
+
+        _cell_set_template_code = _dill.CodeType(
+            co.co_argcount,
+            co.co_nlocals,
+            co.co_stacksize,
+            co.co_flags,
+            co.co_code,
+            co.co_consts,
+            co.co_names,
+            co.co_varnames,
+            co.co_filename,
+            co.co_name,
+            co.co_firstlineno,
+            co.co_lnotab,
+            co.co_cellvars,  # co_freevars is initialized with co_cellvars
+            (),  # co_cellvars is made empty
+        )
+
+        del co
+
+        @assign_to(_dill)
         def _delattr(cell, name):
             if type(cell) is _dill.CellType and name == 'cell_contents':
                 pass
             else:
                 delattr(cell, name)
 
-
-_setattr = GetAttrShim(_dill, '_setattr', setattr)
-_delattr = GetAttrShim(_dill, '_delattr', delattr)
+_setattr = Getattr(_dill, '_setattr', setattr)
+_delattr = Getattr(_dill, '_delattr', delattr)

@@ -260,15 +260,22 @@ except NameError:
     except NameError: ExitType = None
     singletontypes = []
 
+import inspect
+
 ### Shims for different versions of Python and dill
 class Sentinel(object):
     """
     Create a unique sentinel object that is pickled as a constant.
     """
-    def __init__(self, name):
+    def __init__(self, name, module_name=None):
         self.name = name
+        if module_name is None:
+            # Use the calling frame's module
+            self.__module__ = inspect.currentframe().f_back.f_globals['__name__']
+        else:
+            self.__module__ = module_name
     def __repr__(self):
-        return __name__ + '.' + self.name # pragma: no cover
+        return self.__module__ + '.' + self.name # pragma: no cover
     def __copy__(self):
         return self # pragma: no cover
     def __deepcopy__(self, memo):
@@ -922,15 +929,20 @@ class _attrgetter_helper(object):
             attrs[index] = ".".join([attrs[index], attr])
         return type(self)(attrs, index)
 
+# _CELL_REF and _CELL_EMPTY are used to stay compatible with versions of dill
+# whose _create_cell functions do not have a default value.
+# Can be safely replaced removed entirely (replaced by empty tuples for calls to
+# _create_cell) once breaking changes are allowed.
+_CELL_REF = None
+
 if PY3:
     def _create_cell(contents=None):
         return (lambda: contents).__closure__[0]
 
 else:
+    _CELL_EMPTY = Sentinel('_CELL_EMPTY')
+
     def _create_cell(contents=None):
-        # _CELL_EMPTY is a sentinel object defined in _shims.py for specifying
-        # that a cell is empty. Is only needed in PyPy 2.7, but is included for
-        # compatibility across versions of Python.
         if contents is not _CELL_EMPTY:
             value = contents
         return (lambda: value).func_closure[0]
@@ -1355,7 +1367,7 @@ def save_cell(pickler, obj):
         # _shims._CELL_EMPTY is defined in _shims.py to support PyPy 2.7.
         # It unpickles to a sentinel object _dill._CELL_EMPTY, also created in
         # _shims.py. This object is not present in Python 3 because the cell's
-        # contents can be deleted in newer versions of Python. The shim object
+        # contents can be deleted in newer versions of Python. The reduce object
         # will instead unpickle to None if unpickled in Python 3.
 
         # When breaking changes are made to dill, (_shims._CELL_EMPTY,) can
