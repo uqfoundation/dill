@@ -199,6 +199,10 @@ if _dill.OLD37:
 
         exec('''def _delattr(cell, name):
             if type(cell) is _dill.CellType and name == 'cell_contents':
+                try:
+                    cell.cell_contents
+                except:
+                    return
                 def cell_deleter():
                     %s
                     del cell # pylint: disable=unused-variable

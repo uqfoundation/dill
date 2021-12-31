@@ -933,17 +933,18 @@ class _attrgetter_helper(object):
 
 # _CELL_REF and _CELL_EMPTY are used to stay compatible with versions of dill
 # whose _create_cell functions do not have a default value.
-# Can be safely removed entirely (replaced by empty tuples for calls to
-# _create_cell) once breaking changes are allowed.
+# _CELL_REF can be safely removed entirely (replaced by empty tuples for calls
+# to _create_cell) once breaking changes are allowed.
 _CELL_REF = None
+_CELL_EMPTY = Sentinel('_CELL_EMPTY')
 
 if PY3:
     def _create_cell(contents=None):
-        return (lambda: contents).__closure__[0]
+        if contents is not _CELL_EMPTY:
+            value = contents
+        return (lambda: value).__closure__[0]
 
 else:
-    _CELL_EMPTY = Sentinel('_CELL_EMPTY')
-
     def _create_cell(contents=None):
         if contents is not _CELL_EMPTY:
             value = contents
@@ -1373,7 +1374,8 @@ def save_cell(pickler, obj):
         # will instead unpickle to None if unpickled in Python 3.
 
         # When breaking changes are made to dill, (_shims._CELL_EMPTY,) can
-        # be replaced by ()
+        # be replaced by () OR the delattr function can be removed repending on
+        # whichever is more convienient.
         pickler.save_reduce(_create_cell, (_shims._CELL_EMPTY,), obj=obj)
         # Call the function _delattr on the cell's cell_contents attribute
         # The result of this function call will be None
