@@ -16,7 +16,7 @@ Deprecation of constructor function:
 Assume that we were transitioning _import_module in _dill.py to
 the builtin function importlib.import_module when present.
 
-@assign_to(_dill)
+@move_to(_dill)
 def _import_module(import_name):
     ... # code already in _dill.py
 
@@ -31,7 +31,7 @@ CellType.cell_contents behaves differently in Python 3.6 and 3.7. It is
 read-only in Python 3.6 and writable and deletable in 3.7.
 
 if _dill.OLD37 and _dill.HAS_CTYPES and ...:
-    @assign_to(_dill)
+    @move_to(_dill)
     def _setattr(object, name, value):
         if type(object) is _dill.CellType and name == 'cell_contents':
             _PyCell_Set.argtypes = (ctypes.py_object, ctypes.py_object)
@@ -66,6 +66,7 @@ class Reduce(object):
 
     pickler.save_reduce(*reduction, obj=reduction)
     """
+    __slots__ = ['reduction']
     def __new__(cls, *reduction, **kwargs):
         """
         Args:
@@ -83,6 +84,8 @@ class Reduce(object):
             self = object.__new__(Reduce)
         self.reduction = reduction
         return self
+    def __repr__(self):
+        return 'Reduce%s' % (self.reduction,)
     def __copy__(self):
         return self # pragma: no cover
     def __deepcopy__(self, memo):
@@ -136,7 +139,7 @@ def Getattr(object, name, default=__NO_DEFAULT):
 Getattr.NO_DEFAULT = __NO_DEFAULT
 del __NO_DEFAULT
 
-def assign_to(module, name=None):
+def move_to(module, name=None):
     def decorator(func):
         if name is None:
             fname = func.__name__
@@ -160,7 +163,7 @@ if _dill.OLD37:
 
         _PyCell_Set = ctypes.pythonapi.PyCell_Set
 
-        @assign_to(_dill)
+        @move_to(_dill)
         def _setattr(object, name, value):
             if type(object) is _dill.CellType and name == 'cell_contents':
                 _PyCell_Set.argtypes = (ctypes.py_object, ctypes.py_object)
@@ -168,7 +171,7 @@ if _dill.OLD37:
             else:
                 setattr(object, name, value)
 
-        @assign_to(_dill)
+        @move_to(_dill)
         def _delattr(object, name):
             if type(object) is _dill.CellType and name == 'cell_contents':
                 _PyCell_Set.argtypes = (ctypes.py_object, ctypes.c_void_p)
@@ -192,7 +195,7 @@ if _dill.OLD37:
                 func(value)
             else:
                 setattr(cell, name, value)''' % __nonlocal)
-        assign_to(_dill)(_setattr)
+        move_to(_dill)(_setattr)
 
         exec('''def _delattr(cell, name):
             if type(cell) is _dill.CellType and name == 'cell_contents':
@@ -203,7 +206,7 @@ if _dill.OLD37:
                 func()
             else:
                 delattr(cell, name)''' % __nonlocal)
-        assign_to(_dill)(_delattr)
+        move_to(_dill)(_delattr)
 
     else:
         # Likely PyPy 2.7. Simulate the nonlocal keyword with bytecode
@@ -214,7 +217,7 @@ if _dill.OLD37:
         # Copyright (c) 2012, Regents of the University of California.
         # Copyright (c) 2009 `PiCloud, Inc. <http://www.picloud.com>`_.
         # License: https://github.com/cloudpipe/cloudpickle/blob/master/LICENSE
-        @assign_to(_dill)
+        @move_to(_dill)
         def _setattr(cell, name, value):
             if type(cell) is _dill.CellType and name == 'cell_contents':
                 _cell_set = _dill.FunctionType(
@@ -248,7 +251,7 @@ if _dill.OLD37:
 
         del co
 
-        @assign_to(_dill)
+        @move_to(_dill)
         def _delattr(cell, name):
             if type(cell) is _dill.CellType and name == 'cell_contents':
                 pass

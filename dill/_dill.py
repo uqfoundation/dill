@@ -286,6 +286,7 @@ class Sentinel(object):
         return self.name
 
 from . import _shims
+from ._shims import Reduce, Getattr
 
 ### File modes
 #: Pickles the file handle, preserving mode. The position of the unpickled
@@ -487,28 +488,29 @@ class MetaCatchingDict(dict):
             raise KeyError()
 
 
-def _enter_recursive_cell_stack(pickler, obj, is_pickler_dill=None):
+def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO_DEFAULT):
+    if obj is Getattr.NO_DEFAULT:
+        obj = Reduce(reduction)
+
     if is_pickler_dill is None:
         is_pickler_dill = is_dill(pickler, child=True)
     if is_pickler_dill:
-        # assert id(obj) not in pickler._recursive_cells, str(obj) + ' already pushed on stack!'
+        # assert id(obj) not in pickler._postproc, str(obj) + ' already pushed on stack!'
         # if not hasattr(pickler, 'x'): pickler.x = 0
         # print(pickler.x*' ', 'push', obj, id(obj), pickler._recurse)
         # pickler.x += 1
         l = []
-        pickler._recursive_cells[id(obj)] = (len(pickler._recursive_cells), l)
-        return l
+        pickler._postproc[id(obj)] = l
 
-def _exit_recursive_cell_stack(pickler, obj, is_pickler_dill=None):
-    if is_pickler_dill is None:
-        is_pickler_dill = is_dill(pickler, child=True)
+    pickler.save_reduce(*reduction, obj=obj)
+
     if is_pickler_dill:
         # pickler.x -= 1
         # print(pickler.x*' ', 'pop', obj, id(obj))
-        i, recursive_cells = pickler._recursive_cells.pop(id(obj))
-        # assert i == len(pickler._recursive_cells), 'Stack tampered!'
-        for t in recursive_cells:
-            pickler.save_reduce(_shims._setattr, (t, 'cell_contents', obj))
+        postproc = pickler._postproc.pop(id(obj))
+        # assert l == postproc, 'Stack tampered!'
+        for reduction in postproc:
+            pickler.save_reduce(*reduction)
             # pop None created by _setattr off stack
             if PY3:
                 pickler.write(bytes('0', 'UTF-8'))
@@ -535,7 +537,7 @@ class Pickler(StockPickler):
         self._strictio = False #_strictio
         self._fmode = settings['fmode'] if _fmode is None else _fmode
         self._recurse = settings['recurse'] if _recurse is None else _recurse
-        self._recursive_cells = {}
+        self._postproc = {}
 
     def dump(self, obj): #NOTE: if settings change, need to update attributes
         # register if the object is a numpy ufunc
@@ -931,7 +933,7 @@ class _attrgetter_helper(object):
 
 # _CELL_REF and _CELL_EMPTY are used to stay compatible with versions of dill
 # whose _create_cell functions do not have a default value.
-# Can be safely replaced removed entirely (replaced by empty tuples for calls to
+# Can be safely removed entirely (replaced by empty tuples for calls to
 # _create_cell) once breaking changes are allowed.
 _CELL_REF = None
 
@@ -1384,14 +1386,14 @@ def save_cell(pickler, obj):
         log.info("# Ce3")
         return
     if is_dill(pickler, child=True):
-        recursive_cells = pickler._recursive_cells.get(id(f))
-        if recursive_cells is not None:
+        postproc = pickler._postproc.get(id(f))
+        if postproc is not None:
             log.info("Ce2: %s" % obj)
             # _CELL_REF is defined in _shims.py to support older versions of
             # dill. When breaking changes are made to dill, (_CELL_REF,) can
             # be replaced by ()
             pickler.save_reduce(_create_cell, (_CELL_REF,), obj=obj)
-            recursive_cells[1].append(obj)
+            postproc.append((_shims._setattr, (obj, 'cell_contents', f)))
             log.info("# Ce2")
             return
     log.info("Ce1: %s" % obj)
@@ -1573,7 +1575,7 @@ def save_type(pickler, obj):
         pickler_is_dill = is_dill(pickler, child=True)
         if issubclass(type(obj), type):
         #   try: # used when pickling the class as code (or the interpreter)
-            if pickler_is_dill and not pickler._byref and id(obj) not in pickler._recursive_cells:
+            if pickler_is_dill and not pickler._byref and id(obj) not in pickler._postproc:
                 # thanks to Tom Stepleton pointing out pickler._session unneeded
                 _t = 'T2'
                 log.info("%s: %s" % (_t, obj))
@@ -1595,10 +1597,9 @@ def save_type(pickler, obj):
         for name in _dict.get("__slots__", []):
             del _dict[name]
         name = getattr(obj, "__qualname__", obj.__name__)
-        _enter_recursive_cell_stack(pickler, obj, pickler_is_dill)
-        pickler.save_reduce(_create_type, (type(obj), name,
-                                           obj.__bases__, _dict), obj=obj)
-        _exit_recursive_cell_stack(pickler, obj, pickler_is_dill)
+        _save_with_postproc(pickler, (_create_type, (
+            type(obj), name, obj.__bases__, _dict
+        )), pickler_is_dill, obj=obj)
         log.info("# %s" % _t)
     # special cases: NoneType, NotImplementedType, EllipsisType
     elif obj is type(None):
@@ -1652,10 +1653,10 @@ def save_classmethod(pickler, obj):
 def save_function(pickler, obj):
     if not _locate_function(obj): #, pickler._session):
         log.info("F1: %s" % obj)
-        _recursive_cells = getattr(pickler, '_recursive_cells', ())
+        _postproc = getattr(pickler, '_postproc', ())
         _byref = getattr(pickler, '_byref', None)
         _recurse = getattr(pickler, '_recurse', None)
-        _memo = (id(obj) in _recursive_cells) and (_recurse is not None)
+        _memo = (id(obj) in _postproc) and (_recurse is not None)
         if _recurse and not _memo:
             # recurse to get all globals referred to by obj
             from .detect import globalvars
@@ -1664,28 +1665,40 @@ def save_function(pickler, obj):
             globs = obj.__globals__ if PY3 else obj.func_globals
         if _memo:
             pickler._recurse = False
-        else:
-            _enter_recursive_cell_stack(pickler, obj)
-        if PY3:
-            #NOTE: workaround for 'super' (see issue #75)
-            _super = ('super' in getattr(obj.__code__,'co_names',())) and (_byref is not None)
-            fkwdefaults = getattr(obj, '__kwdefaults__', None)
-            pickler.save_reduce(_create_function, (obj.__code__,
-                                globs, obj.__name__,
-                                obj.__defaults__, obj.__closure__,
-                                obj.__dict__, fkwdefaults), obj=obj)
-        else:
-            _super = ('super' in getattr(obj.func_code,'co_names',())) and (_byref is not None) and getattr(pickler, '_recurse', False)
-            if _super: pickler._byref = True
-            pickler.save_reduce(_create_function, (obj.func_code,
-                                globs, obj.func_name,
-                                obj.func_defaults, obj.func_closure,
-                                obj.__dict__), obj=obj)
-            if _super: pickler._byref = _byref
-        if _memo:
+            if PY3:
+                #NOTE: workaround for 'super' (see issue #75)
+                _super = ('super' in getattr(obj.__code__,'co_names',())) and (_byref is not None)
+                fkwdefaults = getattr(obj, '__kwdefaults__', None)
+                pickler.save_reduce(_create_function, (obj.__code__,
+                                    globs, obj.__name__,
+                                    obj.__defaults__, obj.__closure__,
+                                    obj.__dict__, fkwdefaults), obj=obj)
+            else:
+                _super = ('super' in getattr(obj.func_code,'co_names',())) and (_byref is not None) and getattr(pickler, '_recurse', False)
+                if _super: pickler._byref = True
+                pickler.save_reduce(_create_function, (obj.func_code,
+                                    globs, obj.func_name,
+                                    obj.func_defaults, obj.func_closure,
+                                    obj.__dict__), obj=obj)
+                if _super: pickler._byref = _byref
             pickler._recurse = _recurse
         else:
-            _exit_recursive_cell_stack(pickler, obj)
+            if PY3:
+                #NOTE: workaround for 'super' (see issue #75)
+                _super = ('super' in getattr(obj.__code__,'co_names',())) and (_byref is not None)
+                fkwdefaults = getattr(obj, '__kwdefaults__', None)
+                _save_with_postproc(pickler, (_create_function, (
+                      obj.__code__, globs, obj.__name__, obj.__defaults__,
+                      obj.__closure__, obj.__dict__, fkwdefaults
+                )), obj=obj)
+            else:
+                _super = ('super' in getattr(obj.func_code,'co_names',())) and (_byref is not None) and getattr(pickler, '_recurse', False)
+                if _super: pickler._byref = True
+                _save_with_postproc(pickler, (_create_function, (
+                    obj.func_code, globs, obj.func_name, obj.func_defaults,
+                    obj.func_closure, obj.__dict__
+                )), obj=obj)
+                if _super: pickler._byref = _byref
        #clear = (_byref, _super, _recurse, _memo)
        #print(clear + (OLDER,))
         #NOTE: workaround for #234; "partial" still is problematic for recurse
