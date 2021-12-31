@@ -40,6 +40,7 @@ PY3 = (sys.hexversion >= 0x3000000)
 OLDER = (PY3 and sys.hexversion < 0x3040000) or (sys.hexversion < 0x2070ab1)
 OLD33 = (sys.hexversion < 0x3030000)
 OLD37 = (sys.hexversion < 0x3070000)
+OLD310 = (sys.hexversion < 0x30a0000)
 PY34 = (0x3040000 <= sys.hexversion < 0x3050000)
 if PY3: #XXX: get types from .objtypes ?
     import builtins as __builtin__
@@ -261,6 +262,8 @@ except NameError:
     try: ExitType = type(exit) # apparently 'exit' can be removed
     except NameError: ExitType = None
     singletontypes = []
+
+from collections import OrderedDict
 
 import inspect
 
@@ -913,6 +916,23 @@ class _attrgetter_helper(object):
             attrs[index] = ".".join([attrs[index], attr])
         return type(self)(attrs, index)
 
+class _dictproxy_helper(dict):
+   def __ror__(self, a):
+        return a
+
+_dictproxy_helper_instance = _dictproxy_helper()
+
+__d = {}
+try:
+    # In CPython 3.9 and later, this trick can be used to exploit the
+    # implementation of the __or__ function of MappingProxyType to get the true
+    # mapping referenced by the proxy. It may work for other implementations,
+    # but is not guaranteed.
+    MAPPING_PROXY_TRICK = __d is (DictProxyType(__d) | _dictproxy_helper_instance)
+except:
+    MAPPING_PROXY_TRICK = False
+del __d
+
 # _CELL_REF and _CELL_EMPTY are used to stay compatible with versions of dill
 # whose _create_cell functions do not have a default value.
 # _CELL_REF can be safely removed entirely (replaced by empty tuples for calls
@@ -1164,6 +1184,62 @@ def save_module_dict(pickler, obj):
         StockPickler.save_dict(pickler, obj)
         log.info("# D2")
     return
+
+
+if not OLD310 and MAPPING_PROXY_TRICK:
+    def save_dict_view(dicttype):
+        def save_dict_view_for_function(func):
+            def _save_dict_view(pickler, obj):
+                log.info("Dkvi: <%s>" % (obj,))
+                mapping = obj.mapping | _dictproxy_helper_instance
+                pickler.save_reduce(func, (mapping,), obj=obj)
+                log.info("# Dkvi")
+            return _save_dict_view
+        return [
+            (funcname, save_dict_view_for_function(getattr(dicttype, funcname)))
+            for funcname in ('keys', 'values', 'items')
+        ]
+else:
+    # The following functions are based on 'cloudpickle'
+    # https://github.com/cloudpipe/cloudpickle/blob/5d89947288a18029672596a4d719093cc6d5a412/cloudpickle/cloudpickle.py#L922-L940
+    # Copyright (c) 2012, Regents of the University of California.
+    # Copyright (c) 2009 `PiCloud, Inc. <http://www.picloud.com>`_.
+    # License: https://github.com/cloudpipe/cloudpickle/blob/master/LICENSE
+    def save_dict_view(dicttype):
+        def save_dict_keys(pickler, obj):
+            log.info("Dk: <%s>" % (obj,))
+            dict_constructor = _shims.Reduce(dicttype.fromkeys, (list(obj),))
+            pickler.save_reduce(dicttype.keys, (dict_constructor,), obj=obj)
+            log.info("# Dk")
+
+        def save_dict_values(pickler, obj):
+            log.info("Dv: <%s>" % (obj,))
+            dict_constructor = _shims.Reduce(dicttype, (enumerate(obj),))
+            pickler.save_reduce(dicttype.values, (dict_constructor,), obj=obj)
+            log.info("# Dv")
+
+        def save_dict_items(pickler, obj):
+            log.info("Di: <%s>" % (obj,))
+            pickler.save_reduce(dicttype.items, (dicttype(obj),), obj=obj)
+            log.info("# Di")
+
+        return (
+            ('keys', save_dict_keys),
+            ('values', save_dict_values),
+            ('items', save_dict_items)
+        )
+
+for __dicttype in (
+      dict,
+      OrderedDict
+):
+    __obj = __dicttype()
+    for __funcname, __savefunc in save_dict_view(__dicttype):
+        __tview = type(getattr(__obj, __funcname)())
+        if __tview not in Pickler.dispatch:
+            Pickler.dispatch[__tview] = __savefunc
+del __dicttype, __obj, __funcname, __tview, __savefunc
+
 
 @register(ClassType)
 def save_classobj(pickler, obj): #FIXME: enable pickler._byref
@@ -1439,7 +1515,15 @@ def save_cell(pickler, obj):
     log.info("# Ce1")
     return
 
-if not IS_PYPY:
+if MAPPING_PROXY_TRICK:
+    @register(DictProxyType)
+    def save_dictproxy(pickler, obj):
+        log.info("Mp: %s" % obj)
+        mapping = obj | _dictproxy_helper_instance
+        pickler.save_reduce(DictProxyType, (mapping,), obj=obj)
+        log.info("# Mp")
+        return
+elif not IS_PYPY:
     if not OLD33:
         @register(DictProxyType)
         def save_dictproxy(pickler, obj):
