@@ -7,7 +7,7 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 import dill
-from dill._dill import OLD310
+from dill._dill import OLD310, MAPPING_PROXY_TRICK
 
 def test_dictviews():
     x = {'a': 1}
@@ -16,7 +16,7 @@ def test_dictviews():
     assert dill.copy(x.items())
 
 def test_dictproxy_trick():
-    if not OLD310:
+    if not OLD310 and MAPPING_PROXY_TRICK:
         x = {'a': 1}
         all_views = (x.values(), x.items(), x.keys(), x)
         seperate_views = dill.copy(all_views)
