@@ -79,7 +79,7 @@ def test_frame_related():
   _is = lambda ok: not ok if dill._dill.IS_PYPY2 else ok
   ok = dill.pickles(f)
   if verbose: print ("%s: %s, %s" % (ok, type(f), f))
-  assert _is(not ok) #XXX: dill fails
+  assert not ok
   ok = dill.pickles(g)
   if verbose: print ("%s: %s, %s" % (ok, type(g), g))
   assert _is(not ok) #XXX: dill fails

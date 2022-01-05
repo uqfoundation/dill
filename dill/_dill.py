@@ -28,6 +28,7 @@ def _trace(boolean):
     if boolean: log.setLevel(logging.INFO)
     else: log.setLevel(logging.WARN)
     return
+import warnings
 
 import os
 import sys
@@ -488,7 +489,7 @@ class MetaCatchingDict(dict):
             raise KeyError()
 
 
-def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO_DEFAULT):
+def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO_DEFAULT, postproc_list=None):
     if obj is Getattr.NO_DEFAULT:
         obj = Reduce(reduction)
 
@@ -499,17 +500,19 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
         # if not hasattr(pickler, 'x'): pickler.x = 0
         # print(pickler.x*' ', 'push', obj, id(obj), pickler._recurse)
         # pickler.x += 1
-        l = []
-        pickler._postproc[id(obj)] = l
+        if postproc_list is None:
+            postproc_list = []
+        pickler._postproc[id(obj)] = postproc_list
 
+    # TODO: Use state_setter in Python 3.8 to allow for faster cPickle implementations
     pickler.save_reduce(*reduction, obj=obj)
 
     if is_pickler_dill:
         # pickler.x -= 1
         # print(pickler.x*' ', 'pop', obj, id(obj))
         postproc = pickler._postproc.pop(id(obj))
-        # assert l == postproc, 'Stack tampered!'
-        for reduction in postproc:
+        # assert postproc_list == postproc, 'Stack tampered!'
+        for reduction in reversed(postproc):
             pickler.save_reduce(*reduction)
             # pop None created by _setattr off stack
             if PY3:
@@ -735,6 +738,7 @@ def _create_function(fcode, fglobals, fname=None, fdefaults=None,
     # thus we need to make sure that we have __builtins__ as well
     if "__builtins__" not in func.__globals__:
         func.__globals__["__builtins__"] = globals()["__builtins__"]
+    # assert id(fglobals) == id(func.__globals__)
     return func
 
 def _create_code(*args):
@@ -1347,6 +1351,10 @@ if sys.hexversion >= 0x20500f0:
     @register(MethodWrapperType)
     def save_instancemethod(pickler, obj):
         log.info("Mw: %s" % obj)
+        if IS_PYPY2 and obj.__self__ is None and obj.im_class:
+            # Can be a class method in PYPY2 if __self__ is none
+            pickler.save_reduce(getattr, (obj.im_class, obj.__name__), obj=obj)
+            return
         pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
         log.info("# Mw")
         return
@@ -1394,8 +1402,8 @@ def save_cell(pickler, obj):
             # _CELL_REF is defined in _shims.py to support older versions of
             # dill. When breaking changes are made to dill, (_CELL_REF,) can
             # be replaced by ()
-            pickler.save_reduce(_create_cell, (_CELL_REF,), obj=obj)
             postproc.append((_shims._setattr, (obj, 'cell_contents', f)))
+            pickler.save_reduce(_create_cell, (_CELL_REF,), obj=obj)
             log.info("# Ce2")
             return
     log.info("Ce1: %s" % obj)
@@ -1562,7 +1570,7 @@ def save_module(pickler, obj):
     return
 
 @register(TypeType)
-def save_type(pickler, obj):
+def save_type(pickler, obj, postproc_list=None):
     if obj in _typemap:
         log.info("T1: %s" % obj)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
@@ -1573,36 +1581,6 @@ def save_type(pickler, obj):
         pickler.save_reduce(_create_namedtuple, (getattr(obj, "__qualname__", obj.__name__), obj._fields, obj.__module__), obj=obj)
         log.info("# T6")
         return
-    elif obj.__module__ == '__main__':
-        pickler_is_dill = is_dill(pickler, child=True)
-        if issubclass(type(obj), type):
-        #   try: # used when pickling the class as code (or the interpreter)
-            if pickler_is_dill and not pickler._byref and id(obj) not in pickler._postproc:
-                # thanks to Tom Stepleton pointing out pickler._session unneeded
-                _t = 'T2'
-                log.info("%s: %s" % (_t, obj))
-                _dict = _dict_from_dictproxy(obj.__dict__)
-        #   except: # punt to StockPickler (pickle by class reference)
-            else:
-                log.info("T5: %s" % obj)
-                name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
-                StockPickler.save_global(pickler, obj, name=name)
-                log.info("# T5")
-                return
-        else:
-            _t = 'T3'
-            log.info("%s: %s" % (_t, obj))
-            _dict = obj.__dict__
-       #print (_dict)
-       #print ("%s\n%s" % (type(obj), obj.__name__))
-       #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
-        for name in _dict.get("__slots__", []):
-            del _dict[name]
-        name = getattr(obj, "__qualname__", obj.__name__)
-        _save_with_postproc(pickler, (_create_type, (
-            type(obj), name, obj.__bases__, _dict
-        )), pickler_is_dill, obj=obj)
-        log.info("# %s" % _t)
     # special cases: NoneType, NotImplementedType, EllipsisType
     elif obj is type(None):
         log.info("T7: %s" % obj)
@@ -1620,6 +1598,39 @@ def save_type(pickler, obj):
         log.info("T7: %s" % obj)
         pickler.save_reduce(type, (Ellipsis,), obj=obj)
         log.info("# T7")
+
+    elif not _locate_function(obj): # not a function, but the name was held over
+        pickler_is_dill = is_dill(pickler, child=True)
+        # assert id(obj) not in pickler._postproc
+        if issubclass(type(obj), type):
+        #   try: # used when pickling the class as code (or the interpreter)
+            if pickler_is_dill and not pickler._byref and id(obj) not in pickler._postproc:
+                # thanks to Tom Stepleton pointing out pickler._session unneeded
+                _t = 'T2'
+                log.info("%s: %s" % (_t, obj))
+                _dict = _dict_from_dictproxy(obj.__dict__)
+        #   except: # punt to StockPickler (pickle by class reference)
+            else:
+                warnings.warn('The byref setting is on, but %s cannot be located.' % (obj,), RuntimeWarning)
+                log.info("T5: %s" % obj)
+                name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
+                StockPickler.save_global(pickler, obj, name=name)
+                log.info("# T5")
+                return
+        else:
+            _t = 'T3'
+            log.info("%s: %s" % (_t, obj))
+            _dict = obj.__dict__
+       #print (_dict)
+       #print ("%s\n%s" % (type(obj), obj.__name__))
+       #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
+        for name in _dict.get("__slots__", []):
+            del _dict[name]
+        name = getattr(obj, "__qualname__", obj.__name__)
+        _save_with_postproc(pickler, (_create_type, (
+            type(obj), name, obj.__bases__, _dict
+        )), pickler_is_dill, obj=obj, postproc_list=postproc_list)
+        log.info("# %s" % _t)
     else:
         log.info("T4: %s" % obj)
        #print (obj.__dict__)
@@ -1629,6 +1640,12 @@ def save_type(pickler, obj):
         StockPickler.save_global(pickler, obj, name=name)
         log.info("# T4")
     return
+
+# Error in PyPy 2.7 when adding ABC support
+if IS_PYPY2:
+    @register(FrameType)
+    def save_frame(pickler, obj):
+        raise PicklingError('Cannot pickle a Python stack frame')
 
 @register(property)
 def save_property(pickler, obj):
@@ -1665,42 +1682,36 @@ def save_function(pickler, obj):
             globs = globalvars(obj, recurse=True, builtin=True)
         else:
             globs = obj.__globals__ if PY3 else obj.func_globals
-        if _memo:
-            pickler._recurse = False
-            if PY3:
-                #NOTE: workaround for 'super' (see issue #75)
-                _super = ('super' in getattr(obj.__code__,'co_names',())) and (_byref is not None)
-                fkwdefaults = getattr(obj, '__kwdefaults__', None)
-                pickler.save_reduce(_create_function, (obj.__code__,
-                                    globs, obj.__name__,
-                                    obj.__defaults__, obj.__closure__,
-                                    obj.__dict__, fkwdefaults), obj=obj)
+        postproc_list = []
+        if _recurse:
+            if id(obj.__dict__) in pickler.memo:
+                members = obj.__dict__
             else:
-                _super = ('super' in getattr(obj.func_code,'co_names',())) and (_byref is not None) and getattr(pickler, '_recurse', False)
-                if _super: pickler._byref = True
-                pickler.save_reduce(_create_function, (obj.func_code,
-                                    globs, obj.func_name,
-                                    obj.func_defaults, obj.func_closure,
-                                    obj.__dict__), obj=obj)
-                if _super: pickler._byref = _byref
-            pickler._recurse = _recurse
+                postproc_list.append((setattr, (obj, '__dict__', obj.__dict__)))
+                members = None
+            if id(globs) not in pickler.memo:
+                globs_old = globs
+                globs = {'__name__': obj.__module__}
+                if type(globs_old) is not dict:
+                    globs = dict.__new__(type(globs_old), globs)
+                # Code from Python 2 cannot be transfered to Python 3 anyway because of bytecode incompatibility, so this good
+                postproc_list.append((dict.update, (globs, globs_old)))
         else:
-            if PY3:
-                #NOTE: workaround for 'super' (see issue #75)
-                _super = ('super' in getattr(obj.__code__,'co_names',())) and (_byref is not None)
-                fkwdefaults = getattr(obj, '__kwdefaults__', None)
-                _save_with_postproc(pickler, (_create_function, (
-                      obj.__code__, globs, obj.__name__, obj.__defaults__,
-                      obj.__closure__, obj.__dict__, fkwdefaults
-                )), obj=obj)
-            else:
-                _super = ('super' in getattr(obj.func_code,'co_names',())) and (_byref is not None) and getattr(pickler, '_recurse', False)
-                if _super: pickler._byref = True
-                _save_with_postproc(pickler, (_create_function, (
-                    obj.func_code, globs, obj.func_name, obj.func_defaults,
-                    obj.func_closure, obj.__dict__
-                )), obj=obj)
-                if _super: pickler._byref = _byref
+            members = obj.__dict__
+        if PY3:
+            #NOTE: workaround for 'super' (see issue #75)
+            _super = ('super' in getattr(obj.__code__,'co_names',())) and (_byref is not None)
+            fkwdefaults = getattr(obj, '__kwdefaults__', None)
+            _save_with_postproc(pickler, (_create_function, (
+                  obj.__code__, globs, obj.__name__, obj.__defaults__,
+                  obj.__closure__, members, fkwdefaults
+            )), obj=obj, postproc_list=postproc_list) #, delayed_objs=(globs)
+        else:
+            _super = ('super' in getattr(obj.func_code,'co_names',())) and (_byref is not None) and getattr(pickler, '_recurse', False)
+            _save_with_postproc(pickler, (_create_function, (
+                obj.func_code, globs, obj.func_name, obj.func_defaults,
+                obj.func_closure, members
+            )), obj=obj, postproc_list=postproc_list)
        #clear = (_byref, _super, _recurse, _memo)
        #print(clear + (OLDER,))
         #NOTE: workaround for #234; "partial" still is problematic for recurse
@@ -1739,7 +1750,6 @@ def pickles(obj,exact=False,safe=False,**kwds):
             #FIXME: should be "(pik == obj).all()" for numpy comparison, though that'll fail if shapes differ
             result = bool(pik.all() == obj.all())
         except AttributeError:
-            import warnings
             warnings.filterwarnings('ignore')
             result = pik == obj
             warnings.resetwarnings()
