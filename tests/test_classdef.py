@@ -85,8 +85,10 @@ def test_class_objects():
             assert type(_cls).__name__ == "_meta"
 
 # test NoneType
-def test_none():
+def test_specialtypes():
     assert dill.pickles(type(None))
+    assert dill.pickles(type(NotImplemented))
+    assert dill.pickles(type(Ellipsis))
 
 if hex(sys.hexversion) >= '0x20600f0':
     from collections import namedtuple
@@ -204,7 +206,7 @@ def test_slots():
 if __name__ == '__main__':
     test_class_instances()
     test_class_objects()
-    test_none()
+    test_specialtypes()
     test_namedtuple()
     test_dtype()
     test_array_nested()
