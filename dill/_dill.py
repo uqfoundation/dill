@@ -82,6 +82,7 @@ import __main__ as _main_module
 import marshal
 import gc
 # import zlib
+import abc
 from weakref import ReferenceType, ProxyType, CallableProxyType
 from functools import partial
 from operator import itemgetter, attrgetter
@@ -1007,6 +1008,20 @@ def _dict_from_dictproxy(dictproxy):
     _dict.pop('__prepare__', None)
     return _dict
 
+def _dict_from_dictproxy_abc(dictproxy):
+    _dict = dictproxy.copy() # convert dictproxy to dict
+    _dict.pop('__dict__', None)
+    _dict.pop('__weakref__', None)
+    _dict.pop('__prepare__', None)
+    if '_abc_registry' in _dict:
+        del _dict['_abc_registry']
+        del _dict['_abc_cache']
+        del _dict['_abc_negative_cache']
+        del _dict['_abc_negative_cache_version']
+    else:
+        del _dict['_abc_impl']
+    return _dict
+
 def _import_module(import_name, safe=False):
     try:
         if '.' in import_name:
@@ -1597,8 +1612,32 @@ def save_module(pickler, obj):
         return
     return
 
+@register(abc.ABCMeta)
+def save_abc(pickler, obj):
+    """Use StockePickler to ignore ABC internal state which should not be serialized"""
+
+    name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
+    if not _locate_function(obj): # not a function, but the name was held over
+        log.info("ABC2: %s" % obj)
+        if hasattr(abc, '_get_dump'):
+            (registry, _, _, _) = abc._get_dump(obj)
+            register = obj.register
+            postproc_list = [(register, (reg(),)) for reg in registry]
+        elif hasattr(obj, '_abc_registry'):
+            registry = obj._abc_registry
+            register = obj.register
+            postproc_list = [(register, (reg,)) for reg in registry]
+        else:
+            postproc_list = None
+        save_type(pickler, obj, _dict_from_dictproxy_abc, postproc_list)
+        log.info("# ABC2")
+    else:
+        log.info("ABC1: %s" % obj)
+        save_type(pickler, obj)
+        log.info("# ABC1")
+
 @register(TypeType)
-def save_type(pickler, obj, postproc_list=None):
+def save_type(pickler, obj, _dict_from_dictproxy_func=_dict_from_dictproxy, postproc_list=None):
     if obj in _typemap:
         log.info("T1: %s" % obj)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
@@ -1638,7 +1677,7 @@ def save_type(pickler, obj, postproc_list=None):
                 # thanks to Tom Stepleton pointing out pickler._session unneeded
                 _t = 'T2'
                 log.info("%s: %s" % (_t, obj))
-                _dict = _dict_from_dictproxy(obj.__dict__)
+                _dict = _dict_from_dictproxy_func(obj.__dict__)
             else:
                 _t = 'T3'
                 log.info("%s: %s" % (_t, obj))
@@ -1672,9 +1711,10 @@ if IS_PYPY2:
         raise PicklingError('Cannot pickle a Python stack frame')
 
 @register(property)
+@register(abc.abstractproperty)
 def save_property(pickler, obj):
     log.info("Pr: %s" % obj)
-    pickler.save_reduce(property, (obj.fget, obj.fset, obj.fdel, obj.__doc__),
+    pickler.save_reduce(type(obj), (obj.fget, obj.fset, obj.fdel, obj.__doc__),
                         obj=obj)
     log.info("# Pr")
 
@@ -1703,6 +1743,10 @@ def save_classmethod(pickler, obj):
 
     pickler.save_reduce(type(obj), (orig_func,), obj=obj)
     log.info("# Cm")
+
+if sys.hexversion >= 0x03020000:
+    register(abc.abstractstaticmethod)(save_classmethod)
+    register(abc.abstractclassmethod)(save_classmethod)
 
 @register(FunctionType)
 def save_function(pickler, obj):
