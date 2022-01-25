@@ -114,6 +114,13 @@ def test_namedtuple():
     assert Bad._fields == dill.loads(dill.dumps(Bad))._fields
     assert tuple(Badi) == tuple(dill.loads(dill.dumps(Badi)))
 
+    class A:
+        class B(namedtuple("B", ["one", "two"])):
+            pass
+
+    a = A()
+    assert dill.copy(a)
+
 def test_dtype():
     try:
         import numpy as np
