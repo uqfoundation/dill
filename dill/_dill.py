@@ -18,7 +18,8 @@ Test against CH16+ Std. Lib. ... TBD.
 __all__ = ['dump','dumps','load','loads','dump_session','load_session',
            'Pickler','Unpickler','register','copy','pickle','pickles',
            'check','HIGHEST_PROTOCOL','DEFAULT_PROTOCOL','PicklingError',
-           'UnpicklingError','HANDLE_FMODE','CONTENTS_FMODE','FILE_FMODE']
+           'UnpicklingError','HANDLE_FMODE','CONTENTS_FMODE','FILE_FMODE',
+           'PickleError','PickleWarning','PicklingWarning','UnpicklingWarning']
 
 import logging
 log = logging.getLogger("dill")
@@ -1043,8 +1044,8 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
 
         # Recursive object not supported. Default to a global instead.
         if id(obj) in pickler._postproc:
-            name = '(%s.%s) ' % (obj.__module__, getattr(obj, '__qualname__', obj.__name__)) if hasattr(obj, '__module__') else ''
-            warnings.warn('%s %shas strange recursive properties. Cannot pickle.' % (obj, name, PicklingWarning))
+            name = '%s.%s ' % (obj.__module__, getattr(obj, '__qualname__', obj.__name__)) if hasattr(obj, '__module__') else ''
+            warnings.warn('Cannot perfectly pickle %r: %shas recursive self-references that would trigger a RecursionError.' % (obj, name, PicklingWarning))
             pickler.save_global(obj)
             return
         pickler._postproc[id(obj)] = postproc_list
@@ -1631,7 +1632,8 @@ def save_type(pickler, obj, postproc_list=None):
         obj_name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
         _byref = getattr(pickler, '_byref', None)
         obj_recursive = id(obj) in getattr(pickler, '_postproc', ())
-        if not _byref and not obj_recursive and not _locate_function(obj): # not a function, but the name was held over
+        incorrectly_named = not _locate_function(obj)
+        if not _byref and not obj_recursive and incorrectly_named: # not a function, but the name was held over
             if issubclass(type(obj), type):
                 # thanks to Tom Stepleton pointing out pickler._session unneeded
                 _t = 'T2'
@@ -1652,10 +1654,10 @@ def save_type(pickler, obj, postproc_list=None):
             log.info("# %s" % _t)
         else:
             log.info("T4: %s" % obj)
-            if _byref:
-                warnings.warn('The byref setting is on, but %s cannot be located.' % (obj,), PicklingWarning)
+            if incorrectly_named:
+                warnings.warn('Cannot locate reference to %r.' % (obj,), PicklingWarning)
             if obj_recursive:
-                warnings.warn('%s.__dict__ contains %s. Cannot pickle recursive classes.' % (obj_name, obj), PicklingWarning)
+                warnings.warn('Cannot perfectly pickle %r: %s.%s has recursive self-references that would trigger a RecursionError.' % (obj, obj.__module__, obj_name, PicklingWarning))
            #print (obj.__dict__)
            #print ("%s\n%s" % (type(obj), obj.__name__))
            #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
@@ -1704,8 +1706,6 @@ def save_classmethod(pickler, obj):
 
 @register(FunctionType)
 def save_function(pickler, obj):
-    # obj_recursive = id(obj) in getattr(pickler, '_postproc', ())
-    # assert not obj_recursive, '%s has a bizarre structure. Open an issue.' % (obj,)
     if not _locate_function(obj): #, pickler._session):
         log.info("F1: %s" % obj)
         _recurse = getattr(pickler, '_recurse', None)
@@ -1748,7 +1748,6 @@ def save_function(pickler, obj):
                 postproc_list.append((dict.update, (globs, globs_copy)))
 
         if PY3:
-            #NOTE: workaround for 'super' (see issue #75) removed in #443
             fkwdefaults = getattr(obj, '__kwdefaults__', None)
             _save_with_postproc(pickler, (_create_function, (
                   obj.__code__, globs, obj.__name__, obj.__defaults__,
