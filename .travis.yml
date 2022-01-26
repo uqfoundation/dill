@@ -28,9 +28,6 @@ matrix:
         - python: '3.11-dev'
           env:
 
-        - python: 'nightly'
-          env:
-
         - python: 'pypy2.7-7.3.1' # most recent
           dist: xenial
           env:
@@ -47,7 +44,6 @@ matrix:
         - python: '2.7'
         - python: 'pypy2.7-7.3.1'
         - python: '3.11-dev'
-        - python: 'nightly'
     fast_finish: true
 
 cache:
