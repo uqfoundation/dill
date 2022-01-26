@@ -1045,7 +1045,7 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
         # Recursive object not supported. Default to a global instead.
         if id(obj) in pickler._postproc:
             name = '%s.%s ' % (obj.__module__, getattr(obj, '__qualname__', obj.__name__)) if hasattr(obj, '__module__') else ''
-            warnings.warn('Cannot perfectly pickle %r: %shas recursive self-references that would trigger a RecursionError.' % (obj, name, PicklingWarning))
+            warnings.warn('Cannot pickle %r: %shas recursive self-references that trigger a RecursionError.' % (obj, name), PicklingWarning)
             pickler.save_global(obj)
             return
         pickler._postproc[id(obj)] = postproc_list
@@ -1657,7 +1657,7 @@ def save_type(pickler, obj, postproc_list=None):
             if incorrectly_named:
                 warnings.warn('Cannot locate reference to %r.' % (obj,), PicklingWarning)
             if obj_recursive:
-                warnings.warn('Cannot perfectly pickle %r: %s.%s has recursive self-references that would trigger a RecursionError.' % (obj, obj.__module__, obj_name, PicklingWarning))
+                warnings.warn('Cannot pickle %r: %s.%s has recursive self-references that trigger a RecursionError.' % (obj, obj.__module__, obj_name), PicklingWarning)
            #print (obj.__dict__)
            #print ("%s\n%s" % (type(obj), obj.__name__))
            #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
@@ -1690,18 +1690,18 @@ def save_classmethod(pickler, obj):
         if isinstance(obj, classmethod):
             orig_func = getattr(orig_func, im_func) # Unbind
 
-    if PY3:
-        if type(obj.__dict__) is dict:
-            if obj.__dict__:
-                state = obj.__dict__
-            else:
-                state = None
-        else:
-            state = (None, {'__dict__', obj.__dict__})
-    else:
-        state = None
+    # if PY3:
+    #     if type(obj.__dict__) is dict:
+    #         if obj.__dict__:
+    #             state = obj.__dict__
+    #         else:
+    #             state = None
+    #     else:
+    #         state = (None, {'__dict__', obj.__dict__})
+    # else:
+    #     state = None
 
-    pickler.save_reduce(type(obj), (orig_func,), state, obj=obj)
+    pickler.save_reduce(type(obj), (orig_func,), obj=obj)
     log.info("# Cm")
 
 @register(FunctionType)
