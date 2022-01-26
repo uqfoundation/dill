@@ -22,7 +22,10 @@ matrix:
         - python: '3.9'
           env:
 
-        - python: '3.10-dev'
+        - python: '3.10'
+          env:
+
+        - python: '3.11-dev'
           env:
 
         - python: 'nightly'
@@ -43,6 +46,7 @@ matrix:
     allow_failures:
         - python: '2.7'
         - python: 'pypy2.7-7.3.1'
+        - python: '3.11-dev'
         - python: 'nightly'
     fast_finish: true
 
