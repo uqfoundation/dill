@@ -54,6 +54,14 @@ n = _newclass()
 nc = _newclass2()
 m = _mclass()
 
+if sys.hexversion >= 0x03070000:
+    import typing
+    class customIntList(typing.List[int]):
+        pass
+elif sys.hexversion >= 0x03090000:
+    class customIntList(list[int]):
+        pass
+
 # test pickles for class instances
 def test_class_instances():
     assert dill.pickles(o)
@@ -127,7 +135,7 @@ def test_dtype():
 def test_array_nested():
     try:
         import numpy as np
-    
+
         x = np.array([1])
         y = (x,)
         dill.dumps(x)
@@ -202,6 +210,10 @@ def test_slots():
     assert dill.pickles(Y.y)
     assert dill.copy(y).y == value
 
+def test_origbases():
+    if sys.hexversion >= 0x03070000:
+        assert dill.copy(customIntList).__orig_bases__ == customIntList.__orig_bases__
+
 
 if __name__ == '__main__':
     test_class_instances()
@@ -213,3 +225,4 @@ if __name__ == '__main__':
     test_array_subclass()
     test_method_decorator()
     test_slots()
+    test_origbases()

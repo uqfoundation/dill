@@ -79,8 +79,8 @@ def test_abc_non_local():
     # Set a property that StockPickle can't preserve
     instance.bar = lambda x: x**2
     depickled = dill.copy(instance)
-    assert type(depickled) == type(instance)
-    assert type(depickled.bar) == FunctionType
+    assert type(depickled) is not type(instance)
+    assert type(depickled.bar) is FunctionType
     assert depickled.bar(3) == 9
     assert depickled.sfoo() == "Static Method SFOO"
     assert depickled.cfoo() == "Class Method CFOO"

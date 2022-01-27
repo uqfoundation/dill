@@ -73,7 +73,8 @@ else:
          GeneratorType, DictProxyType, XRangeType, SliceType, TracebackType, \
          NotImplementedType, EllipsisType, FrameType, ModuleType, \
          BufferType, BuiltinMethodType, TypeType
-from pickle import HIGHEST_PROTOCOL, PickleError, PicklingError, UnpicklingError
+from pickle import HIGHEST_PROTOCOL, PickleError, PicklingError, \
+    UnpicklingError
 try:
     from pickle import DEFAULT_PROTOCOL
 except ImportError:
@@ -262,6 +263,14 @@ except NameError:
     try: ExitType = type(exit) # apparently 'exit' can be removed
     except NameError: ExitType = None
     singletontypes = []
+
+from collections import OrderedDict
+
+try:
+    from enum import Enum, EnumMeta
+except:
+    Enum = None
+    EnumMeta = None
 
 import inspect
 
@@ -1002,24 +1011,11 @@ def _get_attr(self, name):
     return getattr(self, name, None) or getattr(__builtin__, name)
 
 def _dict_from_dictproxy(dictproxy):
+    # Deprecated. Use _get_typedict_type instead.
     _dict = dictproxy.copy() # convert dictproxy to dict
     _dict.pop('__dict__', None)
     _dict.pop('__weakref__', None)
     _dict.pop('__prepare__', None)
-    return _dict
-
-def _dict_from_dictproxy_abc(dictproxy):
-    _dict = dictproxy.copy() # convert dictproxy to dict
-    _dict.pop('__dict__', None)
-    _dict.pop('__weakref__', None)
-    _dict.pop('__prepare__', None)
-    if '_abc_registry' in _dict:
-        del _dict['_abc_registry']
-        del _dict['_abc_cache']
-        del _dict['_abc_negative_cache']
-        del _dict['_abc_negative_cache_version']
-    else:
-        del _dict['_abc_impl']
     return _dict
 
 def _import_module(import_name, safe=False):
@@ -1036,12 +1032,39 @@ def _import_module(import_name, safe=False):
             return None
         raise
 
-def _locate_function(obj, session=False):
-    if obj.__module__ in ['__main__', None]: # and session:
-        return False
-    found = _import_module(obj.__module__ + '.' + obj.__name__, safe=True)
-    return found is obj
+# https://github.com/python/cpython/blob/a8912a0f8d9eba6d502c37d522221f9933e976db/Lib/pickle.py#L322-L333
+def _getattribute(obj, name):
+    for subpath in name.split('.'):
+        if subpath == '<locals>':
+            raise AttributeError("Can't get local attribute {!r} on {!r}"
+                                 .format(name, obj))
+        try:
+            parent = obj
+            obj = getattr(obj, subpath)
+        except AttributeError:
+            raise AttributeError("Can't get attribute {!r} on {!r}"
+                                 .format(name, obj))
+    return obj, parent
 
+def _locate_function(obj, session=False):
+    module_name = getattr(obj, '__module__', None)
+    if module_name in ['__main__', None]: # and session:
+        return False
+    if hasattr(obj, '__qualname__'):
+        module = _import_module(module_name, safe=True)
+        try:
+            found, _ = _getattribute(module, obj.__qualname__)
+            return found is obj
+        except:
+            return False
+    else:
+        found = _import_module(module_name + '.' + obj.__name__, safe=True)
+        return found is obj
+
+
+def _setitems(dest, source):
+    for k, v in source.items():
+        dest[k] = v
 
 def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO_DEFAULT, postproc_list=None):
     if obj is Getattr.NO_DEFAULT:
@@ -1074,7 +1097,7 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
         postproc = pickler._postproc.pop(id(obj))
         # assert postproc_list == postproc, 'Stack tampered!'
         for reduction in reversed(postproc):
-            if reduction[0] is dict.update and type(reduction[1][0]) is dict:
+            if reduction[0] is _setitems:
                 # use the internal machinery of pickle.py to speedup when
                 # updating a dictionary in postproc
                 dest, source = reduction[1]
@@ -1612,32 +1635,77 @@ def save_module(pickler, obj):
         return
     return
 
-@register(abc.ABCMeta)
-def save_abc(pickler, obj):
-    """Use StockePickler to ignore ABC internal state which should not be serialized"""
-
-    name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
-    if not _locate_function(obj): # not a function, but the name was held over
-        log.info("ABC2: %s" % obj)
-        if hasattr(abc, '_get_dump'):
-            (registry, _, _, _) = abc._get_dump(obj)
-            register = obj.register
-            postproc_list = [(register, (reg(),)) for reg in registry]
-        elif hasattr(obj, '_abc_registry'):
-            registry = obj._abc_registry
-            register = obj.register
-            postproc_list = [(register, (reg,)) for reg in registry]
-        else:
-            postproc_list = None
-        save_type(pickler, obj, _dict_from_dictproxy_abc, postproc_list)
-        log.info("# ABC2")
+# The following function is based on '_extract_class_dict' from 'cloudpickle'
+# Copyright (c) 2012, Regents of the University of California.
+# Copyright (c) 2009 `PiCloud, Inc. <http://www.picloud.com>`_.
+# License: https://github.com/cloudpipe/cloudpickle/blob/master/LICENSE
+def _get_typedict_type(cls, clsdict, postproc_list):
+    """Retrieve a copy of the dict of a class without the inherited methods"""
+    if len(cls.__bases__) == 1:
+        inherited_dict = cls.__bases__[0].__dict__
     else:
-        log.info("ABC1: %s" % obj)
-        save_type(pickler, obj)
-        log.info("# ABC1")
+        inherited_dict = {}
+        for base in reversed(cls.__bases__):
+            inherited_dict.update(base.__dict__)
+    to_remove = []
+    for name, value in dict.items(clsdict):
+        try:
+            base_value = inherited_dict[name]
+            if value is base_value:
+                to_remove.append(name)
+        except KeyError:
+            pass
+    for name in to_remove:
+        dict.pop(clsdict, name)
+
+    if issubclass(type(cls), type):
+        clsdict.pop('__dict__', None)
+        clsdict.pop('__weakref__', None)
+        # clsdict.pop('__prepare__', None)
+    return clsdict
+    # return _dict_from_dictproxy(cls.__dict__)
+
+def _get_typedict_abc(obj, _dict, state, postproc_list):
+    log.info("ABC: %s" % obj)
+    if hasattr(abc, '_get_dump'):
+        (registry, _, _, _) = abc._get_dump(obj)
+        register = obj.register
+        postproc_list.extend((register, (reg(),)) for reg in registry)
+    elif hasattr(obj, '_abc_registry'):
+        registry = obj._abc_registry
+        register = obj.register
+        postproc_list.extend((register, (reg,)) for reg in registry)
+    else:
+        raise PicklingError("Cannot find registry of ABC %s", obj)
+
+    if '_abc_registry' in _dict:
+        del _dict['_abc_registry']
+        del _dict['_abc_cache']
+        del _dict['_abc_negative_cache']
+        # del _dict['_abc_negative_cache_version']
+    else:
+        del _dict['_abc_impl']
+    log.info("# ABC")
+    return _dict, state
+
+def _get_typedict_enum(obj, _dict, state, postproc_list):
+    log.info("E: %s" % obj)
+    metacls = type(obj)
+    original_dict = {}
+    for name, enum_value in obj.__members__.items():
+        original_dict[name] = enum_value.value
+        del _dict[name]
+
+    _dict.pop('_member_names_', None)
+    _dict.pop('_member_map_', None)
+    _dict.pop('_value2member_map_', None)
+    _dict.pop('_generate_next_value_', None)
+
+    log.info("# E")
+    return original_dict, (None, _dict)
 
 @register(TypeType)
-def save_type(pickler, obj, _dict_from_dictproxy_func=_dict_from_dictproxy, postproc_list=None):
+def save_type(pickler, obj, postproc_list=None):
     if obj in _typemap:
         log.info("T1: %s" % obj)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
@@ -1673,23 +1741,46 @@ def save_type(pickler, obj, _dict_from_dictproxy_func=_dict_from_dictproxy, post
         obj_recursive = id(obj) in getattr(pickler, '_postproc', ())
         incorrectly_named = not _locate_function(obj)
         if not _byref and not obj_recursive and incorrectly_named: # not a function, but the name was held over
-            if issubclass(type(obj), type):
-                # thanks to Tom Stepleton pointing out pickler._session unneeded
-                _t = 'T2'
-                log.info("%s: %s" % (_t, obj))
-                _dict = _dict_from_dictproxy_func(obj.__dict__)
-            else:
-                _t = 'T3'
-                log.info("%s: %s" % (_t, obj))
-                _dict = obj.__dict__
+            if postproc_list is None:
+                postproc_list = []
+
+            # thanks to Tom Stepleton pointing out pickler._session unneeded
+            _t = 'T3'
+            _dict = _get_typedict_type(obj, obj.__dict__.copy(), postproc_list) # copy dict proxy to a dict
+            state = None
+
+            for name in _dict.get("__slots__", []):
+                del _dict[name]
+
+            if isinstance(obj, abc.ABCMeta):
+                _dict, state = _get_typedict_abc(obj, _dict, state, postproc_list)
+
+            if EnumMeta and isinstance(obj, EnumMeta):
+                _dict, state = _get_typedict_enum(obj, _dict, state, postproc_list)
+
            #print (_dict)
            #print ("%s\n%s" % (type(obj), obj.__name__))
            #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
-            for name in _dict.get("__slots__", []):
-                del _dict[name]
-            _save_with_postproc(pickler, (_create_type, (
-                type(obj), obj_name, obj.__bases__, _dict
-            )), obj=obj, postproc_list=postproc_list)
+
+            if PY3 and type(obj) is not type or hasattr(obj, '__orig_bases__'):
+                from types import new_class
+                _metadict = {
+                    'metaclass': type(obj)
+                }
+
+                if _dict:
+                    _dict_update = PartialType(_setitems, source=_dict)
+                else:
+                    _dict_update = None
+
+                bases = getattr(obj, '__orig_bases__', obj.__bases__)
+                _save_with_postproc(pickler, (new_class, (
+                    obj_name, bases, _metadict, _dict_update
+                )), state, obj=obj, postproc_list=postproc_list)
+            else:
+                _save_with_postproc(pickler, (_create_type, (
+                    type(obj), obj_name, obj.__bases__, _dict
+                )), state, obj=obj, postproc_list=postproc_list)
             log.info("# %s" % _t)
         else:
             log.info("T4: %s" % obj)
@@ -1784,12 +1875,13 @@ def save_function(pickler, obj):
                 glob_ids = {id(g) for g in globs_copy.values()}
             else:
                 glob_ids = {id(g) for g in globs_copy.itervalues()}
+
             for stack_element in _postproc:
                 if stack_element in glob_ids:
-                    _postproc[stack_element].append((dict.update, (globs, globs_copy)))
+                    _postproc[stack_element].append((_setitems, (globs, globs_copy)))
                     break
             else:
-                postproc_list.append((dict.update, (globs, globs_copy)))
+                postproc_list.append((_setitems, (globs, globs_copy)))
 
         if PY3:
             fkwdefaults = getattr(obj, '__kwdefaults__', None)
