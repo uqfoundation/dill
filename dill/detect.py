@@ -157,7 +157,16 @@ def freevars(func):
         func = getattr(func, func_code).co_freevars # get freevars
     else:
         return {}
-    return dict((name,c.cell_contents) for (name,c) in zip(func,closures))
+
+    def get_cell_contents():
+        for (name,c) in zip(func,closures):
+            try:
+                cell_contents = c.cell_contents
+            except:
+                continue
+            yield (name,c.cell_contents)
+
+    return dict(get_cell_contents())
 
 # thanks to Davies Liu for recursion of globals
 def nestedglobals(func, recurse=True):
@@ -201,9 +210,14 @@ def globalvars(func, recurse=True, builtin=False):
         # get references from within closure
         orig_func, func = func, set()
         for obj in getattr(orig_func, func_closure) or {}:
-            _vars = globalvars(obj.cell_contents, recurse, builtin) or {}
-            func.update(_vars) #XXX: (above) be wary of infinte recursion?
-            globs.update(_vars)
+            try:
+                cell_contents = obj.cell_contents
+            except:
+                pass
+            else:
+                _vars = globalvars(cell_contents, recurse, builtin) or {}
+                func.update(_vars) #XXX: (above) be wary of infinte recursion?
+                globs.update(_vars)
         # get globals
         globs.update(getattr(orig_func, func_globals) or {})
         # get names of references

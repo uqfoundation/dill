@@ -25,7 +25,8 @@ __license__ = """
 from ._dill import dump, dumps, load, loads, dump_session, load_session, \
     Pickler, Unpickler, register, copy, pickle, pickles, check, \
     HIGHEST_PROTOCOL, DEFAULT_PROTOCOL, PicklingError, UnpicklingError, \
-    HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE
+    HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE, PickleError, PickleWarning, \
+    PicklingWarning, UnpicklingWarning
 from . import source, temp, detect
 
 # get global settings

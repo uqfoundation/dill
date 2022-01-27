@@ -36,6 +36,12 @@ def function_e(e, *e1, e2=1, e3=2):
     return e + sum(e1) + e2 + e3''')
 
 
+def function_with_unassigned_variable():
+    if False:
+        value = None
+    return (lambda: value)
+
+
 def test_functions():
     dumped_func_a = dill.dumps(function_a)
     assert dill.loads(dumped_func_a)(0) == 0
@@ -52,6 +58,17 @@ def test_functions():
     assert dill.loads(dumped_func_d)(1, 2, 3) == 6
     assert dill.loads(dumped_func_d)(1, 2, d2=3) == 6
 
+    empty_cell = function_with_unassigned_variable()
+    cell_copy = dill.loads(dill.dumps(empty_cell))
+    assert 'empty' in str(cell_copy.__closure__[0])
+    try:
+        cell_copy()
+    except:
+        # this is good
+        pass
+    else:
+        raise AssertionError('cell_copy() did not read an empty cell')
+
     if is_py3():
         exec('''
 dumped_func_e = dill.dumps(function_e)
@@ -61,7 +78,6 @@ assert dill.loads(dumped_func_e)(1, 2, e2=3) == 8
 assert dill.loads(dumped_func_e)(1, 2, e2=3, e3=4) == 10
 assert dill.loads(dumped_func_e)(1, 2, 3, e2=4) == 12
 assert dill.loads(dumped_func_e)(1, 2, 3, e2=4, e3=5) == 15''')
-
 
 if __name__ == '__main__':
     test_functions()
