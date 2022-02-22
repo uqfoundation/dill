@@ -644,7 +644,7 @@ def _namespace(obj):
     # mostly for functions and modules and such
     #FIXME: 'wrong' for decorators and curried functions
     try: #XXX: needs some work and testing on different types
-        module = qual = str(getmodule(obj)).split()[1].strip('"').strip("'")
+        module = qual = str(getmodule(obj)).split()[1].strip('>').strip('"').strip("'")
         qual = qual.split('.')
         if ismodule(obj):
             return qual
