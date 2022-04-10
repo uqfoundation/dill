@@ -154,6 +154,19 @@ def test_recursive_function():
     fib = fib4
 
 
+def collection_function_recursion():
+    d = {}
+    def g():
+        return d
+    d['g'] = g
+    return g
+
+
+def test_collection_function_recursion():
+    g = copy(collection_function_recursion())
+    assert g()['g'] is g
+
+
 if __name__ == '__main__':
     with warnings.catch_warnings():
         warnings.simplefilter('error')
@@ -163,3 +176,4 @@ if __name__ == '__main__':
         test_circular_reference()
         test_function_cells()
         test_recursive_function()
+        test_collection_function_recursion()
