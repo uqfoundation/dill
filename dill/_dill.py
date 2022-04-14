@@ -710,11 +710,6 @@ def _create_function(fcode, fglobals, fname=None, fdefaults=None,
     func = FunctionType(fcode, fglobals or dict(), fname, fdefaults, fclosure)
     if fdict is not None:
         func.__dict__.update(fdict) #XXX: better copy? option to copy?
-    elif IS_PYPY2:
-        # __reduce__ crashes in PyPy2
-        # __setstate__ is not used in any PyPy2 code and is removed in PyPy3
-        # so is likely an artifact
-        func.__setstate__ = None
     if fkwdefaults is not None:
         func.__kwdefaults__ = fkwdefaults
     # 'recurse' only stores referenced modules/objects in fglobals,
@@ -1767,12 +1762,14 @@ def save_function(pickler, obj):
 
         if PY3:
             state_dict = {}
-            for fattrname in ('__kwdefaults__', '__annotations__'):
+            for fattrname in ('__doc__', '__kwdefaults__', '__annotations__'):
                 fattr = getattr(obj, fattrname, None)
                 if fattr is not None:
                     state_dict[fattrname] = fattr
             if obj.__qualname__ != obj.__name__:
                 state_dict['__qualname__'] = obj.__qualname__
+            if '__name__' not in globs or obj.__module__ != globs['__name__']:
+                state_dict['__module__'] = obj.__module__
 
             state = obj.__dict__
             if type(state) is not dict:
@@ -1786,10 +1783,15 @@ def save_function(pickler, obj):
                   obj.__closure__
             ), state), obj=obj, postproc_list=postproc_list)
         else:
+            if obj.__doc__ is not None:
+                postproc_list.append((setattr, (obj, '__doc__', obj.__doc__)))
+            if '__name__' not in globs or obj.__module__ != globs['__name__']:
+                postproc_list.append((setattr, (obj, '__module__', obj.__module__)))
+
             _save_with_postproc(pickler, (_create_function, (
                 obj.func_code, globs, obj.func_name, obj.func_defaults,
-                obj.func_closure
-            ), obj.__dict__), obj=obj, postproc_list=postproc_list)
+                obj.func_closure, obj.__dict__
+            )), obj=obj, postproc_list=postproc_list)
         log.info("# F1")
     else:
         log.info("F2: %s" % obj)
