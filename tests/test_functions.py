@@ -5,6 +5,7 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
+import functools
 import dill
 import sys
 dill.settings['recurse'] = True
@@ -35,6 +36,14 @@ if is_py3():
 def function_e(e, *e1, e2=1, e3=2):
     return e + sum(e1) + e2 + e3''')
 
+    globalvar = 0
+
+    @functools.lru_cache(None)
+    def function_with_cache(x):
+        global globalvar
+        globalvar += x
+        return globalvar
+
 
 def function_with_unassigned_variable():
     if False:
@@ -57,6 +66,15 @@ def test_functions():
     assert dill.loads(dumped_func_d)(1, 2) == 4
     assert dill.loads(dumped_func_d)(1, 2, 3) == 6
     assert dill.loads(dumped_func_d)(1, 2, d2=3) == 6
+
+    if is_py3():
+        function_with_cache(1)
+        globalvar = 0
+        dumped_func_cache = dill.dumps(function_with_cache)
+        assert function_with_cache(2) == 3
+        assert function_with_cache(1) == 1
+        assert function_with_cache(3) == 6
+        assert function_with_cache(2) == 3
 
     empty_cell = function_with_unassigned_variable()
     cell_copy = dill.loads(dill.dumps(empty_cell))
