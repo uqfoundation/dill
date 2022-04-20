@@ -1777,8 +1777,12 @@ def save_type(pickler, obj, postproc_list=None):
            #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
             for name in _dict.get("__slots__", []):
                 del _dict[name]
+            if PY3 and obj_name != obj.__name__:
+                if postproc_list is None:
+                    postproc_list = []
+                postproc_list.append((setattr, (obj, '__qualname__', obj_name)))
             _save_with_postproc(pickler, (_create_type, (
-                type(obj), obj_name, obj.__bases__, _dict
+                type(obj), obj.__name__, obj.__bases__, _dict
             )), obj=obj, postproc_list=postproc_list)
             log.info("# %s" % _t)
         else:
