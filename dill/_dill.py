@@ -40,6 +40,8 @@ PY3 = (sys.hexversion >= 0x3000000)
 OLDER = (PY3 and sys.hexversion < 0x3040000) or (sys.hexversion < 0x2070ab1)
 OLD33 = (sys.hexversion < 0x3030000)
 OLD37 = (sys.hexversion < 0x3070000)
+OLD39 = (sys.hexversion < 0x3090000)
+OLD310 = (sys.hexversion < 0x30a0000)
 PY34 = (0x3040000 <= sys.hexversion < 0x3050000)
 if PY3: #XXX: get types from .objtypes ?
     import builtins as __builtin__
@@ -219,6 +221,14 @@ SuperType = type(super(Exception, TypeError()))
 ItemGetterType = type(itemgetter(0))
 AttrGetterType = type(attrgetter('__repr__'))
 
+try:
+    from functools import _lru_cache_wrapper as LRUCacheType
+except:
+    LRUCacheType = None
+
+if not isinstance(LRUCacheType, type):
+    LRUCacheType = None
+
 def get_file_type(*args, **kwargs):
     open = kwargs.pop("open", __builtin__.open)
     f = open(os.devnull, *args, **kwargs)
@@ -261,6 +271,8 @@ except NameError:
     try: ExitType = type(exit) # apparently 'exit' can be removed
     except NameError: ExitType = None
     singletontypes = []
+
+from collections import OrderedDict
 
 import inspect
 
@@ -518,7 +530,8 @@ class Pickler(StockPickler):
         self._strictio = False #_strictio
         self._fmode = settings['fmode'] if _fmode is None else _fmode
         self._recurse = settings['recurse'] if _recurse is None else _recurse
-        self._postproc = {}
+        from collections import OrderedDict
+        self._postproc = OrderedDict()
 
     def dump(self, obj): #NOTE: if settings change, need to update attributes
         # register if the object is a numpy ufunc
@@ -913,6 +926,23 @@ class _attrgetter_helper(object):
             attrs[index] = ".".join([attrs[index], attr])
         return type(self)(attrs, index)
 
+class _dictproxy_helper(dict):
+   def __ror__(self, a):
+        return a
+
+_dictproxy_helper_instance = _dictproxy_helper()
+
+__d = {}
+try:
+    # In CPython 3.9 and later, this trick can be used to exploit the
+    # implementation of the __or__ function of MappingProxyType to get the true
+    # mapping referenced by the proxy. It may work for other implementations,
+    # but is not guaranteed.
+    MAPPING_PROXY_TRICK = __d is (DictProxyType(__d) | _dictproxy_helper_instance)
+except:
+    MAPPING_PROXY_TRICK = False
+del __d
+
 # _CELL_REF and _CELL_EMPTY are used to stay compatible with versions of dill
 # whose _create_cell functions do not have a default value.
 # _CELL_REF can be safely removed entirely (replaced by empty tuples for calls
@@ -1174,6 +1204,62 @@ def save_module_dict(pickler, obj):
         log.info("# D2")
     return
 
+
+if not OLD310 and MAPPING_PROXY_TRICK:
+    def save_dict_view(dicttype):
+        def save_dict_view_for_function(func):
+            def _save_dict_view(pickler, obj):
+                log.info("Dkvi: <%s>" % (obj,))
+                mapping = obj.mapping | _dictproxy_helper_instance
+                pickler.save_reduce(func, (mapping,), obj=obj)
+                log.info("# Dkvi")
+            return _save_dict_view
+        return [
+            (funcname, save_dict_view_for_function(getattr(dicttype, funcname)))
+            for funcname in ('keys', 'values', 'items')
+        ]
+else:
+    # The following functions are based on 'cloudpickle'
+    # https://github.com/cloudpipe/cloudpickle/blob/5d89947288a18029672596a4d719093cc6d5a412/cloudpickle/cloudpickle.py#L922-L940
+    # Copyright (c) 2012, Regents of the University of California.
+    # Copyright (c) 2009 `PiCloud, Inc. <http://www.picloud.com>`_.
+    # License: https://github.com/cloudpipe/cloudpickle/blob/master/LICENSE
+    def save_dict_view(dicttype):
+        def save_dict_keys(pickler, obj):
+            log.info("Dk: <%s>" % (obj,))
+            dict_constructor = _shims.Reduce(dicttype.fromkeys, (list(obj),))
+            pickler.save_reduce(dicttype.keys, (dict_constructor,), obj=obj)
+            log.info("# Dk")
+
+        def save_dict_values(pickler, obj):
+            log.info("Dv: <%s>" % (obj,))
+            dict_constructor = _shims.Reduce(dicttype, (enumerate(obj),))
+            pickler.save_reduce(dicttype.values, (dict_constructor,), obj=obj)
+            log.info("# Dv")
+
+        def save_dict_items(pickler, obj):
+            log.info("Di: <%s>" % (obj,))
+            pickler.save_reduce(dicttype.items, (dicttype(obj),), obj=obj)
+            log.info("# Di")
+
+        return (
+            ('keys', save_dict_keys),
+            ('values', save_dict_values),
+            ('items', save_dict_items)
+        )
+
+for __dicttype in (
+      dict,
+      OrderedDict
+):
+    __obj = __dicttype()
+    for __funcname, __savefunc in save_dict_view(__dicttype):
+        __tview = type(getattr(__obj, __funcname)())
+        if __tview not in Pickler.dispatch:
+            Pickler.dispatch[__tview] = __savefunc
+del __dicttype, __obj, __funcname, __tview, __savefunc
+
+
 @register(ClassType)
 def save_classobj(pickler, obj): #FIXME: enable pickler._byref
     if obj.__module__ == '__main__': #XXX: use _main_module.__name__ everywhere?
@@ -1214,24 +1300,25 @@ if not IS_PYPY2:
         log.info("# So")
         return
 
-@register(ItemGetterType)
-def save_itemgetter(pickler, obj):
-    log.info("Ig: %s" % obj)
-    helper = _itemgetter_helper()
-    obj(helper)
-    pickler.save_reduce(type(obj), tuple(helper.items), obj=obj)
-    log.info("# Ig")
-    return
+if sys.hexversion <= 0x3050000:
+    @register(ItemGetterType)
+    def save_itemgetter(pickler, obj):
+        log.info("Ig: %s" % obj)
+        helper = _itemgetter_helper()
+        obj(helper)
+        pickler.save_reduce(type(obj), tuple(helper.items), obj=obj)
+        log.info("# Ig")
+        return
 
-@register(AttrGetterType)
-def save_attrgetter(pickler, obj):
-    log.info("Ag: %s" % obj)
-    attrs = []
-    helper = _attrgetter_helper(attrs)
-    obj(helper)
-    pickler.save_reduce(type(obj), tuple(attrs), obj=obj)
-    log.info("# Ag")
-    return
+    @register(AttrGetterType)
+    def save_attrgetter(pickler, obj):
+        log.info("Ag: %s" % obj)
+        attrs = []
+        helper = _attrgetter_helper(attrs)
+        obj(helper)
+        pickler.save_reduce(type(obj), tuple(attrs), obj=obj)
+        log.info("# Ag")
+        return
 
 def _save_file(pickler, obj, open_):
     if obj.closed:
@@ -1311,13 +1398,33 @@ if InputType:
         log.info("# Io")
         return
 
-@register(PartialType)
-def save_functor(pickler, obj):
-    log.info("Fu: %s" % obj)
-    pickler.save_reduce(_create_ftype, (type(obj), obj.func, obj.args,
-                                        obj.keywords), obj=obj)
-    log.info("# Fu")
-    return
+if 0x2050000 <= sys.hexversion < 0x3010000:
+    @register(PartialType)
+    def save_functor(pickler, obj):
+        log.info("Fu: %s" % obj)
+        pickler.save_reduce(_create_ftype, (type(obj), obj.func, obj.args,
+                                            obj.keywords), obj=obj)
+        log.info("# Fu")
+        return
+
+if LRUCacheType is not None:
+    from functools import lru_cache
+    @register(LRUCacheType)
+    def save_lru_cache(pickler, obj):
+        log.info("LRU: %s" % obj)
+        if OLD39:
+            kwargs = obj.cache_info()
+            args = (kwargs.maxsize,)
+        else:
+            kwargs = obj.cache_parameters()
+            args = (kwargs['maxsize'], kwargs['typed'])
+        if args != lru_cache.__defaults__:
+            wrapper = Reduce(lru_cache, args, is_callable=True)
+        else:
+            wrapper = lru_cache
+        pickler.save_reduce(wrapper, (obj.__wrapped__,), obj=obj)
+        log.info("# LRU")
+        return
 
 @register(SuperType)
 def save_super(pickler, obj):
@@ -1326,41 +1433,42 @@ def save_super(pickler, obj):
     log.info("# Su")
     return
 
-@register(BuiltinMethodType)
-def save_builtin_method(pickler, obj):
-    if obj.__self__ is not None:
-        if obj.__self__ is __builtin__:
-            module = 'builtins' if PY3 else '__builtin__'
-            _t = "B1"
-            log.info("%s: %s" % (_t, obj))
+if OLDER or not PY3:
+    @register(BuiltinMethodType)
+    def save_builtin_method(pickler, obj):
+        if obj.__self__ is not None:
+            if obj.__self__ is __builtin__:
+                module = 'builtins' if PY3 else '__builtin__'
+                _t = "B1"
+                log.info("%s: %s" % (_t, obj))
+            else:
+                module = obj.__self__
+                _t = "B3"
+                log.info("%s: %s" % (_t, obj))
+            if is_dill(pickler, child=True):
+                _recurse = pickler._recurse
+                pickler._recurse = False
+            pickler.save_reduce(_get_attr, (module, obj.__name__), obj=obj)
+            if is_dill(pickler, child=True):
+                pickler._recurse = _recurse
+            log.info("# %s" % _t)
         else:
-            module = obj.__self__
-            _t = "B3"
-            log.info("%s: %s" % (_t, obj))
-        if is_dill(pickler, child=True):
-            _recurse = pickler._recurse
-            pickler._recurse = False
-        pickler.save_reduce(_get_attr, (module, obj.__name__), obj=obj)
-        if is_dill(pickler, child=True):
-            pickler._recurse = _recurse
-        log.info("# %s" % _t)
-    else:
-        log.info("B2: %s" % obj)
-        name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
-        StockPickler.save_global(pickler, obj, name=name)
-        log.info("# B2")
-    return
+            log.info("B2: %s" % obj)
+            name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
+            StockPickler.save_global(pickler, obj, name=name)
+            log.info("# B2")
+        return
 
-@register(MethodType) #FIXME: fails for 'hidden' or 'name-mangled' classes
-def save_instancemethod0(pickler, obj):# example: cStringIO.StringI
-    log.info("Me: %s" % obj) #XXX: obj.__dict__ handled elsewhere?
-    if PY3:
-        pickler.save_reduce(MethodType, (obj.__func__, obj.__self__), obj=obj)
-    else:
-        pickler.save_reduce(MethodType, (obj.im_func, obj.im_self,
-                                         obj.im_class), obj=obj)
-    log.info("# Me")
-    return
+    @register(MethodType) #FIXME: fails for 'hidden' or 'name-mangled' classes
+    def save_instancemethod0(pickler, obj):# example: cStringIO.StringI
+        log.info("Me: %s" % obj) #XXX: obj.__dict__ handled elsewhere?
+        if PY3:
+            pickler.save_reduce(MethodType, (obj.__func__, obj.__self__), obj=obj)
+        else:
+            pickler.save_reduce(MethodType, (obj.im_func, obj.im_self,
+                                             obj.im_class), obj=obj)
+        log.info("# Me")
+        return
 
 if sys.hexversion >= 0x20500f0:
     if not IS_PYPY:
@@ -1433,14 +1541,14 @@ def save_cell(pickler, obj):
         log.info("# Ce3")
         return
     if is_dill(pickler, child=True):
-        postproc = pickler._postproc.get(id(f))
+        postproc = next(iter(pickler._postproc.values()), None)
         if postproc is not None:
             log.info("Ce2: %s" % obj)
             # _CELL_REF is defined in _shims.py to support older versions of
             # dill. When breaking changes are made to dill, (_CELL_REF,) can
             # be replaced by ()
-            postproc.append((_shims._setattr, (obj, 'cell_contents', f)))
             pickler.save_reduce(_create_cell, (_CELL_REF,), obj=obj)
+            postproc.append((_shims._setattr, (obj, 'cell_contents', f)))
             log.info("# Ce2")
             return
     log.info("Ce1: %s" % obj)
@@ -1448,7 +1556,15 @@ def save_cell(pickler, obj):
     log.info("# Ce1")
     return
 
-if not IS_PYPY:
+if MAPPING_PROXY_TRICK:
+    @register(DictProxyType)
+    def save_dictproxy(pickler, obj):
+        log.info("Mp: %s" % obj)
+        mapping = obj | _dictproxy_helper_instance
+        pickler.save_reduce(DictProxyType, (mapping,), obj=obj)
+        log.info("# Mp")
+        return
+elif not IS_PYPY:
     if not OLD33:
         @register(DictProxyType)
         def save_dictproxy(pickler, obj):
@@ -1761,6 +1877,7 @@ def save_function(pickler, obj):
                 postproc_list.append((dict.update, (globs, globs_copy)))
 
         if PY3:
+            closure = obj.__closure__
             state_dict = {}
             for fattrname in ('__doc__', '__kwdefaults__', '__annotations__'):
                 fattr = getattr(obj, fattrname, None)
@@ -1780,18 +1897,40 @@ def save_function(pickler, obj):
 
             _save_with_postproc(pickler, (_create_function, (
                   obj.__code__, globs, obj.__name__, obj.__defaults__,
-                  obj.__closure__
+                  closure
             ), state), obj=obj, postproc_list=postproc_list)
         else:
+            closure = obj.func_closure
             if obj.__doc__ is not None:
                 postproc_list.append((setattr, (obj, '__doc__', obj.__doc__)))
             if '__name__' not in globs or obj.__module__ != globs['__name__']:
                 postproc_list.append((setattr, (obj, '__module__', obj.__module__)))
+            if obj.__dict__:
+                postproc_list.append((setattr, (obj, '__dict__', obj.__dict__)))
 
             _save_with_postproc(pickler, (_create_function, (
                 obj.func_code, globs, obj.func_name, obj.func_defaults,
-                obj.func_closure, obj.__dict__
+                closure
             )), obj=obj, postproc_list=postproc_list)
+
+        # Lift closure cell update to earliest function (#458)
+        topmost_postproc = next(iter(pickler._postproc.values()), None)
+        if closure and topmost_postproc:
+            for cell in closure:
+                possible_postproc = (setattr, (cell, 'cell_contents', obj))
+                try:
+                    topmost_postproc.remove(possible_postproc)
+                except ValueError:
+                    continue
+
+                # Change the value of the cell
+                pickler.save_reduce(*possible_postproc)
+                # pop None created by calling preprocessing step off stack
+                if PY3:
+                    pickler.write(bytes('0', 'UTF-8'))
+                else:
+                    pickler.write('0')
+
         log.info("# F1")
     else:
         log.info("F2: %s" % obj)
