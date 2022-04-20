@@ -8,13 +8,10 @@ matrix:
           env:
             - COVERAGE="true"
 
-        - python: '3.6'
+        - python: '3.7'
           env:
             - COVERAGE="true"
             - NUMPY="true"
-
-        - python: '3.7'
-          env:
 
         - python: '3.8'
           env:
@@ -30,10 +27,6 @@ matrix:
 
         - python: 'pypy2.7-7.3.1' # most recent
           dist: xenial
-          env:
-
-        - python: 'pypy3.6-7.3.3' # most recent
-          dist: bionic
           env:
 
         - python: 'pypy3.7-7.3.5' # most recent
