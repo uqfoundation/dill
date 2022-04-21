@@ -1067,6 +1067,11 @@ def _locate_function(obj, session=False):
     return found is obj
 
 
+def _setitems(dest, source):
+    for k, v in source.items():
+        dest[k] = v
+
+
 def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO_DEFAULT, postproc_list=None):
     if obj is Getattr.NO_DEFAULT:
         obj = Reduce(reduction) # pragma: no cover
@@ -1098,7 +1103,7 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
         postproc = pickler._postproc.pop(id(obj))
         # assert postproc_list == postproc, 'Stack tampered!'
         for reduction in reversed(postproc):
-            if reduction[0] is dict.update and type(reduction[1][0]) is dict:
+            if reduction[0] is _setitems:
                 # use the internal machinery of pickle.py to speedup when
                 # updating a dictionary in postproc
                 dest, source = reduction[1]
@@ -1875,10 +1880,10 @@ def save_function(pickler, obj):
                 glob_ids = {id(g) for g in globs_copy.itervalues()}
             for stack_element in _postproc:
                 if stack_element in glob_ids:
-                    _postproc[stack_element].append((dict.update, (globs, globs_copy)))
+                    _postproc[stack_element].append((_setitems, (globs, globs_copy)))
                     break
             else:
-                postproc_list.append((dict.update, (globs, globs_copy)))
+                postproc_list.append((_setitems, (globs, globs_copy)))
 
         if PY3:
             closure = obj.__closure__
@@ -1918,22 +1923,23 @@ def save_function(pickler, obj):
             )), obj=obj, postproc_list=postproc_list)
 
         # Lift closure cell update to earliest function (#458)
-        topmost_postproc = next(iter(pickler._postproc.values()), None)
-        if closure and topmost_postproc:
-            for cell in closure:
-                possible_postproc = (setattr, (cell, 'cell_contents', obj))
-                try:
-                    topmost_postproc.remove(possible_postproc)
-                except ValueError:
-                    continue
+        if _postproc:
+            topmost_postproc = next(iter(_postproc.values()), None)
+            if closure and topmost_postproc:
+                for cell in closure:
+                    possible_postproc = (setattr, (cell, 'cell_contents', obj))
+                    try:
+                        topmost_postproc.remove(possible_postproc)
+                    except ValueError:
+                        continue
 
-                # Change the value of the cell
-                pickler.save_reduce(*possible_postproc)
-                # pop None created by calling preprocessing step off stack
-                if PY3:
-                    pickler.write(bytes('0', 'UTF-8'))
-                else:
-                    pickler.write('0')
+                    # Change the value of the cell
+                    pickler.save_reduce(*possible_postproc)
+                    # pop None created by calling preprocessing step off stack
+                    if PY3:
+                        pickler.write(bytes('0', 'UTF-8'))
+                    else:
+                        pickler.write('0')
 
         log.info("# F1")
     else:
