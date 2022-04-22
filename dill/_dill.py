@@ -433,7 +433,7 @@ def _stash_modules(main_module):
         newmod.__dill_imported = imported
         return newmod
     else:
-        return original
+        return main_module
 
 def _restore_modules(main_module):
     if '__dill_imported' not in main_module.__dict__:
