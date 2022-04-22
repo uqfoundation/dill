@@ -412,7 +412,7 @@ def _module_map():
 def _lookup_module(modmap, name, obj, main_module): #FIXME: needs work
     """lookup name if module is imported"""
     for modobj, modname in modmap[name]:
-        if modobj is obj and modname != main_module.__name__:
+        if modobj is obj and sys.modules[modname] is not main_module:
             return modname
 
 def _stash_modules(main_module):
