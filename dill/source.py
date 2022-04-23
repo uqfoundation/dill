@@ -27,6 +27,7 @@ import re
 from inspect import (getblock, getfile, getmodule, getsourcefile, indentsize,
                      isbuiltin, isclass, iscode, isframe, isfunction, ismethod,
                      ismodule, istraceback)
+from inspect import getsource as inspect_getsource
 from tokenize import TokenError
 
 from ._dill import PY3
@@ -127,8 +128,14 @@ def findsource(object):
                 err += ", please install 'pyreadline'"
         if err:
             raise IOError(err)
-        lbuf = readline.get_current_history_length()
-        lines = [readline.get_history_item(i)+'\n' for i in range(1,lbuf)]
+
+        if hasattr(module, 'get_ipython'):
+            if isfunction(object):
+                return [''.join(inspect_getsource(object))], 0
+            lines = module.get_ipython().history_manager.input_hist_raw
+        else:
+            lbuf = readline.get_current_history_length()
+            lines = [readline.get_history_item(i)+'\n' for i in range(1,lbuf)]
     else:
         try: # special handling for class instances
             if not isclass(object) and isclass(type(object)): # __class__
