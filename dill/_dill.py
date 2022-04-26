@@ -482,13 +482,15 @@ def dump_session(filename='/tmp/session.pkl', main=None, byref=False, **kwds):
     else:
         f = open(filename, 'wb')
     try:
+        pickler = Pickler(f, protocol, **kwds)
+        pickler._original_main = main
         if byref:
             main = _stash_modules(main)
-        pickler = Pickler(f, protocol, **kwds)
         pickler._main = main     #FIXME: dill.settings are disabled
         pickler._byref = False   # disable pickling by name reference
         pickler._recurse = False # disable pickling recursion for globals
         pickler._session = True  # is best indicator of when pickling a session
+        pickler._main_modified = main is not pickler._original_main
         pickler.dump(main)
     finally:
         if f is not filename:  # If newly opened file
@@ -1878,6 +1880,7 @@ def save_function(pickler, obj):
         _recurse = getattr(pickler, '_recurse', None)
         _byref = getattr(pickler, '_byref', None)
         _postproc = getattr(pickler, '_postproc', None)
+        _main_modified = getattr(pickler, '_main_modified', None)
         postproc_list = []
         if _recurse:
             # recurse to get all globals referred to by obj
@@ -1892,8 +1895,12 @@ def save_function(pickler, obj):
         else:
             globs_copy = obj.__globals__ if PY3 else obj.func_globals
 
+            # If the globals is the __dict__ from the module being save as a
+            # session, substitute it by the dictionary being actually saved.
+            if _main_modified and globs_copy is pickler._original_main.__dict__:
+                globs = globs_copy = pickler._main.__dict__
             # If the globals is a module __dict__, do not save it in the pickle.
-            if globs_copy is not None and obj.__module__ is not None and \
+            elif globs_copy is not None and obj.__module__ is not None and \
                     getattr(_import_module(obj.__module__, True), '__dict__', None) is globs_copy:
                 globs = globs_copy
             else:
