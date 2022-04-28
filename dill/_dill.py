@@ -436,7 +436,7 @@ def _stash_modules(main_module):
     items = 'items' if PY3 else 'iteritems'
     for name, obj in getattr(main_module.__dict__, items)():
         # Avoid incorrectly matching a singleton value in another package (ex.: __doc__).
-        if obj in (None, False, True):
+        if obj is None or obj is False or obj is True:
             original[name] = obj
             continue
         source_module, objname = _lookup_module(modmap, name, obj, main_module)
