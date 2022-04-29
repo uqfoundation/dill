@@ -55,20 +55,17 @@ def test_objects(main, copy_dict, byref):
     try:
         for obj in ('json', 'url', 'sax', 'dom'):
             assert main_dict[obj].__name__ == copy_dict[obj].__name__
-            assert main_dict[obj].__name__ in sys.modules
         
         #FIXME: In the second test call, 'calendar' is not included in
         # sys.modules, independent of the value of byref. Tried to run garbage
         # collection before with no luck. This block fails even with
         # "import calendar" before it. Needed to restore the original modules
-        # with the 'copy_modules' object.
-        for obj in ('Calendar', 'isleap'):
-            assert main_dict[obj] is sys.modules['calendar'].__dict__[obj]
-        assert main_dict['day_name'].__module__ == 'calendar'
-        if byref:
-            assert main_dict['day_name'] is sys.modules['calendar'].__dict__['day_name']
-
-        assert complex_log is sys.modules['cmath'].__dict__['log']
+        # with the 'copy_modules' object. (Moved to "test_session_byref_*.py".)
+        #for obj in ('Calendar', 'isleap'):
+        #    assert main_dict[obj] is sys.modules['calendar'].__dict__[obj]
+        #assert main_dict['day_name'].__module__ == 'calendar'
+        #if byref:
+        #    assert main_dict['day_name'] is sys.modules['calendar'].__dict__['day_name']
 
         for obj in ('x', 'empty', 'names'):
             assert main_dict[obj] == copy_dict[obj]
@@ -99,6 +96,9 @@ if __name__ == '__main__':
         #print(sorted(set(sys.modules.keys()) - original_modules))
         dill._test_file = StringIO()
         try:
+            # For following tests.
+            dill.dump_session('session-byref-%s.pkl' % byref, byref=byref)
+
             dill.dump_session(dill._test_file, byref=byref)
             dump = dill._test_file.getvalue()
             dill._test_file.close()
