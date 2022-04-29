@@ -8,7 +8,6 @@
 
 from __future__ import print_function
 import dill, sys, __main__
-from dill._dill import StringIO, PY3
 
 imported_modules = set(['json', 'urllib', 'xml.sax', 'xml.dom.minidom', 'calendar', 'cmath'])
 original_modules = set(sys.modules.keys()) - imported_modules
@@ -70,7 +69,7 @@ def test_objects(main, copy_dict, byref):
         for obj in ('x', 'empty', 'names'):
             assert main_dict[obj] == copy_dict[obj]
 
-        globs = '__globals__' if PY3 else 'func_globals'
+        globs = '__globals__' if dill._dill.PY3 else 'func_globals'
         for obj in ['squared', 'cubed']:
             assert getattr(main_dict[obj], globs) is main_dict
             assert main_dict[obj](3) == copy_dict[obj](3)
@@ -91,10 +90,11 @@ def test_objects(main, copy_dict, byref):
 
 
 if __name__ == '__main__':
+
     # Test dump_session() and load_session().
     for byref in (False, True):
         #print(sorted(set(sys.modules.keys()) - original_modules))
-        dill._test_file = StringIO()
+        dill._test_file = dill._dill.StringIO()
         try:
             # For following tests.
             dill.dump_session('session-byref-%s.pkl' % byref, byref=byref)
@@ -115,14 +115,35 @@ if __name__ == '__main__':
                 if module not in original_modules:
                     del sys.modules[module]
 
-            dill._test_file = StringIO(dump)
+            dill._test_file = dill._dill.StringIO(dump)
             dill.load_session(dill._test_file)
             #print(sorted(set(sys.modules.keys()) - original_modules))
         finally:
             dill._test_file.close()
-            del dill._test_file
 
         test_objects(__main__, copy_dict, byref)
         __main__.__dict__.update(copy_dict)
         sys.modules.update(copy_modules)
         del __main__, copy_dict, copy_modules, dump
+
+
+    # This is for code coverage, tests the use case of dump_session(byref=True)
+    # without imported objects in the namespace. It's a contrived example because
+    # even dill can't be in it.
+    from types import ModuleType
+    main = ModuleType('__main__')
+    main.x = 42
+
+    test_file = dill._dill.StringIO()
+    try:
+        dill.dump_session(test_file, main=main, byref=True)
+        dump = test_file.getvalue()
+        test_file.close()
+        test_file = dill._dill.StringIO(dump)
+
+        # This should work after fixing https://github.com/uqfoundation/dill/issues/462
+        dill.load_session(test_file)
+    finally:
+        test_file.close()
+
+    assert x == 42
