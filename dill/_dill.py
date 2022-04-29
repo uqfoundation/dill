@@ -407,7 +407,7 @@ def _module_map():
     modmap = modmap(defaultdict(list), defaultdict(list), {})
     items = 'items' if PY3 else 'iteritems'
     for modname, module in getattr(sys.modules, items)():
-        if module is None:
+        if not isinstance(module, ModuleType):
             continue
         if '.' not in modname:
             modmap.top_level[id(module)] = modname
