@@ -32,10 +32,24 @@ def test_modules(main, byref):
         print("Error while testing (byref=%s):" % byref, error_line, sep="\n", file=sys.stderr)
         raise
 
+def _clean_up_cache(module):
+    cached = module.__file__.split('.', 1)[0] + '.pyc'
+    cached = module.__cached__ if hasattr(module, '__cached__') else cached
+    pycache = os.path.join(os.path.dirname(module.__file__), '__pycache__')
+    for remove, file in [(os.remove, cached), (os.removedirs, pycache)]:
+        try:
+            remove(file)
+        except OSError:
+            pass
+
 if __name__ == '__main__':
     byref = False
+
     dill.load_session(session_file % byref)
-    os.remove(session_file % byref)
+    try:
+        os.remove(session_file % byref)
+    except OSError:
+        pass
 
     import __main__
     test_modules(__main__, byref)

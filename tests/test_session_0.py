@@ -20,7 +20,7 @@ original_objects.add('original_objects')
 ## Modules.
 import json                                         # top-level module
 import urllib as url                                # top-level module under alias
-import test_session_1_byref_false as local_mod      # non-builtin top-level module
+import test_session_1 as local_mod                  # non-builtin top-level module
 from xml import sax                                 # submodule
 import xml.dom.minidom as dom                       # submodule under alias
 
@@ -57,7 +57,8 @@ def test_objects(main, copy_dict, byref):
         # sys.modules, independent of the value of byref. Tried to run garbage
         # collection before with no luck. This block fails even with
         # "import calendar" before it. Needed to restore the original modules
-        # with the 'copy_modules' object. (Moved to "test_session_byref_*.py".)
+        # with the 'copy_modules' object. (Moved to "test_session_{1,2}.py".)
+
         #for obj in ('Calendar', 'isleap'):
         #    assert main_dict[obj] is sys.modules['calendar'].__dict__[obj]
         #assert main_dict['day_name'].__module__ == 'calendar'
@@ -138,7 +139,8 @@ if __name__ == '__main__':
     # without imported objects in the namespace. It's a contrived example because
     # even dill can't be in it.
     from types import ModuleType
-    main = ModuleType('test_module')
+    modname = '__test_main__'
+    main = ModuleType(modname)
     main.x = 42
 
     _main = dill._dill._stash_modules(main)
@@ -153,6 +155,7 @@ if __name__ == '__main__':
         dump = test_file.getvalue()
         test_file.close()
 
+        sys.modules[modname] = ModuleType(modname)  # empty
         # This should work after fixing https://github.com/uqfoundation/dill/issues/462
         test_file = dill._dill.StringIO(dump)
         dill.load_session(test_file)
@@ -183,3 +186,8 @@ if __name__ == '__main__':
 
     assert all(obj in module.__dict__ for obj in dict_objects)
     assert module.selfref is module
+
+
+    # Clean up.
+    local_mod._clean_up_cache(local_mod)
+    local_mod._clean_up_cache(module)
