@@ -429,16 +429,24 @@ def _lookup_module(modmap, name, obj, main_module):
 
 def _stash_modules(main_module):
     modmap = _module_map()
+    newmod = ModuleType(main_module.__name__)
+
     imported = []
     imported_as = []
     imported_top_level = []  # keep separeted for backwards compatibility
     original = {}
     items = 'items' if PY3 else 'iteritems'
     for name, obj in getattr(main_module.__dict__, items)():
+        if obj is main_module:
+            original[name] = newmod  # self-reference
+            continue
+
         # Avoid incorrectly matching a singleton value in another package (ex.: __doc__).
-        if obj is None or obj is False or obj is True:
+        if any(obj is singleton for singleton in (None, False, True)) or \
+                isinstance(obj, ModuleType) and _is_builtin_module(obj):  # always saved by ref
             original[name] = obj
             continue
+
         source_module, objname = _lookup_module(modmap, name, obj, main_module)
         if source_module:
             if objname == name:
@@ -450,8 +458,8 @@ def _stash_modules(main_module):
                 imported_top_level.append((modmap.top_level[id(obj)], name))
             except KeyError:
                 original[name] = obj
-    if len(imported):
-        newmod = ModuleType(main_module.__name__)
+
+    if len(original) < len(main_module.__dict__):
         newmod.__dict__.update(original)
         newmod.__dill_imported = imported
         newmod.__dill_imported_as = imported_as
@@ -460,12 +468,12 @@ def _stash_modules(main_module):
     else:
         return main_module
 
-def _restore_modules(main_module):
+def _restore_modules(unpickler, main_module):
     try:
         for modname, name in main_module.__dict__.pop('__dill_imported'):
-            main_module.__dict__[name] = __import__(modname, None, None, [name]).__dict__[name]
+            main_module.__dict__[name] = unpickler.find_class(modname, name)
         for modname, objname, name in main_module.__dict__.pop('__dill_imported_as'):
-            main_module.__dict__[name] = __import__(modname, None, None, [objname]).__dict__[objname]
+            main_module.__dict__[name] = unpickler.find_class(modname, objname)
         for modname, name in main_module.__dict__.pop('__dill_imported_top_level'):
             main_module.__dict__[name] = __import__(modname)
     except KeyError:
@@ -511,7 +519,7 @@ def load_session(filename='/tmp/session.pkl', main=None, **kwds):
         module = unpickler.load()
         unpickler._session = False
         main.__dict__.update(module.__dict__)
-        _restore_modules(main)
+        _restore_modules(unpickler, main)
     finally:
         if f is not filename:  # If newly opened file
             f.close()
@@ -1707,6 +1715,16 @@ def save_weakproxy(pickler, obj):
     log.info("# %s" % _t)
     return
 
+def _is_builtin_module(module):
+    if not hasattr(module, "__file__"): return True
+    # If a module file name starts with prefix, it should be a builtin
+    # module, so should always be pickled as a reference.
+    names = ["base_prefix", "base_exec_prefix", "exec_prefix", "prefix", "real_prefix"]
+    return any(os.path.realpath(module.__file__).startswith(os.path.realpath(getattr(sys, name)))
+               for name in names if hasattr(sys, name)) or \
+            module.__file__.endswith(EXTENSION_SUFFIXES) or \
+            'site-packages' in module.__file__
+
 @register(ModuleType)
 def save_module(pickler, obj):
     if False: #_use_diff:
@@ -1727,19 +1745,9 @@ def save_module(pickler, obj):
         pickler.save_reduce(_import_module, (obj.__name__,), obj=obj)
         log.info("# M1")
     else:
-        # if a module file name starts with prefix, it should be a builtin
-        # module, so should be pickled as a reference
-        if hasattr(obj, "__file__"):
-            names = ["base_prefix", "base_exec_prefix", "exec_prefix",
-                     "prefix", "real_prefix"]
-            builtin_mod = any(os.path.realpath(obj.__file__).startswith(os.path.realpath(getattr(sys, name)))
-                              for name in names if hasattr(sys, name))
-            builtin_mod = (builtin_mod or obj.__file__.endswith(EXTENSION_SUFFIXES) or
-                           'site-packages' in obj.__file__)
-        else:
-            builtin_mod = True
-        if obj.__name__ not in ("builtins", "dill", "dill._dill") \
-           and not builtin_mod or is_dill(pickler, child=True) and obj is pickler._main:
+        builtin_mod = _is_builtin_module(obj)
+        if obj.__name__ not in ("builtins", "dill", "dill._dill") and not builtin_mod or \
+                is_dill(pickler, child=True) and obj is pickler._main:
             log.info("M1: %s" % obj)
             _main_dict = obj.__dict__.copy() #XXX: better no copy? option to copy?
             [_main_dict.pop(item, None) for item in singletontypes
