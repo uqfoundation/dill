@@ -498,6 +498,7 @@ def dump_session(filename='/tmp/session.pkl', main=None, byref=False, **kwds):
         pickler._byref = False   # disable pickling by name reference
         pickler._recurse = False # disable pickling recursion for globals
         pickler._session = True  # is best indicator of when pickling a session
+        pickler._first_pass = True
         pickler._main_modified = main is not pickler._original_main
         pickler.dump(main)
     finally:
@@ -1099,9 +1100,11 @@ def _import_module(import_name, safe=False):
             return None
         raise
 
-def _locate_function(obj, session=False):
-    if obj.__module__ in ['__main__', None]: # and session:
+def _locate_function(obj, pickler=None):
+    if obj.__module__ in ['__main__', None] or \
+            pickler and pickler._session and obj.__module__ == pickler._main.__name__:
         return False
+
     found = _import_module(obj.__module__ + '.' + obj.__name__, safe=True)
     return found is obj
 
@@ -1216,7 +1219,8 @@ def save_code(pickler, obj):
 
 @register(dict)
 def save_module_dict(pickler, obj):
-    if is_dill(pickler, child=False) and obj == pickler._main.__dict__ and not pickler._session:
+    if is_dill(pickler, child=False) and obj == pickler._main.__dict__ and \
+            not (pickler._session and pickler._first_pass):
         log.info("D1: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if PY3:
             pickler.write(bytes('c__builtin__\n__main__\n', 'UTF-8'))
@@ -1243,7 +1247,7 @@ def save_module_dict(pickler, obj):
         log.info("D2: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if is_dill(pickler, child=False) and pickler._session:
             # we only care about session the first pass thru
-            pickler._session = False
+            pickler._first_pass = False
         StockPickler.save_dict(pickler, obj)
         log.info("# D2")
     return
@@ -1306,7 +1310,7 @@ del __dicttype, __obj, __funcname, __tview, __savefunc
 
 @register(ClassType)
 def save_classobj(pickler, obj): #FIXME: enable pickler._byref
-    if obj.__module__ == '__main__': #XXX: use _main_module.__name__ everywhere?
+    if not _locate_function(obj, pickler):
         log.info("C1: %s" % obj)
         pickler.save_reduce(ClassType, (obj.__name__, obj.__bases__,
                                         obj.__dict__), obj=obj)
@@ -1805,7 +1809,7 @@ def save_type(pickler, obj, postproc_list=None):
         obj_name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
         _byref = getattr(pickler, '_byref', None)
         obj_recursive = id(obj) in getattr(pickler, '_postproc', ())
-        incorrectly_named = not _locate_function(obj)
+        incorrectly_named = not _locate_function(obj, pickler)
         if not _byref and not obj_recursive and incorrectly_named: # not a function, but the name was held over
             if issubclass(type(obj), type):
                 # thanks to Tom Stepleton pointing out pickler._session unneeded
@@ -1883,7 +1887,7 @@ def save_classmethod(pickler, obj):
 
 @register(FunctionType)
 def save_function(pickler, obj):
-    if not _locate_function(obj): #, pickler._session):
+    if not _locate_function(obj, pickler):
         log.info("F1: %s" % obj)
         _recurse = getattr(pickler, '_recurse', None)
         _byref = getattr(pickler, '_byref', None)

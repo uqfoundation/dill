@@ -154,3 +154,26 @@ if __name__ == '__main__':
         test_file.close()
 
     assert x == 42
+
+
+    # Dump session for module that is not __main__:
+    import test_classdef as module
+    module.selfref = module
+    dict_objects = [obj for obj in module.__dict__.keys() if not obj.startswith('__')]
+
+    test_file = dill._dill.StringIO()
+    try:
+        dill.dump_session(test_file, main=module)
+        dump = test_file.getvalue()
+        test_file.close()
+
+        for obj in dict_objects:
+            del module.__dict__[obj]
+
+        test_file = dill._dill.StringIO(dump)
+        dill.load_session(test_file, main=module)
+    finally:
+        test_file.close()
+
+    assert all(obj in module.__dict__ for obj in dict_objects)
+    assert module.selfref is module
