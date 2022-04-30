@@ -6,8 +6,54 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 from __future__ import print_function
-import dill, sys, __main__
+import atexit, dill, os, sys, __main__
 
+session_file = os.path.join(os.path.dirname(__file__), 'session-byref-%s.pkl')
+
+def test_modules(main, byref):
+    main_dict = main.__dict__
+
+    try:
+        for obj in ('json', 'url', 'local_mod', 'sax', 'dom'):
+            assert main_dict[obj].__name__ in sys.modules
+
+        for obj in ('Calendar', 'isleap'):
+            assert main_dict[obj] is sys.modules['calendar'].__dict__[obj]
+        assert main.day_name.__module__ == 'calendar'
+        if byref:
+            assert main.day_name is sys.modules['calendar'].__dict__['day_name']
+
+        assert main.complex_log is sys.modules['cmath'].__dict__['log']
+
+    except AssertionError:
+        import traceback
+        error_line = traceback.format_exc().splitlines()[-2].replace('[obj]', '['+repr(obj)+']')
+        print("Error while testing (byref=%s):" % byref, error_line, sep="\n", file=sys.stderr)
+        raise
+
+
+# Test session loading in a fresh interpreter session.
+if __name__ == '__main__' and len(sys.argv) >= 3 and sys.argv[1] == '--child':
+    byref = sys.argv[2] == 'True'
+    dill.load_session(session_file % byref)
+    test_modules(__main__, byref)
+    sys.exit()
+
+del test_modules
+
+
+def _clean_up_cache(module):
+    cached = module.__file__.split('.', 1)[0] + '.pyc'
+    cached = module.__cached__ if hasattr(module, '__cached__') else cached
+    pycache = os.path.join(os.path.dirname(module.__file__), '__pycache__')
+    for remove, file in [(os.remove, cached), (os.removedirs, pycache)]:
+        try:
+            remove(file)
+        except OSError:
+            pass
+
+
+# To clean up namespace before loading the session.
 original_modules = set(sys.modules.keys()) - \
         set(['json', 'urllib', 'xml.sax', 'xml.dom.minidom', 'calendar', 'cmath'])
 original_objects = set(__main__.__dict__.keys())
@@ -19,9 +65,10 @@ original_objects.add('original_objects')
 ## Modules.
 import json                                         # top-level module
 import urllib as url                                # top-level module under alias
-import test_session_1 as local_mod                  # non-builtin top-level module
 from xml import sax                                 # submodule
 import xml.dom.minidom as dom                       # submodule under alias
+import test_dictviews as local_mod                  # non-builtin top-level module
+atexit.register(_clean_up_cache, local_mod)
 
 ## Imported objects.
 from calendar import Calendar, isleap, day_name     # class, function, other object
@@ -51,7 +98,7 @@ def test_objects(main, copy_dict, byref):
     try:
         for obj in ('json', 'url', 'local_mod', 'sax', 'dom'):
             assert main_dict[obj].__name__ == copy_dict[obj].__name__
-        
+
         #FIXME: In the second test call, 'calendar' is not included in
         # sys.modules, independent of the value of byref. Tried to run garbage
         # collection before with no luck. This block fails even with
@@ -103,8 +150,8 @@ if __name__ == '__main__':
         #print(sorted(set(sys.modules.keys()) - original_modules))
         dill._test_file = dill._dill.StringIO()
         try:
-            # For the following test files.
-            dill.dump_session('session-byref-%s.pkl' % byref, byref=byref)
+            # For the subprocess.
+            dill.dump_session(session_file % byref, byref=byref)
 
             dill.dump_session(dill._test_file, byref=byref)
             dump = dill._test_file.getvalue()
@@ -125,8 +172,19 @@ if __name__ == '__main__':
             dill._test_file = dill._dill.StringIO(dump)
             dill.load_session(dill._test_file)
             #print(sorted(set(sys.modules.keys()) - original_modules))
+
+            # Test session loading in a new session.
+            from dill.tests.__main__ import python, shell, sp
+            error = sp.call([python, __file__, '--child', str(byref)], shell=shell)
+            if error: sys.exit(error)
+            del python, shell, sp
+
         finally:
             dill._test_file.close()
+            try:
+                os.remove(session_file % byref)
+            except OSError:
+                pass
 
         test_objects(__main__, copy_dict, byref)
         __main__.__dict__.update(copy_dict)
@@ -166,6 +224,7 @@ if __name__ == '__main__':
 
     # Dump session for module that is not __main__:
     import test_classdef as module
+    atexit.register(_clean_up_cache, module)
     module.selfref = module
     dict_objects = [obj for obj in module.__dict__.keys() if not obj.startswith('__')]
 
@@ -185,8 +244,3 @@ if __name__ == '__main__':
 
     assert all(obj in module.__dict__ for obj in dict_objects)
     assert module.selfref is module
-
-
-    # Clean up.
-    local_mod._clean_up_cache(local_mod)
-    local_mod._clean_up_cache(module)
