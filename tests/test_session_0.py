@@ -138,8 +138,14 @@ if __name__ == '__main__':
     # without imported objects in the namespace. It's a contrived example because
     # even dill can't be in it.
     from types import ModuleType
-    main = ModuleType('__main__')
+    main = ModuleType('test_module')
     main.x = 42
+
+    _main = dill._dill._stash_modules(main)
+    if _main is not main:
+        print("There are objects to save by referenece that shouldn't be:",
+              _main.__dill_imported, _main.__dill_imported_as, _main.__dill_imported_top_level,
+              file=sys.stderr)
 
     test_file = dill._dill.StringIO()
     try:
