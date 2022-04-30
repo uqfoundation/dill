@@ -15,16 +15,16 @@ def test_modules(main, byref):
     main_dict = main.__dict__
 
     try:
-        for obj in ('json', 'url', 'sax', 'dom'):
+        for obj in ('json', 'url', 'local_mod', 'sax', 'dom'):
             assert main_dict[obj].__name__ in sys.modules
 
         for obj in ('Calendar', 'isleap'):
             assert main_dict[obj] is sys.modules['calendar'].__dict__[obj]
-        assert main_dict['day_name'].__module__ == 'calendar'
+        assert main.day_name.__module__ == 'calendar'
         if byref:
-            assert main_dict['day_name'] is sys.modules['calendar'].__dict__['day_name']
+            assert main.day_name is sys.modules['calendar'].__dict__['day_name']
 
-        assert main_dict['complex_log'] is sys.modules['cmath'].__dict__['log']
+        assert main.complex_log is sys.modules['cmath'].__dict__['log']
 
     except AssertionError:
         import traceback

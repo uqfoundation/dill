@@ -9,23 +9,20 @@
 from __future__ import print_function
 import dill, sys, __main__
 
-imported_modules = set(['json', 'urllib', 'xml.sax', 'xml.dom.minidom', 'calendar', 'cmath'])
-original_modules = set(sys.modules.keys()) - imported_modules
-del imported_modules
-
+original_modules = set(sys.modules.keys()) - \
+        set(['json', 'urllib', 'xml.sax', 'xml.dom.minidom', 'calendar', 'cmath'])
 original_objects = set(__main__.__dict__.keys())
 original_objects.add('original_objects')
-original_objects.remove('__main__')
-del __main__
 
 
 # Create various kinds of objects to test different internal logics.
 
 ## Modules.
-import json                             # top-level module
-import urllib as url                    # top-level module under alias
-from xml import sax                     # submodule
-import xml.dom.minidom as dom           # submodule under alias
+import json                                         # top-level module
+import urllib as url                                # top-level module under alias
+import test_session_1_byref_false as local_mod      # non-builtin top-level module
+from xml import sax                                 # submodule
+import xml.dom.minidom as dom                       # submodule under alias
 
 ## Imported objects.
 from calendar import Calendar, isleap, day_name     # class, function, other object
@@ -46,13 +43,14 @@ class CalendarSubclass(Calendar):
     def weekdays(self):
         return [day_name[i] for i in self.iterweekdays()]
 cal = CalendarSubclass()
+selfref = __main__
 
 
 def test_objects(main, copy_dict, byref):
     main_dict = main.__dict__
 
     try:
-        for obj in ('json', 'url', 'sax', 'dom'):
+        for obj in ('json', 'url', 'local_mod', 'sax', 'dom'):
             assert main_dict[obj].__name__ == copy_dict[obj].__name__
         
         #FIXME: In the second test call, 'calendar' is not included in
@@ -74,13 +72,15 @@ def test_objects(main, copy_dict, byref):
             assert getattr(main_dict[obj], globs) is main_dict
             assert main_dict[obj](3) == copy_dict[obj](3)
 
-        assert main_dict['Person'].__module__ == main.__name__
-        assert isinstance(main_dict['person'], main_dict['Person'])
-        assert main_dict['person'].age == copy_dict['person'].age
+        assert main.Person.__module__ == main.__name__
+        assert isinstance(main.person, main.Person)
+        assert main.person.age == copy_dict['person'].age
 
-        assert issubclass(main_dict['CalendarSubclass'], main_dict['Calendar'])
-        assert isinstance(main_dict['cal'], main_dict['CalendarSubclass'])
-        assert main_dict['cal'].weekdays() == copy_dict['cal'].weekdays()
+        assert issubclass(main.CalendarSubclass, main.Calendar)
+        assert isinstance(main.cal, main.CalendarSubclass)
+        assert main.cal.weekdays() == copy_dict['cal'].weekdays()
+
+        assert main.selfref is main
 
     except AssertionError:
         import traceback
@@ -93,10 +93,17 @@ if __name__ == '__main__':
 
     # Test dump_session() and load_session().
     for byref in (False, True):
+        if byref:
+            # Test unpickleable imported object in main.
+            try:
+                from ctypes import pythonapi
+            except ImportError:
+                pass
+
         #print(sorted(set(sys.modules.keys()) - original_modules))
         dill._test_file = dill._dill.StringIO()
         try:
-            # For following tests.
+            # For the following test files.
             dill.dump_session('session-byref-%s.pkl' % byref, byref=byref)
 
             dill.dump_session(dill._test_file, byref=byref)
@@ -139,9 +146,9 @@ if __name__ == '__main__':
         dill.dump_session(test_file, main=main, byref=True)
         dump = test_file.getvalue()
         test_file.close()
-        test_file = dill._dill.StringIO(dump)
 
         # This should work after fixing https://github.com/uqfoundation/dill/issues/462
+        test_file = dill._dill.StringIO(dump)
         dill.load_session(test_file)
     finally:
         test_file.close()
