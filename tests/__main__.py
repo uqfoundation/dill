@@ -18,7 +18,7 @@ from sys import platform
 shell = platform[:3] == 'win'
 
 suite = os.path.dirname(__file__) or os.path.curdir
-tests = sorted(glob.glob(suite + os.path.sep + 'test_*.py'))
+tests = glob.glob(suite + os.path.sep + 'test_*.py')
 
 
 if __name__ == '__main__':
@@ -28,4 +28,3 @@ if __name__ == '__main__':
         if not p:
             print('.', end='')
     print('')
-
