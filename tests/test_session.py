@@ -142,10 +142,7 @@ if __name__ == '__main__':
     for byref in (False, True):
         if byref:
             # Test unpickleable imported object in main.
-            try:
-                from ctypes import pythonapi
-            except ImportError:
-                pass
+            from sys import flags
 
         #print(sorted(set(sys.modules.keys()) - original_modules))
         dill._test_file = dill._dill.StringIO()
