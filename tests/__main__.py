@@ -28,4 +28,3 @@ if __name__ == '__main__':
         if not p:
             print('.', end='')
     print('')
-
