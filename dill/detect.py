@@ -175,14 +175,14 @@ def nestedglobals(func, recurse=True):
     if func is None: return list()
     import sys
     from .temp import capture
-    IS_311a7 = sys.hexversion == 51052711 #FIXME: for odd behavior in 3.11a7
+    CAN_NULL = sys.hexversion >= 51052711 #NULL may be prepended >= 3.11a7
     names = set()
     with capture('stdout') as out:
         dis.dis(func) #XXX: dis.dis(None) disassembles last traceback
     for line in out.getvalue().splitlines():
         if '_GLOBAL' in line:
             name = line.split('(')[-1].split(')')[0]
-            if IS_311a7:
+            if CAN_NULL:
                 names.add(name.replace('NULL + ', ''))
             else:
                 names.add(name)
