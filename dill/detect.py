@@ -173,14 +173,19 @@ def nestedglobals(func, recurse=True):
     """get the names of any globals found within func"""
     func = code(func)
     if func is None: return list()
+    import sys
     from .temp import capture
+    CAN_NULL = sys.hexversion >= 51052711 #NULL may be prepended >= 3.11a7
     names = set()
     with capture('stdout') as out:
         dis.dis(func) #XXX: dis.dis(None) disassembles last traceback
     for line in out.getvalue().splitlines():
         if '_GLOBAL' in line:
             name = line.split('(')[-1].split(')')[0]
-            names.add(name)
+            if CAN_NULL:
+                names.add(name.replace('NULL + ', ''))
+            else:
+                names.add(name)
     for co in getattr(func, 'co_consts', tuple()):
         if co and recurse and iscode(co):
             names.update(nestedglobals(co, recurse=True))

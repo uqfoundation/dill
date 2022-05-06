@@ -128,10 +128,9 @@ def test_abc_local():
         assert False
 
     labc2, pik = dill.copy((labc, Real()))
+    assert 'Real' == type(pik).__name__
     if dill._dill.PY3:
-        assert '.Real' in type(pik).__name__
-    else:
-        assert 'Real' == type(pik).__name__
+        assert '.Real' in type(pik).__qualname__
     assert type(pik) is not Real
     assert labc2 is not LocalABC
     assert labc2 is not labc

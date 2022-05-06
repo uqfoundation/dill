@@ -28,7 +28,10 @@ def function_c(c, c1=1):
 
 
 def function_d(d, d1, d2=1):
+    """doc string"""
     return d + d1 + d2
+
+function_d.__module__ = 'a module'
 
 
 if is_py3():
@@ -63,6 +66,8 @@ def test_functions():
     assert dill.loads(dumped_func_c)(1, 2) == 3
 
     dumped_func_d = dill.dumps(function_d)
+    assert dill.loads(dumped_func_d).__doc__ == function_d.__doc__
+    assert dill.loads(dumped_func_d).__module__ == function_d.__module__
     assert dill.loads(dumped_func_d)(1, 2) == 4
     assert dill.loads(dumped_func_d)(1, 2, 3) == 6
     assert dill.loads(dumped_func_d)(1, 2, d2=3) == 6

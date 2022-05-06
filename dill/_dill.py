@@ -405,50 +405,87 @@ def loads(str, ignore=None, **kwds):
 ### End: Shorthands ###
 
 ### Pickle the Interpreter Session
+SESSION_IMPORTED_AS_TYPES = (ModuleType, ClassType, TypeType, Exception,
+                             FunctionType, MethodType, BuiltinMethodType)
+
 def _module_map():
     """get map of imported modules"""
-    from collections import defaultdict
-    modmap = defaultdict(list)
+    from collections import defaultdict, namedtuple
+    modmap = namedtuple('Modmap', ['by_name', 'by_id', 'top_level'])
+    modmap = modmap(defaultdict(list), defaultdict(list), {})
     items = 'items' if PY3 else 'iteritems'
-    for name, module in getattr(sys.modules, items)():
-        if module is None:
+    for modname, module in getattr(sys.modules, items)():
+        if not isinstance(module, ModuleType):
             continue
-        for objname, obj in module.__dict__.items():
-            modmap[objname].append((obj, name))
+        if '.' not in modname:
+            modmap.top_level[id(module)] = modname
+        for objname, modobj in module.__dict__.items():
+            modmap.by_name[objname].append((modobj, modname))
+            modmap.by_id[id(modobj)].append((modobj, objname, modname))
     return modmap
 
-def _lookup_module(modmap, name, obj, main_module): #FIXME: needs work
-    """lookup name if module is imported"""
-    for modobj, modname in modmap[name]:
-        if modobj is obj and modname != main_module.__name__:
-            return modname
+def _lookup_module(modmap, name, obj, main_module):
+    """lookup name or id of obj if module is imported"""
+    for modobj, modname in modmap.by_name[name]:
+        if modobj is obj and sys.modules[modname] is not main_module:
+            return modname, name
+    if isinstance(obj, SESSION_IMPORTED_AS_TYPES):
+        for modobj, objname, modname in modmap.by_id[id(obj)]:
+            if sys.modules[modname] is not main_module:
+                return modname, objname
+    return None, None
 
 def _stash_modules(main_module):
     modmap = _module_map()
+    newmod = ModuleType(main_module.__name__)
+
     imported = []
+    imported_as = []
+    imported_top_level = []  # keep separeted for backwards compatibility
     original = {}
     items = 'items' if PY3 else 'iteritems'
     for name, obj in getattr(main_module.__dict__, items)():
-        source_module = _lookup_module(modmap, name, obj, main_module)
-        if source_module:
-            imported.append((source_module, name))
-        else:
+        if obj is main_module:
+            original[name] = newmod  # self-reference
+            continue
+
+        # Avoid incorrectly matching a singleton value in another package (ex.: __doc__).
+        if any(obj is singleton for singleton in (None, False, True)) or \
+                isinstance(obj, ModuleType) and _is_builtin_module(obj):  # always saved by ref
             original[name] = obj
-    if len(imported):
-        import types
-        newmod = types.ModuleType(main_module.__name__)
+            continue
+
+        source_module, objname = _lookup_module(modmap, name, obj, main_module)
+        if source_module:
+            if objname == name:
+                imported.append((source_module, name))
+            else:
+                imported_as.append((source_module, objname, name))
+        else:
+            try:
+                imported_top_level.append((modmap.top_level[id(obj)], name))
+            except KeyError:
+                original[name] = obj
+
+    if len(original) < len(main_module.__dict__):
         newmod.__dict__.update(original)
         newmod.__dill_imported = imported
+        newmod.__dill_imported_as = imported_as
+        newmod.__dill_imported_top_level = imported_top_level
         return newmod
     else:
-        return original
+        return main_module
 
-def _restore_modules(main_module):
-    if '__dill_imported' not in main_module.__dict__:
-        return
-    imports = main_module.__dict__.pop('__dill_imported')
-    for module, name in imports:
-        exec("from %s import %s" % (module, name), main_module.__dict__)
+def _restore_modules(unpickler, main_module):
+    try:
+        for modname, name in main_module.__dict__.pop('__dill_imported'):
+            main_module.__dict__[name] = unpickler.find_class(modname, name)
+        for modname, objname, name in main_module.__dict__.pop('__dill_imported_as'):
+            main_module.__dict__[name] = unpickler.find_class(modname, objname)
+        for modname, name in main_module.__dict__.pop('__dill_imported_top_level'):
+            main_module.__dict__[name] = __import__(modname)
+    except KeyError:
+        pass
 
 #NOTE: 06/03/15 renamed main_module to main
 def dump_session(filename='/tmp/session.pkl', main=None, byref=False, **kwds):
@@ -461,13 +498,16 @@ def dump_session(filename='/tmp/session.pkl', main=None, byref=False, **kwds):
     else:
         f = open(filename, 'wb')
     try:
+        pickler = Pickler(f, protocol, **kwds)
+        pickler._original_main = main
         if byref:
             main = _stash_modules(main)
-        pickler = Pickler(f, protocol, **kwds)
         pickler._main = main     #FIXME: dill.settings are disabled
         pickler._byref = False   # disable pickling by name reference
         pickler._recurse = False # disable pickling recursion for globals
         pickler._session = True  # is best indicator of when pickling a session
+        pickler._first_pass = True
+        pickler._main_modified = main is not pickler._original_main
         pickler.dump(main)
     finally:
         if f is not filename:  # If newly opened file
@@ -488,7 +528,7 @@ def load_session(filename='/tmp/session.pkl', main=None, **kwds):
         module = unpickler.load()
         unpickler._session = False
         main.__dict__.update(module.__dict__)
-        _restore_modules(main)
+        _restore_modules(unpickler, main)
     finally:
         if f is not filename:  # If newly opened file
             f.close()
@@ -728,9 +768,9 @@ def _create_function(fcode, fglobals, fname=None, fdefaults=None,
                      fclosure=None, fdict=None, fkwdefaults=None):
     # same as FunctionType, but enable passing __dict__ to new function,
     # __dict__ is the storehouse for attributes added after function creation
-    if fdict is None: fdict = dict()
     func = FunctionType(fcode, fglobals or dict(), fname, fdefaults, fclosure)
-    func.__dict__.update(fdict) #XXX: better copy? option to copy?
+    if fdict is not None:
+        func.__dict__.update(fdict) #XXX: better copy? option to copy?
     if fkwdefaults is not None:
         func.__kwdefaults__ = fkwdefaults
     # 'recurse' only stores referenced modules/objects in fglobals,
@@ -1009,14 +1049,23 @@ def _create_dtypemeta(scalar_type):
         return NumpyDType
     return type(NumpyDType(scalar_type))
 
-def _create_namedtuple(name, fieldnames, modulename):
-    class_ = _import_module(modulename + '.' + name, safe=True)
-    if class_ is not None:
-        return class_
-    import collections
-    t = collections.namedtuple(name, fieldnames)
-    t.__module__ = modulename
-    return t
+if OLD37:
+    def _create_namedtuple(name, fieldnames, modulename, defaults=None):
+        class_ = _import_module(modulename + '.' + name, safe=True)
+        if class_ is not None:
+            return class_
+        import collections
+        t = collections.namedtuple(name, fieldnames)
+        t.__module__ = modulename
+        return t
+else:
+    def _create_namedtuple(name, fieldnames, modulename, defaults=None):
+        class_ = _import_module(modulename + '.' + name, safe=True)
+        if class_ is not None:
+            return class_
+        import collections
+        t = collections.namedtuple(name, fieldnames, defaults=defaults, module=modulename)
+        return t
 
 def _getattr(objclass, name, repr_str):
     # hack to grab the reference directly
@@ -1074,9 +1123,10 @@ def _getattribute(obj, name):
                                  .format(name, obj))
     return obj, parent
 
-def _locate_function(obj, session=False):
+def _locate_function(obj, pickler=None):
     module_name = getattr(obj, '__module__', None)
-    if module_name in ['__main__', None]: # and session:
+    if module_name in ['__main__', None] or \
+            pickler and is_dill(pickler, child=False) and pickler._session and module_name == pickler._main.__name__:
         return False
     if hasattr(obj, '__qualname__'):
         module = _import_module(module_name, safe=True)
@@ -1089,10 +1139,10 @@ def _locate_function(obj, session=False):
         found = _import_module(module_name + '.' + obj.__name__, safe=True)
         return found is obj
 
-
 def _setitems(dest, source):
     for k, v in source.items():
         dest[k] = v
+
 
 def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO_DEFAULT, postproc_list=None):
     if obj is Getattr.NO_DEFAULT:
@@ -1199,7 +1249,8 @@ def save_code(pickler, obj):
 
 @register(dict)
 def save_module_dict(pickler, obj):
-    if is_dill(pickler, child=False) and obj == pickler._main.__dict__ and not pickler._session:
+    if is_dill(pickler, child=False) and obj == pickler._main.__dict__ and \
+            not (pickler._session and pickler._first_pass):
         log.info("D1: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if PY3:
             pickler.write(bytes('c__builtin__\n__main__\n', 'UTF-8'))
@@ -1226,7 +1277,7 @@ def save_module_dict(pickler, obj):
         log.info("D2: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if is_dill(pickler, child=False) and pickler._session:
             # we only care about session the first pass thru
-            pickler._session = False
+            pickler._first_pass = False
         StockPickler.save_dict(pickler, obj)
         log.info("# D2")
     return
@@ -1289,7 +1340,7 @@ del __dicttype, __obj, __funcname, __tview, __savefunc
 
 @register(ClassType)
 def save_classobj(pickler, obj): #FIXME: enable pickler._byref
-    if obj.__module__ == '__main__': #XXX: use _main_module.__name__ everywhere?
+    if not _locate_function(obj, pickler):
         log.info("C1: %s" % obj)
         pickler.save_reduce(ClassType, (obj.__name__, obj.__bases__,
                                         obj.__dict__), obj=obj)
@@ -1698,6 +1749,16 @@ def save_weakproxy(pickler, obj):
     log.info("# %s" % _t)
     return
 
+def _is_builtin_module(module):
+    if not hasattr(module, "__file__"): return True
+    # If a module file name starts with prefix, it should be a builtin
+    # module, so should always be pickled as a reference.
+    names = ["base_prefix", "base_exec_prefix", "exec_prefix", "prefix", "real_prefix"]
+    return any(os.path.realpath(module.__file__).startswith(os.path.realpath(getattr(sys, name)))
+               for name in names if hasattr(sys, name)) or \
+            module.__file__.endswith(EXTENSION_SUFFIXES) or \
+            'site-packages' in module.__file__
+
 @register(ModuleType)
 def save_module(pickler, obj):
     if False: #_use_diff:
@@ -1718,19 +1779,9 @@ def save_module(pickler, obj):
         pickler.save_reduce(_import_module, (obj.__name__,), obj=obj)
         log.info("# M1")
     else:
-        # if a module file name starts with prefix, it should be a builtin
-        # module, so should be pickled as a reference
-        if hasattr(obj, "__file__"):
-            names = ["base_prefix", "base_exec_prefix", "exec_prefix",
-                     "prefix", "real_prefix"]
-            builtin_mod = any(os.path.realpath(obj.__file__).startswith(os.path.realpath(getattr(sys, name)))
-                              for name in names if hasattr(sys, name))
-            builtin_mod = (builtin_mod or obj.__file__.endswith(EXTENSION_SUFFIXES) or
-                           'site-packages' in obj.__file__)
-        else:
-            builtin_mod = True
-        if obj.__name__ not in ("builtins", "dill", "dill._dill") \
-           and not builtin_mod or is_dill(pickler, child=True) and obj is pickler._main:
+        builtin_mod = _is_builtin_module(obj)
+        if obj.__name__ not in ("builtins", "dill", "dill._dill") and not builtin_mod or \
+                is_dill(pickler, child=True) and obj is pickler._main:
             log.info("M1: %s" % obj)
             _main_dict = obj.__dict__.copy() #XXX: better no copy? option to copy?
             [_main_dict.pop(item, None) for item in singletontypes
@@ -1824,10 +1875,21 @@ def save_type(pickler, obj, postproc_list=None):
         log.info("T1: %s" % obj)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
         log.info("# T1")
-    elif issubclass(obj, tuple) and all([hasattr(obj, attr) for attr in ('_fields','_asdict','_make','_replace')]):
+    elif obj.__bases__ == (tuple,) and all([hasattr(obj, attr) for attr in ('_fields','_asdict','_make','_replace')]):
         # special case: namedtuples
         log.info("T6: %s" % obj)
-        pickler.save_reduce(_create_namedtuple, (getattr(obj, "__qualname__", obj.__name__), obj._fields, obj.__module__), obj=obj)
+
+        obj_name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
+        if PY3 and obj.__name__ != obj_name:
+            if postproc_list is None:
+                postproc_list = []
+            postproc_list.append((setattr, (obj, '__qualname__', obj_name)))
+
+        if OLD37 or (not obj._field_defaults):
+            _save_with_postproc(pickler, (_create_namedtuple, (obj.__name__, obj._fields, obj.__module__)), obj=obj, postproc_list=postproc_list)
+        else:
+            defaults = [obj._field_defaults[field] for field in obj._fields]
+            _save_with_postproc(pickler, (_create_namedtuple, (obj.__name__, obj._fields, obj.__module__, defaults)), obj=obj, postproc_list=postproc_list)
         log.info("# T6")
         return
 
@@ -1853,7 +1915,7 @@ def save_type(pickler, obj, postproc_list=None):
         obj_name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
         _byref = getattr(pickler, '_byref', None)
         obj_recursive = id(obj) in getattr(pickler, '_postproc', ())
-        incorrectly_named = not _locate_function(obj)
+        incorrectly_named = not _locate_function(obj, pickler)
         if not _byref and not obj_recursive and incorrectly_named: # not a function, but the name was held over
             if postproc_list is None:
                 postproc_list = []
@@ -1865,6 +1927,9 @@ def save_type(pickler, obj, postproc_list=None):
 
             for name in _dict.get("__slots__", []):
                 del _dict[name]
+
+            if PY3 and obj_name != obj.__name__:
+                postproc_list.append((setattr, (obj, '__qualname__', obj_name)))
 
             if isinstance(obj, abc.ABCMeta):
                 _dict, state = _get_typedict_abc(obj, _dict, state, postproc_list)
@@ -1889,11 +1954,11 @@ def save_type(pickler, obj, postproc_list=None):
 
                 bases = getattr(obj, '__orig_bases__', obj.__bases__)
                 _save_with_postproc(pickler, (new_class, (
-                    obj_name, bases, _metadict, _dict_update
+                    obj.__name__, bases, _metadict, _dict_update
                 )), state, obj=obj, postproc_list=postproc_list)
             else:
                 _save_with_postproc(pickler, (_create_type, (
-                    type(obj), obj_name, obj.__bases__, _dict
+                    type(obj), obj.__name__, obj.__bases__, _dict
                 )), state, obj=obj, postproc_list=postproc_list)
             log.info("# %s" % _t)
         else:
@@ -1955,11 +2020,13 @@ if sys.hexversion >= 0x03020000:
 
 @register(FunctionType)
 def save_function(pickler, obj):
-    if not _locate_function(obj): #, pickler._session):
+    if not _locate_function(obj, pickler):
         log.info("F1: %s" % obj)
         _recurse = getattr(pickler, '_recurse', None)
         _byref = getattr(pickler, '_byref', None)
         _postproc = getattr(pickler, '_postproc', None)
+        _main_modified = getattr(pickler, '_main_modified', None)
+        _original_main = getattr(pickler, '_original_main', __builtin__)#'None'
         postproc_list = []
         if _recurse:
             # recurse to get all globals referred to by obj
@@ -1974,8 +2041,13 @@ def save_function(pickler, obj):
         else:
             globs_copy = obj.__globals__ if PY3 else obj.func_globals
 
+            # If the globals is the __dict__ from the module being saved as a
+            # session, substitute it by the dictionary being actually saved.
+            if _main_modified and globs_copy is _original_main.__dict__:
+                globs_copy = getattr(pickler, '_main', _original_main).__dict__
+                globs = globs_copy
             # If the globals is a module __dict__, do not save it in the pickle.
-            if globs_copy is not None and obj.__module__ is not None and \
+            elif globs_copy is not None and obj.__module__ is not None and \
                     getattr(_import_module(obj.__module__, True), '__dict__', None) is globs_copy:
                 globs = globs_copy
             else:
@@ -1999,35 +2071,59 @@ def save_function(pickler, obj):
 
         if PY3:
             closure = obj.__closure__
-            fkwdefaults = getattr(obj, '__kwdefaults__', None)
+            state_dict = {}
+            for fattrname in ('__doc__', '__kwdefaults__', '__annotations__'):
+                fattr = getattr(obj, fattrname, None)
+                if fattr is not None:
+                    state_dict[fattrname] = fattr
+            if obj.__qualname__ != obj.__name__:
+                state_dict['__qualname__'] = obj.__qualname__
+            if '__name__' not in globs or obj.__module__ != globs['__name__']:
+                state_dict['__module__'] = obj.__module__
+
+            state = obj.__dict__
+            if type(state) is not dict:
+                state_dict['__dict__'] = state
+                state = None
+            if state_dict:
+                state = state, state_dict
+
             _save_with_postproc(pickler, (_create_function, (
                   obj.__code__, globs, obj.__name__, obj.__defaults__,
-                  closure, obj.__dict__, fkwdefaults
-            )), obj=obj, postproc_list=postproc_list)
+                  closure
+            ), state), obj=obj, postproc_list=postproc_list)
         else:
             closure = obj.func_closure
+            if obj.__doc__ is not None:
+                postproc_list.append((setattr, (obj, '__doc__', obj.__doc__)))
+            if '__name__' not in globs or obj.__module__ != globs['__name__']:
+                postproc_list.append((setattr, (obj, '__module__', obj.__module__)))
+            if obj.__dict__:
+                postproc_list.append((setattr, (obj, '__dict__', obj.__dict__)))
+
             _save_with_postproc(pickler, (_create_function, (
                 obj.func_code, globs, obj.func_name, obj.func_defaults,
-                closure, obj.__dict__
+                closure
             )), obj=obj, postproc_list=postproc_list)
 
         # Lift closure cell update to earliest function (#458)
-        topmost_postproc = next(iter(pickler._postproc.values()), None)
-        if closure and topmost_postproc:
-            for cell in closure:
-                possible_postproc = (setattr, (cell, 'cell_contents', obj))
-                try:
-                    topmost_postproc.remove(possible_postproc)
-                except ValueError:
-                    continue
+        if _postproc:
+            topmost_postproc = next(iter(_postproc.values()), None)
+            if closure and topmost_postproc:
+                for cell in closure:
+                    possible_postproc = (setattr, (cell, 'cell_contents', obj))
+                    try:
+                        topmost_postproc.remove(possible_postproc)
+                    except ValueError:
+                        continue
 
-                # Change the value of the cell
-                pickler.save_reduce(*possible_postproc)
-                # pop None created by calling preprocessing step off stack
-                if PY3:
-                    pickler.write(bytes('0', 'UTF-8'))
-                else:
-                    pickler.write('0')
+                    # Change the value of the cell
+                    pickler.save_reduce(*possible_postproc)
+                    # pop None created by calling preprocessing step off stack
+                    if PY3:
+                        pickler.write(bytes('0', 'UTF-8'))
+                    else:
+                        pickler.write('0')
 
         log.info("# F1")
     else:
