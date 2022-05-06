@@ -1619,7 +1619,13 @@ def save_cell(pickler, obj):
         log.info("# Ce3")
         return
     if is_dill(pickler, child=True):
-        postproc = next(iter(pickler._postproc.values()), None)
+        if id(f) in pickler._postproc:
+            # Already seen. Add to its postprocessing.
+            postproc = pickler._postproc[id(f)]
+        else:
+            # Haven't seen it. Add to the highest possible object and set its
+            # value as late as possible to prevent cycle.
+            postproc = next(iter(pickler._postproc.values()), None)
         if postproc is not None:
             log.info("Ce2: %s" % obj)
             # _CELL_REF is defined in _shims.py to support older versions of
@@ -1830,7 +1836,7 @@ def _get_typedict_type(cls, clsdict, postproc_list):
     return clsdict
     # return _dict_from_dictproxy(cls.__dict__)
 
-def _get_typedict_abc(obj, _dict, state, postproc_list):
+def _get_typedict_abc(obj, _dict, attrs, postproc_list):
     log.info("ABC: %s" % obj)
     if hasattr(abc, '_get_dump'):
         (registry, _, _, _) = abc._get_dump(obj)
@@ -1851,9 +1857,9 @@ def _get_typedict_abc(obj, _dict, state, postproc_list):
     else:
         del _dict['_abc_impl']
     log.info("# ABC")
-    return _dict, state
+    return _dict, attrs
 
-def _get_typedict_enum(obj, _dict, state, postproc_list):
+def _get_typedict_enum(obj, _dict, attrs, postproc_list):
     log.info("E: %s" % obj)
     metacls = type(obj)
     original_dict = {}
@@ -1866,8 +1872,12 @@ def _get_typedict_enum(obj, _dict, state, postproc_list):
     _dict.pop('_value2member_map_', None)
     _dict.pop('_generate_next_value_', None)
 
+    if attrs is not None:
+        attrs.update(_dict)
+        _dict = attrs
+
     log.info("# E")
-    return original_dict, (None, _dict)
+    return original_dict, _dict
 
 @register(TypeType)
 def save_type(pickler, obj, postproc_list=None):
@@ -1912,7 +1922,6 @@ def save_type(pickler, obj, postproc_list=None):
         log.info("# T7")
 
     else:
-        obj_name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
         _byref = getattr(pickler, '_byref', None)
         obj_recursive = id(obj) in getattr(pickler, '_postproc', ())
         incorrectly_named = not _locate_function(obj, pickler)
@@ -1923,25 +1932,30 @@ def save_type(pickler, obj, postproc_list=None):
             # thanks to Tom Stepleton pointing out pickler._session unneeded
             _t = 'T3'
             _dict = _get_typedict_type(obj, obj.__dict__.copy(), postproc_list) # copy dict proxy to a dict
-            state = None
+            attrs = None
 
             for name in _dict.get("__slots__", []):
                 del _dict[name]
 
-            if PY3 and obj_name != obj.__name__:
-                postproc_list.append((setattr, (obj, '__qualname__', obj_name)))
-
             if isinstance(obj, abc.ABCMeta):
-                _dict, state = _get_typedict_abc(obj, _dict, state, postproc_list)
+                _dict, attrs = _get_typedict_abc(obj, _dict, attrs, postproc_list)
 
             if EnumMeta and isinstance(obj, EnumMeta):
-                _dict, state = _get_typedict_enum(obj, _dict, state, postproc_list)
+                _dict, attrs = _get_typedict_enum(obj, _dict, attrs, postproc_list)
 
-           #print (_dict)
-           #print ("%s\n%s" % (type(obj), obj.__name__))
-           #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
+            qualname = getattr(obj, '__qualname__', None)
+            if attrs is not None:
+                if qualname is not None:
+                    attrs['__qualname__'] = qualname
+                for k, v in attrs.items():
+                    postproc_list.append((setattr, (obj, k, v)))
+                state = _dict, attrs
+            elif qualname is not None:
+                postproc_list.append((setattr, (obj, '__qualname__', qualname)))
+                state = _dict
 
-            if PY3 and type(obj) is not type or hasattr(obj, '__orig_bases__'):
+            if True: # PY3 and type(obj) is not type or hasattr(obj, '__orig_bases__'):
+                # This case will always work, but might be overkill.
                 from types import new_class
                 _metadict = {
                     'metaclass': type(obj)
@@ -1962,6 +1976,7 @@ def save_type(pickler, obj, postproc_list=None):
                 )), state, obj=obj, postproc_list=postproc_list)
             log.info("# %s" % _t)
         else:
+            obj_name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
             log.info("T4: %s" % obj)
             if incorrectly_named:
                 warnings.warn('Cannot locate reference to %r.' % (obj,), PicklingWarning)
