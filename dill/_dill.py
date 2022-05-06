@@ -1102,7 +1102,7 @@ def _import_module(import_name, safe=False):
 
 def _locate_function(obj, pickler=None):
     if obj.__module__ in ['__main__', None] or \
-            pickler and pickler._session and obj.__module__ == pickler._main.__name__:
+            pickler and is_dill(pickler, child=False) and pickler._session and obj.__module__ == pickler._main.__name__:
         return False
 
     found = _import_module(obj.__module__ + '.' + obj.__name__, safe=True)
@@ -1893,6 +1893,7 @@ def save_function(pickler, obj):
         _byref = getattr(pickler, '_byref', None)
         _postproc = getattr(pickler, '_postproc', None)
         _main_modified = getattr(pickler, '_main_modified', None)
+        _original_main = getattr(pickler, '_original_main', __builtin__)#'None'
         postproc_list = []
         if _recurse:
             # recurse to get all globals referred to by obj
@@ -1907,10 +1908,11 @@ def save_function(pickler, obj):
         else:
             globs_copy = obj.__globals__ if PY3 else obj.func_globals
 
-            # If the globals is the __dict__ from the module being save as a
+            # If the globals is the __dict__ from the module being saved as a
             # session, substitute it by the dictionary being actually saved.
-            if _main_modified and globs_copy is pickler._original_main.__dict__:
-                globs = globs_copy = pickler._main.__dict__
+            if _main_modified and globs_copy is _original_main.__dict__:
+                globs_copy = getattr(pickler, '_main', _original_main).__dict__
+                globs = globs_copy
             # If the globals is a module __dict__, do not save it in the pickle.
             elif globs_copy is not None and obj.__module__ is not None and \
                     getattr(_import_module(obj.__module__, True), '__dict__', None) is globs_copy:
