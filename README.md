@@ -83,6 +83,35 @@ You can get the latest development version with all the shiny new features at:
 If you have a new contribution, please submit a pull request.
 
 
+Installation
+------------
+``dill`` can be installed with ``pip``::
+
+    $ pip install dill
+
+To optionally include the ``objgraph`` diagnostic tool in the install::
+
+    $ pip install dill[graph]
+
+For windows users, to optionally install session history tools::
+
+    $ pip install dill[readline]
+
+
+Requirements
+------------
+``dill`` requires:
+
+* ``python`` (or ``pypy``), **==2.7** or **>=3.7**
+* ``setuptools``, **>=42**
+* ``wheel``, **>=0.1**
+
+Optional requirements:
+
+* ``objgraph``, **>=1.7.2**
+* ``pyreadline``, **>=1.7.1** (on windows)
+
+
 Basic Usage
 -----------
 ``dill`` is a drop-in replacement for ``pickle``. Existing code can be

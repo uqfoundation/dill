@@ -48,7 +48,7 @@ before_install:
     - if [[ $NUMPY == "true" ]]; then pip install numpy; fi
 
 install:
-    - python setup.py build && python setup.py install
+    - python -m pip install .
 
 script:
     - for test in tests/__init__.py; do echo $test ; if [[ $COVERAGE == "true" ]]; then coverage run -a $test > /dev/null; else python $test > /dev/null; fi ; done
