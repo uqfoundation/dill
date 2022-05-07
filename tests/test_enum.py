@@ -116,9 +116,14 @@ def test_enums():
     class Holiday(date, Enum):
         NEW_YEAR = 2013, 1, 1
         IDES_OF_MARCH = 2013, 3, 15
-        
-    # TODO: Fix this case
-    # assert hasattr(dill.copy(Holiday), 'NEW_YEAR')
+
+    assert hasattr(dill.copy(Holiday), 'NEW_YEAR')
+
+    class HolidayTuple(tuple, Enum):
+        NEW_YEAR = 2013, 1, 1
+        IDES_OF_MARCH = 2013, 3, 15
+
+    assert isinstance(dill.copy(HolidayTuple).NEW_YEAR, tuple)
 
     class SuperEnum(IntEnum):
         def __new__(cls, value, description=""):
@@ -133,6 +138,35 @@ def test_enums():
     if sys.hexversion >= 0x030a0000:
         assert 'description' in dir(dill.copy(SubEnum.sample))
         assert 'description' in dir(dill.copy(SubEnum).sample)
+
+    class WeekDay(IntEnum):
+        SUNDAY = 1
+        MONDAY = 2
+        TUESDAY = TEUSDAY = 3
+        WEDNESDAY = 4
+        THURSDAY = 5
+        FRIDAY = 6
+        SATURDAY = 7
+
+    WeekDay_ = dill.copy(WeekDay)
+    assert WeekDay_.TUESDAY is WeekDay_.TEUSDAY
+
+    class AutoNumber(IntEnum):
+        def __new__(cls):
+            value = len(cls.__members__) + 1
+            obj = int.__new__(cls, value)
+            obj._value_ = value
+            return obj
+
+    class Color(AutoNumber):
+        red = ()
+        green = ()
+        blue = ()
+
+    # TODO: This doesn't work yet
+    # Color_ = dill.copy(Color)
+    # assert list(Color_) == [Color_.red, Color_.green, Color_.blue]
+    # assert list(map(int, Color_)) == [1, 2, 3]
 
 if __name__ == '__main__':
     test_enums()

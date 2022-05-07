@@ -1859,12 +1859,31 @@ def _get_typedict_abc(obj, _dict, attrs, postproc_list):
     log.info("# ABC")
     return _dict, attrs
 
+CORE_CLASSES = (int, float, type(None), str, dict, tuple, set, list, frozenset)
+
 def _get_typedict_enum(obj, _dict, attrs, postproc_list):
     log.info("E: %s" % obj)
+    base = None
+
     metacls = type(obj)
     original_dict = {}
     for name, enum_value in obj.__members__.items():
-        original_dict[name] = enum_value.value
+        value = enum_value.value
+        if base is None:
+            import copyreg
+            base = type(value)
+            reducer = copyreg.dispatch_table.get(base, None)
+
+        if base is tuple:
+            init_value = (value,)
+        elif base in CORE_CLASSES:
+            init_value = value
+        else:
+            init_value = reducer(value) if reducer else value.__reduce__()
+            if init_value[0] is not base or len(init_value) != 2:
+                raise PickleError('Cannot pickle Enum class, reduction too complex')
+            init_value = init_value[1]
+        original_dict[name] = init_value
         del _dict[name]
 
     _dict.pop('_member_names_', None)
@@ -1930,7 +1949,7 @@ def save_type(pickler, obj, postproc_list=None):
                 postproc_list = []
 
             # thanks to Tom Stepleton pointing out pickler._session unneeded
-            _t = 'T3'
+            log.info("T3: %s" % obj)
             _dict = _get_typedict_type(obj, obj.__dict__.copy(), postproc_list) # copy dict proxy to a dict
             attrs = None
 
@@ -1974,7 +1993,7 @@ def save_type(pickler, obj, postproc_list=None):
                 _save_with_postproc(pickler, (_create_type, (
                     type(obj), obj.__name__, obj.__bases__, _dict
                 )), state, obj=obj, postproc_list=postproc_list)
-            log.info("# %s" % _t)
+            log.info("# T3")
         else:
             obj_name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
             log.info("T4: %s" % obj)
