@@ -1589,7 +1589,13 @@ def save_cell(pickler, obj):
         log.info("# Ce3")
         return
     if is_dill(pickler, child=True):
-        postproc = next(iter(pickler._postproc.values()), None)
+        if id(f) in pickler._postproc:
+            # Already seen. Add to its postprocessing.
+            postproc = pickler._postproc[id(f)]
+        else:
+            # Haven't seen it. Add to the highest possible object and set its
+            # value as late as possible to prevent cycle.
+            postproc = next(iter(pickler._postproc.values()), None)
         if postproc is not None:
             log.info("Ce2: %s" % obj)
             # _CELL_REF is defined in _shims.py to support older versions of

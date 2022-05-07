@@ -216,6 +216,32 @@ def test_slots():
     assert dill.pickles(Y.y)
     assert dill.copy(y).y == value
 
+def test_metaclass():
+    class metaclass_with_new(type):
+        def __new__(mcls, name, bases, ns, **kwds):
+            cls = super().__new__(mcls, name, bases, ns, **kwds)
+            assert mcls is not None
+            assert cls.method(mcls)
+            return cls
+        def method(cls, mcls):
+            return isinstance(cls, mcls)
+
+    if dill._dill.PY3:
+        l = locals()
+        exec("""class subclass_with_new(metaclass=metaclass_with_new):
+            def __new__(cls):
+                self = super().__new__(cls)
+                return self""", None, l)
+        subclass_with_new = l['subclass_with_new']
+    else:
+        class subclass_with_new:
+            __metaclass__ = metaclass_with_new
+            def __new__(cls):
+                self = super().__new__(cls)
+                return self
+
+    assert dill.copy(subclass_with_new())
+
 
 if __name__ == '__main__':
     test_class_instances()
@@ -227,3 +253,4 @@ if __name__ == '__main__':
     test_array_subclass()
     test_method_decorator()
     test_slots()
+    test_metaclass()
