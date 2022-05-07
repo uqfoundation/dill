@@ -217,16 +217,16 @@ def test_slots():
     assert dill.copy(y).y == value
 
 def test_metaclass():
-    class metaclass_with_new(type):
-        def __new__(mcls, name, bases, ns, **kwds):
-            cls = super().__new__(mcls, name, bases, ns, **kwds)
-            assert mcls is not None
-            assert cls.method(mcls)
-            return cls
-        def method(cls, mcls):
-            return isinstance(cls, mcls)
-
     if dill._dill.PY3:
+        class metaclass_with_new(type):
+            def __new__(mcls, name, bases, ns, **kwds):
+                cls = super().__new__(mcls, name, bases, ns, **kwds)
+                assert mcls is not None
+                assert cls.method(mcls)
+                return cls
+            def method(cls, mcls):
+                return isinstance(cls, mcls)
+
         l = locals()
         exec("""class subclass_with_new(metaclass=metaclass_with_new):
             def __new__(cls):
@@ -234,10 +234,19 @@ def test_metaclass():
                 return self""", None, l)
         subclass_with_new = l['subclass_with_new']
     else:
+        class metaclass_with_new(type):
+            def __new__(mcls, name, bases, ns, **kwds):
+                cls = super(mcls, metaclass_with_new).__new__(mcls, name, bases, ns, **kwds)
+                assert mcls is not None
+                assert cls.method(mcls)
+                return cls
+            def method(cls, mcls):
+                return isinstance(cls, mcls)
+
         class subclass_with_new:
             __metaclass__ = metaclass_with_new
             def __new__(cls):
-                self = super().__new__(cls)
+                self = super(subclass_with_new, cls).__new__(cls)
                 return self
 
     assert dill.copy(subclass_with_new())
