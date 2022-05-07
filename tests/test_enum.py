@@ -2,7 +2,11 @@ try:
     import enum
     from enum import Enum, IntEnum, EnumMeta, Flag, IntFlag, unique, auto
 except:
-    Enum = None
+    try:
+        import enum34
+        from enum34 import Enum, IntEnum, EnumMeta, Flag, IntFlag, unique, auto
+    except:
+        Enum = None
 
 import abc
 
@@ -69,11 +73,11 @@ def test_enums():
                 try:  # Handle existence of undefined abstract methods.
                     absmethods = list(abstract_enum_cls.__abstractmethods__)
                     if absmethods:
-                        missing = ', '.join(f'{method!r}' for method in absmethods)
+                        missing = ', '.join(repr(method) for method in absmethods)
                         plural = 's' if len(absmethods) > 1 else ''
                         raise TypeError(
-                           f"cannot instantiate abstract class {abstract_enum_cls.__name__!r}"
-                           f" with abstract method{plural} {missing}")
+                          ("cannot instantiate abstract class %r"
+                           " with abstract method%s %s") % (abstract_enum_cls.__name__, plural, missing))
                 except AttributeError:
                     pass
             return abstract_enum_cls
@@ -169,4 +173,5 @@ def test_enums():
     # assert list(map(int, Color_)) == [1, 2, 3]
 
 if __name__ == '__main__':
-    test_enums()
+    if Enum:
+        test_enums()

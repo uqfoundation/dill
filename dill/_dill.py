@@ -279,8 +279,11 @@ from collections import OrderedDict
 try:
     from enum import Enum, EnumMeta
 except:
-    Enum = None
-    EnumMeta = None
+    try:
+        from enum34 import Enum, EnumMeta
+    except:
+        Enum = None
+        EnumMeta = None
 
 import inspect
 
@@ -1968,12 +1971,11 @@ def save_type(pickler, obj, postproc_list=None):
                     attrs['__qualname__'] = qualname
                 for k, v in attrs.items():
                     postproc_list.append((setattr, (obj, k, v)))
-                state = _dict, attrs
+                # TODO: Consider using the state argument to save_reduce?
             elif qualname is not None:
                 postproc_list.append((setattr, (obj, '__qualname__', qualname)))
-                state = _dict
 
-            if True: # PY3 and type(obj) is not type or hasattr(obj, '__orig_bases__'):
+            if PY3: # and type(obj) is not type or hasattr(obj, '__orig_bases__'):
                 # This case will always work, but might be overkill.
                 from types import new_class
                 _metadict = {
@@ -1988,11 +1990,11 @@ def save_type(pickler, obj, postproc_list=None):
                 bases = getattr(obj, '__orig_bases__', obj.__bases__)
                 _save_with_postproc(pickler, (new_class, (
                     obj.__name__, bases, _metadict, _dict_update
-                )), state, obj=obj, postproc_list=postproc_list)
+                )), obj=obj, postproc_list=postproc_list)
             else:
                 _save_with_postproc(pickler, (_create_type, (
                     type(obj), obj.__name__, obj.__bases__, _dict
-                )), state, obj=obj, postproc_list=postproc_list)
+                )), obj=obj, postproc_list=postproc_list)
             log.info("# T3")
         else:
             obj_name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
