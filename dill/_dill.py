@@ -40,6 +40,7 @@ PY3 = (sys.hexversion >= 0x3000000)
 OLDER = (PY3 and sys.hexversion < 0x3040000) or (sys.hexversion < 0x2070ab1)
 OLD33 = (sys.hexversion < 0x3030000)
 OLD37 = (sys.hexversion < 0x3070000)
+OLD38 = (sys.hexversion < 0x3080000)
 OLD39 = (sys.hexversion < 0x3090000)
 OLD310 = (sys.hexversion < 0x30a0000)
 PY34 = (0x3040000 <= sys.hexversion < 0x3050000)
@@ -85,6 +86,7 @@ import marshal
 import gc
 # import zlib
 from weakref import ReferenceType, ProxyType, CallableProxyType
+from collections import OrderedDict
 from functools import partial
 from operator import itemgetter, attrgetter
 # new in python3.3
@@ -271,8 +273,6 @@ except NameError:
     try: ExitType = type(exit) # apparently 'exit' can be removed
     except NameError: ExitType = None
     singletontypes = []
-
-from collections import OrderedDict
 
 import inspect
 
@@ -570,7 +570,6 @@ class Pickler(StockPickler):
         self._strictio = False #_strictio
         self._fmode = settings['fmode'] if _fmode is None else _fmode
         self._recurse = settings['recurse'] if _recurse is None else _recurse
-        from collections import OrderedDict
         self._postproc = OrderedDict()
 
     def dump(self, obj): #NOTE: if settings change, need to update attributes
@@ -721,6 +720,15 @@ _reverse_typemap.update({
     'SuperType': SuperType,
     'ItemGetterType': ItemGetterType,
     'AttrGetterType': AttrGetterType,
+})
+
+# "Incidental" implementation specific types. Unpickling these types in another
+# implementation of Python (PyPy -> CPython) is not gauranteed to work
+
+# This dictionary should contain all types that appear in Python implementations
+# but are not defined in https://docs.python.org/3/library/types.html#standard-interpreter-types
+x=OrderedDict()
+_incedental_reverse_typemap = {
     'FileType': FileType,
     'BufferedRandomType': BufferedRandomType,
     'BufferedReaderType': BufferedReaderType,
@@ -730,18 +738,89 @@ _reverse_typemap.update({
     'PyBufferedReaderType': PyBufferedReaderType,
     'PyBufferedWriterType': PyBufferedWriterType,
     'PyTextWrapperType': PyTextWrapperType,
-})
-if ExitType:
-    _reverse_typemap['ExitType'] = ExitType
-if InputType:
-    _reverse_typemap['InputType'] = InputType
-    _reverse_typemap['OutputType'] = OutputType
-if not IS_PYPY:
-    _reverse_typemap['WrapperDescriptorType'] = WrapperDescriptorType
-    _reverse_typemap['MethodDescriptorType'] = MethodDescriptorType
-    _reverse_typemap['ClassMethodDescriptorType'] = ClassMethodDescriptorType
+
+    "BytesIteratorType": type(iter(b'')),
+    "BytearrayIteratorType": type(iter(bytearray(b''))),
+    "CallableIteratorType": type(iter(iter, None)),
+    "MemoryIteratorType": type(iter(memoryview(b''))),
+    "RangeIteratorType": type(iter(range(3))),
+    "SetIteratorType": type(iter(set())),
+    "TupleIteratorType": type(iter(())),
+
+    "ListIteratorType": type(iter([])),
+    "ListReverseiteratorType": type(reversed([])),
+}
+
+if PY3:
+    _incedental_reverse_typemap.update({
+        "DictKeysType": type({}.keys()),
+        "DictValuesType": type({}.values()),
+        "DictItemsType": type({}.items()),
+
+        "DictKeyiteratorType": type(iter({}.keys())),
+        "DictValueiteratorType": type(iter({}.values())),
+        "DictItemiteratorType": type(iter({}.items())),
+
+        "OdictKeysType": type(x.keys()),
+        "OdictValuesType": type(x.values()),
+        "OdictItemsType": type(x.items()),
+
+        "OdictIteratorType": iter(x.keys()),
+    })
+    if not OLD38:
+        _incedental_reverse_typemap.update({
+            "DictReversekeyiteratorType": type(reversed({}.keys())),
+            "DictReversevalueiteratorType": type(reversed({}.values())),
+            "DictReverseitemiteratorType": type(reversed({}.items())),
+        })
 else:
-    _reverse_typemap['MemberDescriptorType'] = MemberDescriptorType
+    _incedental_reverse_typemap.update({
+        "DictKeysType": type({}.viewkeys()),
+        "DictValuesType": type({}.viewvalues()),
+        "DictItemsType": type({}.viewitems()),
+
+        "DictKeyiteratorType": type({}.iterkeys()),
+        "DictValueiteratorType": type({}.itervalues()),
+        "DictItemiteratorType": type({}.iteritems()),
+    })
+
+if ExitType:
+    _incedental_reverse_typemap['ExitType'] = ExitType
+if InputType:
+    _incedental_reverse_typemap['InputType'] = InputType
+    _incedental_reverse_typemap['OutputType'] = OutputType
+if not IS_PYPY:
+    _incedental_reverse_typemap['WrapperDescriptorType'] = WrapperDescriptorType
+    _incedental_reverse_typemap['MethodDescriptorType'] = MethodDescriptorType
+    _incedental_reverse_typemap['ClassMethodDescriptorType'] = ClassMethodDescriptorType
+else:
+    _incedental_reverse_typemap['MemberDescriptorType'] = MemberDescriptorType
+
+try:
+    import symtable
+    _incedental_reverse_typemap["SymtableStentryType"] = type(symtable.symtable("", "string", "exec")._table)
+except:
+    pass
+
+if sys.hexversion >= 0x30a00a0:
+    _incedental_reverse_typemap['LineIteratorType'] = type(compile('3', '', 'eval').co_lines())
+
+if sys.hexversion >= 0x30b00a0:
+    # from types import GenericAlias
+    # _incedental_reverse_typemap["GenericAliasIteratorType"] = type(iter(GenericAlias(list, (int,))))
+    _incedental_reverse_typemap['PositionsIteratorType'] = type(compile('3', '', 'eval').co_positions())
+
+try:
+    import winreg
+    _incedental_reverse_typemap["PyHKEY"] = winreg.HKEYType
+except:
+    pass
+
+_reverse_typemap.update(_incedental_reverse_typemap)
+_incedental_types = set(_incedental_reverse_typemap.values())
+
+del x
+
 if PY3:
     _typemap = dict((v, k) for k, v in _reverse_typemap.items())
 else:
@@ -1780,6 +1859,8 @@ def save_module(pickler, obj):
 def save_type(pickler, obj, postproc_list=None):
     if obj in _typemap:
         log.info("T1: %s" % obj)
+        # if obj in _incedental_types:
+        #     warnings.warn('Type %r may only exist on this implementation of Python and cannot be unpickled in other implementations.' % (obj,), PicklingWarning)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
         log.info("# T1")
     elif obj.__bases__ == (tuple,) and all([hasattr(obj, attr) for attr in ('_fields','_asdict','_make','_replace')]):
