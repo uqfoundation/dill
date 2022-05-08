@@ -13,8 +13,8 @@ import dis
 from inspect import ismethod, isfunction, istraceback, isframe, iscode
 from .pointers import parent, reference, at, parents, children
 
-from ._dill import _trace as trace
 from ._dill import PY3
+from .logger import trace
 
 __all__ = ['baditems','badobjects','badtypes','code','errors','freevars',
            'getmodule','globalvars','nestedcode','nestedglobals','outermost',

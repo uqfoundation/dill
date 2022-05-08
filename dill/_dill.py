@@ -21,14 +21,7 @@ __all__ = ['dump','dumps','load','loads','dump_session','load_session',
            'UnpicklingError','HANDLE_FMODE','CONTENTS_FMODE','FILE_FMODE',
            'PickleError','PickleWarning','PicklingWarning','UnpicklingWarning']
 
-import logging
-log = logging.getLogger("dill")
-log.addHandler(logging.StreamHandler())
-def _trace(boolean):
-    """print a trace through the stack when pickling; useful for debugging"""
-    if boolean: log.setLevel(logging.INFO)
-    else: log.setLevel(logging.WARN)
-    return
+from .logger import adapter as logger
 import warnings
 
 import os
@@ -491,6 +484,7 @@ def dump_session(filename='/tmp/session.pkl', main=None, byref=False, **kwds):
         f = open(filename, 'wb')
     try:
         pickler = Pickler(f, protocol, **kwds)
+        pickler._file = f
         pickler._original_main = main
         if byref:
             main = _stash_modules(main)
@@ -557,13 +551,13 @@ class Pickler(StockPickler):
     _session = False
     from .settings import settings
 
-    def __init__(self, *args, **kwds):
+    def __init__(self, file, *args, **kwds):
         settings = Pickler.settings
         _byref = kwds.pop('byref', None)
        #_strictio = kwds.pop('strictio', None)
         _fmode = kwds.pop('fmode', None)
         _recurse = kwds.pop('recurse', None)
-        StockPickler.__init__(self, *args, **kwds)
+        StockPickler.__init__(self, file, *args, **kwds)
         self._main = _main_module
         self._diff_cache = {}
         self._byref = settings['byref'] if _byref is None else _byref
@@ -572,6 +566,7 @@ class Pickler(StockPickler):
         self._recurse = settings['recurse'] if _recurse is None else _recurse
         from collections import OrderedDict
         self._postproc = OrderedDict()
+        self._file = file
 
     def dump(self, obj): #NOTE: if settings change, need to update attributes
         # register if the object is a numpy ufunc
@@ -579,10 +574,10 @@ class Pickler(StockPickler):
         if NumpyUfuncType and numpyufunc(obj):
             @register(type(obj))
             def save_numpy_ufunc(pickler, obj):
-                log.info("Nu: %s" % obj)
+                _log_trace(pickler, "Nu: %s", obj)
                 name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
                 StockPickler.save_global(pickler, obj, name=name)
-                log.info("# Nu")
+                _log_trace(pickler, "# Nu")
                 return
             # NOTE: the above 'save' performs like:
             #   import copy_reg
@@ -593,9 +588,9 @@ class Pickler(StockPickler):
         if NumpyDType and numpydtype(obj):
             @register(type(obj))
             def save_numpy_dtype(pickler, obj):
-                log.info("Dt: %s" % obj)
+                _log_trace(pickler, "Dt: %s", obj)
                 pickler.save_reduce(_create_dtypemeta, (obj.type,), obj=obj)
-                log.info("# Dt")
+                _log_trace(pickler, "# Dt")
                 return
             # NOTE: the above 'save' performs like:
             #   import copy_reg
@@ -606,21 +601,25 @@ class Pickler(StockPickler):
         if NumpyArrayType and ndarraysubclassinstance(obj):
             @register(type(obj))
             def save_numpy_array(pickler, obj):
-                log.info("Nu: (%s, %s)" % (obj.shape,obj.dtype))
+                _log_trace(pickler, "Nu: (%s, %s)", obj.shape, obj.dtype)
                 npdict = getattr(obj, '__dict__', None)
                 f, args, state = obj.__reduce__()
                 pickler.save_reduce(_create_array, (f,args,state,npdict), obj=obj)
-                log.info("# Nu")
+                _log_trace(pickler, "# Nu")
                 return
         # end hack
         if GENERATOR_FAIL and type(obj) == GeneratorType:
             msg = "Can't pickle %s: attribute lookup builtins.generator failed" % GeneratorType
             raise PicklingError(msg)
         else:
-            StockPickler.dump(self, obj)
+            _log_trace(self)
+            try:
+                StockPickler.dump(self, obj)
+            finally:
+                _log_trace(self, reset=True)
         return
+
     dump.__doc__ = StockPickler.dump.__doc__
-    pass
 
 class Unpickler(StockUnpickler):
     """python's Unpickler extended to interpreter sessions and more types"""
@@ -1165,9 +1164,9 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
 
 #@register(CodeType)
 #def save_code(pickler, obj):
-#    log.info("Co: %s" % obj)
+#    _log_trace(pickler, "Co: %s", obj)
 #    pickler.save_reduce(_unmarshal, (marshal.dumps(obj),), obj=obj)
-#    log.info("# Co")
+#    _log_trace(pickler, "# Co")
 #    return
 
 # The following function is based on 'save_codeobject' from 'cloudpickle'
@@ -1176,7 +1175,7 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
 # License: https://github.com/cloudpipe/cloudpickle/blob/master/LICENSE
 @register(CodeType)
 def save_code(pickler, obj):
-    log.info("Co: %s" % obj)
+    _log_trace(pickler, "Co: %s", obj)
     if PY3:
         if hasattr(obj, "co_exceptiontable"):
             args = (
@@ -1214,42 +1213,42 @@ def save_code(pickler, obj):
         )
 
     pickler.save_reduce(_create_code, args, obj=obj)
-    log.info("# Co")
+    _log_trace(pickler, "# Co")
     return
 
 @register(dict)
 def save_module_dict(pickler, obj):
     if is_dill(pickler, child=False) and obj == pickler._main.__dict__ and \
             not (pickler._session and pickler._first_pass):
-        log.info("D1: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
+        _log_trace(pickler, "D1: <dict%s", str(obj.__repr__).split('dict')[-1]) # obj
         if PY3:
             pickler.write(bytes('c__builtin__\n__main__\n', 'UTF-8'))
         else:
             pickler.write('c__builtin__\n__main__\n')
-        log.info("# D1")
+        _log_trace(pickler, "# D1")
     elif (not is_dill(pickler, child=False)) and (obj == _main_module.__dict__):
-        log.info("D3: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
+        _log_trace(pickler, "D3: <dict%s", str(obj.__repr__).split('dict')[-1]) # obj
         if PY3:
             pickler.write(bytes('c__main__\n__dict__\n', 'UTF-8'))
         else:
             pickler.write('c__main__\n__dict__\n')   #XXX: works in general?
-        log.info("# D3")
+        _log_trace(pickler, "# D3")
     elif '__name__' in obj and obj != _main_module.__dict__ \
     and type(obj['__name__']) is str \
     and obj is getattr(_import_module(obj['__name__'],True), '__dict__', None):
-        log.info("D4: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
+        _log_trace(pickler, "D4: <dict%s", str(obj.__repr__).split('dict')[-1]) # obj
         if PY3:
             pickler.write(bytes('c%s\n__dict__\n' % obj['__name__'], 'UTF-8'))
         else:
             pickler.write('c%s\n__dict__\n' % obj['__name__'])
-        log.info("# D4")
+        _log_trace(pickler, "# D4")
     else:
-        log.info("D2: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
+        _log_trace(pickler, "D2: <dict%s", str(obj.__repr__).split('dict')[-1]) # obj
         if is_dill(pickler, child=False) and pickler._session:
             # we only care about session the first pass thru
             pickler._first_pass = False
         StockPickler.save_dict(pickler, obj)
-        log.info("# D2")
+        _log_trace(pickler, "# D2")
     return
 
 
@@ -1257,10 +1256,10 @@ if not OLD310 and MAPPING_PROXY_TRICK:
     def save_dict_view(dicttype):
         def save_dict_view_for_function(func):
             def _save_dict_view(pickler, obj):
-                log.info("Dkvi: <%s>" % (obj,))
+                _log_trace(pickler, "Dkvi: <%s>", obj)
                 mapping = obj.mapping | _dictproxy_helper_instance
                 pickler.save_reduce(func, (mapping,), obj=obj)
-                log.info("# Dkvi")
+                _log_trace(pickler, "# Dkvi")
             return _save_dict_view
         return [
             (funcname, save_dict_view_for_function(getattr(dicttype, funcname)))
@@ -1274,21 +1273,21 @@ else:
     # License: https://github.com/cloudpipe/cloudpickle/blob/master/LICENSE
     def save_dict_view(dicttype):
         def save_dict_keys(pickler, obj):
-            log.info("Dk: <%s>" % (obj,))
+            _log_trace(pickler, "Dk: <%s>", obj)
             dict_constructor = _shims.Reduce(dicttype.fromkeys, (list(obj),))
             pickler.save_reduce(dicttype.keys, (dict_constructor,), obj=obj)
-            log.info("# Dk")
+            _log_trace(pickler, "# Dk")
 
         def save_dict_values(pickler, obj):
-            log.info("Dv: <%s>" % (obj,))
+            _log_trace(pickler, "Dv: <%s>", obj)
             dict_constructor = _shims.Reduce(dicttype, (enumerate(obj),))
             pickler.save_reduce(dicttype.values, (dict_constructor,), obj=obj)
-            log.info("# Dv")
+            _log_trace(pickler, "# Dv")
 
         def save_dict_items(pickler, obj):
-            log.info("Di: <%s>" % (obj,))
+            _log_trace(pickler, "Di: <%s>", obj)
             pickler.save_reduce(dicttype.items, (dicttype(obj),), obj=obj)
-            log.info("# Di")
+            _log_trace(pickler, "# Di")
 
         return (
             ('keys', save_dict_keys),
@@ -1311,61 +1310,61 @@ del __dicttype, __obj, __funcname, __tview, __savefunc
 @register(ClassType)
 def save_classobj(pickler, obj): #FIXME: enable pickler._byref
     if not _locate_function(obj, pickler):
-        log.info("C1: %s" % obj)
+        _log_trace(pickler, "C1: %s", obj)
         pickler.save_reduce(ClassType, (obj.__name__, obj.__bases__,
                                         obj.__dict__), obj=obj)
                                        #XXX: or obj.__dict__.copy()), obj=obj) ?
-        log.info("# C1")
+        _log_trace(pickler, "# C1")
     else:
-        log.info("C2: %s" % obj)
+        _log_trace(pickler, "C2: %s", obj)
         name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
         StockPickler.save_global(pickler, obj, name=name)
-        log.info("# C2")
+        _log_trace(pickler, "# C2")
     return
 
 @register(LockType)
 def save_lock(pickler, obj):
-    log.info("Lo: %s" % obj)
+    _log_trace(pickler, "Lo: %s", obj)
     pickler.save_reduce(_create_lock, (obj.locked(),), obj=obj)
-    log.info("# Lo")
+    _log_trace(pickler, "# Lo")
     return
 
 @register(RLockType)
 def save_rlock(pickler, obj):
-    log.info("RL: %s" % obj)
+    _log_trace(pickler, "RL: %s", obj)
     r = obj.__repr__() # don't use _release_save as it unlocks the lock
     count = int(r.split('count=')[1].split()[0].rstrip('>'))
     owner = int(r.split('owner=')[1].split()[0]) if PY3 else getattr(obj, '_RLock__owner')
     pickler.save_reduce(_create_rlock, (count,owner,), obj=obj)
-    log.info("# RL")
+    _log_trace(pickler, "# RL")
     return
 
 if not IS_PYPY2:
     #@register(SocketType) #FIXME: causes multiprocess test_pickling FAIL
     def save_socket(pickler, obj):
-        log.info("So: %s" % obj)
+        _log_trace(pickler, "So: %s", obj)
         pickler.save_reduce(*reduce_socket(obj))
-        log.info("# So")
+        _log_trace(pickler, "# So")
         return
 
 if sys.hexversion <= 0x3050000:
     @register(ItemGetterType)
     def save_itemgetter(pickler, obj):
-        log.info("Ig: %s" % obj)
+        _log_trace(pickler, "Ig: %s", obj)
         helper = _itemgetter_helper()
         obj(helper)
         pickler.save_reduce(type(obj), tuple(helper.items), obj=obj)
-        log.info("# Ig")
+        _log_trace(pickler, "# Ig")
         return
 
     @register(AttrGetterType)
     def save_attrgetter(pickler, obj):
-        log.info("Ag: %s" % obj)
+        _log_trace(pickler, "Ag: %s", obj)
         attrs = []
         helper = _attrgetter_helper(attrs)
         obj(helper)
         pickler.save_reduce(type(obj), tuple(attrs), obj=obj)
-        log.info("# Ag")
+        _log_trace(pickler, "# Ag")
         return
 
 def _save_file(pickler, obj, open_):
@@ -1401,9 +1400,9 @@ def _save_file(pickler, obj, open_):
 @register(BufferedWriterType)
 @register(TextWrapperType)
 def save_file(pickler, obj):
-    log.info("Fi: %s" % obj)
+    _log_trace(pickler, "Fi: %s", obj)
     f = _save_file(pickler, obj, open)
-    log.info("# Fi")
+    _log_trace(pickler, "# Fi")
     return f
 
 if PyTextWrapperType:
@@ -1412,9 +1411,9 @@ if PyTextWrapperType:
     @register(PyBufferedWriterType)
     @register(PyTextWrapperType)
     def save_file(pickler, obj):
-        log.info("Fi: %s" % obj)
+        _log_trace(pickler, "Fi: %s", obj)
         f = _save_file(pickler, obj, _open)
-        log.info("# Fi")
+        _log_trace(pickler, "# Fi")
         return f
 
 # The following two functions are based on 'saveCStringIoInput'
@@ -1424,42 +1423,42 @@ if PyTextWrapperType:
 if InputType:
     @register(InputType)
     def save_stringi(pickler, obj):
-        log.info("Io: %s" % obj)
+        _log_trace(pickler, "Io: %s", obj)
         if obj.closed:
             value = ''; position = 0
         else:
             value = obj.getvalue(); position = obj.tell()
         pickler.save_reduce(_create_stringi, (value, position, \
                                               obj.closed), obj=obj)
-        log.info("# Io")
+        _log_trace(pickler, "# Io")
         return
 
     @register(OutputType)
     def save_stringo(pickler, obj):
-        log.info("Io: %s" % obj)
+        _log_trace(pickler, "Io: %s", obj)
         if obj.closed:
             value = ''; position = 0
         else:
             value = obj.getvalue(); position = obj.tell()
         pickler.save_reduce(_create_stringo, (value, position, \
                                               obj.closed), obj=obj)
-        log.info("# Io")
+        _log_trace(pickler, "# Io")
         return
 
 if 0x2050000 <= sys.hexversion < 0x3010000:
     @register(PartialType)
     def save_functor(pickler, obj):
-        log.info("Fu: %s" % obj)
+        _log_trace(pickler, "Fu: %s", obj)
         pickler.save_reduce(_create_ftype, (type(obj), obj.func, obj.args,
                                             obj.keywords), obj=obj)
-        log.info("# Fu")
+        _log_trace(pickler, "# Fu")
         return
 
 if LRUCacheType is not None:
     from functools import lru_cache
     @register(LRUCacheType)
     def save_lru_cache(pickler, obj):
-        log.info("LRU: %s" % obj)
+        _log_trace(pickler, "LRU: %s", obj)
         if OLD39:
             kwargs = obj.cache_info()
             args = (kwargs.maxsize,)
@@ -1471,14 +1470,14 @@ if LRUCacheType is not None:
         else:
             wrapper = lru_cache
         pickler.save_reduce(wrapper, (obj.__wrapped__,), obj=obj)
-        log.info("# LRU")
+        _log_trace(pickler, "# LRU")
         return
 
 @register(SuperType)
 def save_super(pickler, obj):
-    log.info("Su: %s" % obj)
+    _log_trace(pickler, "Su: %s", obj)
     pickler.save_reduce(super, (obj.__thisclass__, obj.__self__), obj=obj)
-    log.info("# Su")
+    _log_trace(pickler, "# Su")
     return
 
 if OLDER or not PY3:
@@ -1488,34 +1487,34 @@ if OLDER or not PY3:
             if obj.__self__ is __builtin__:
                 module = 'builtins' if PY3 else '__builtin__'
                 _t = "B1"
-                log.info("%s: %s" % (_t, obj))
+                _log_trace(pickler, "%s: %s", _t, obj)
             else:
                 module = obj.__self__
                 _t = "B3"
-                log.info("%s: %s" % (_t, obj))
+                _log_trace(pickler, "%s: %s", _t, obj)
             if is_dill(pickler, child=True):
                 _recurse = pickler._recurse
                 pickler._recurse = False
             pickler.save_reduce(_get_attr, (module, obj.__name__), obj=obj)
             if is_dill(pickler, child=True):
                 pickler._recurse = _recurse
-            log.info("# %s" % _t)
+            _log_trace(pickler, "# %s", _t)
         else:
-            log.info("B2: %s" % obj)
+            _log_trace(pickler, "B2: %s", obj)
             name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
             StockPickler.save_global(pickler, obj, name=name)
-            log.info("# B2")
+            _log_trace(pickler, "# B2")
         return
 
     @register(MethodType) #FIXME: fails for 'hidden' or 'name-mangled' classes
     def save_instancemethod0(pickler, obj):# example: cStringIO.StringI
-        log.info("Me: %s" % obj) #XXX: obj.__dict__ handled elsewhere?
+        _log_trace(pickler, "Me: %s", obj) #XXX: obj.__dict__ handled elsewhere?
         if PY3:
             pickler.save_reduce(MethodType, (obj.__func__, obj.__self__), obj=obj)
         else:
             pickler.save_reduce(MethodType, (obj.im_func, obj.im_self,
                                              obj.im_class), obj=obj)
-        log.info("# Me")
+        _log_trace(pickler, "# Me")
         return
 
 if sys.hexversion >= 0x20500f0:
@@ -1526,40 +1525,40 @@ if sys.hexversion >= 0x20500f0:
         @register(WrapperDescriptorType)
         @register(ClassMethodDescriptorType)
         def save_wrapper_descriptor(pickler, obj):
-            log.info("Wr: %s" % obj)
+            _log_trace(pickler, "Wr: %s", obj)
             pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
                                            obj.__repr__()), obj=obj)
-            log.info("# Wr")
+            _log_trace(pickler, "# Wr")
             return
     else:
         @register(MemberDescriptorType)
         @register(GetSetDescriptorType)
         def save_wrapper_descriptor(pickler, obj):
-            log.info("Wr: %s" % obj)
+            _log_trace(pickler, "Wr: %s", obj)
             pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
                                            obj.__repr__()), obj=obj)
-            log.info("# Wr")
+            _log_trace(pickler, "# Wr")
             return
 
     @register(MethodWrapperType)
     def save_instancemethod(pickler, obj):
-        log.info("Mw: %s" % obj)
+        _log_trace(pickler, "Mw: %s", obj)
         if IS_PYPY2 and obj.__self__ is None and obj.im_class:
             # Can be a class method in PYPY2 if __self__ is none
             pickler.save_reduce(getattr, (obj.im_class, obj.__name__), obj=obj)
             return
         pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
-        log.info("# Mw")
+        _log_trace(pickler, "# Mw")
         return
 
 elif not IS_PYPY:
     @register(MethodDescriptorType)
     @register(WrapperDescriptorType)
     def save_wrapper_descriptor(pickler, obj):
-        log.info("Wr: %s" % obj)
+        _log_trace(pickler, "Wr: %s", obj)
         pickler.save_reduce(_getattr, (obj.__objclass__, obj.__name__,
                                        obj.__repr__()), obj=obj)
-        log.info("# Wr")
+        _log_trace(pickler, "# Wr")
         return
 
 @register(CellType)
@@ -1567,7 +1566,7 @@ def save_cell(pickler, obj):
     try:
         f = obj.cell_contents
     except:
-        log.info("Ce3: %s" % obj)
+        _log_trace(pickler, "Ce3: %s", obj)
         # _shims._CELL_EMPTY is defined in _shims.py to support PyPy 2.7.
         # It unpickles to a sentinel object _dill._CELL_EMPTY, also created in
         # _shims.py. This object is not present in Python 3 because the cell's
@@ -1586,7 +1585,7 @@ def save_cell(pickler, obj):
             pickler.write(bytes('0', 'UTF-8'))
         else:
             pickler.write('0')
-        log.info("# Ce3")
+        _log_trace(pickler, "# Ce3")
         return
     if is_dill(pickler, child=True):
         if id(f) in pickler._postproc:
@@ -1597,34 +1596,34 @@ def save_cell(pickler, obj):
             # value as late as possible to prevent cycle.
             postproc = next(iter(pickler._postproc.values()), None)
         if postproc is not None:
-            log.info("Ce2: %s" % obj)
+            _log_trace(pickler, "Ce2: %s", obj)
             # _CELL_REF is defined in _shims.py to support older versions of
             # dill. When breaking changes are made to dill, (_CELL_REF,) can
             # be replaced by ()
             pickler.save_reduce(_create_cell, (_CELL_REF,), obj=obj)
             postproc.append((_shims._setattr, (obj, 'cell_contents', f)))
-            log.info("# Ce2")
+            _log_trace(pickler, "# Ce2")
             return
-    log.info("Ce1: %s" % obj)
+    _log_trace(pickler, "Ce1: %s", obj)
     pickler.save_reduce(_create_cell, (f,), obj=obj)
-    log.info("# Ce1")
+    _log_trace(pickler, "# Ce1")
     return
 
 if MAPPING_PROXY_TRICK:
     @register(DictProxyType)
     def save_dictproxy(pickler, obj):
-        log.info("Mp: %s" % obj)
+        _log_trace(pickler, "Mp: %s", obj)
         mapping = obj | _dictproxy_helper_instance
         pickler.save_reduce(DictProxyType, (mapping,), obj=obj)
-        log.info("# Mp")
+        _log_trace(pickler, "# Mp")
         return
 elif not IS_PYPY:
     if not OLD33:
         @register(DictProxyType)
         def save_dictproxy(pickler, obj):
-            log.info("Mp: %s" % obj)
+            _log_trace(pickler, "Mp: %s", obj)
             pickler.save_reduce(DictProxyType, (obj.copy(),), obj=obj)
-            log.info("# Mp")
+            _log_trace(pickler, "# Mp")
             return
     else:
         # The following function is based on 'saveDictProxy' from spickle
@@ -1632,31 +1631,31 @@ elif not IS_PYPY:
         # License: http://www.apache.org/licenses/LICENSE-2.0
         @register(DictProxyType)
         def save_dictproxy(pickler, obj):
-            log.info("Dp: %s" % obj)
+            _log_trace(pickler, "Dp: %s", obj)
             attr = obj.get('__dict__')
            #pickler.save_reduce(_create_dictproxy, (attr,'nested'), obj=obj)
             if type(attr) == GetSetDescriptorType and attr.__name__ == "__dict__" \
             and getattr(attr.__objclass__, "__dict__", None) == obj:
                 pickler.save_reduce(getattr, (attr.__objclass__,"__dict__"),obj=obj)
-                log.info("# Dp")
+                _log_trace(pickler, "# Dp")
                 return
             # all bad below... so throw ReferenceError or TypeError
             raise ReferenceError("%s does not reference a class __dict__" % obj)
 
 @register(SliceType)
 def save_slice(pickler, obj):
-    log.info("Sl: %s" % obj)
+    _log_trace(pickler, "Sl: %s", obj)
     pickler.save_reduce(slice, (obj.start, obj.stop, obj.step), obj=obj)
-    log.info("# Sl")
+    _log_trace(pickler, "# Sl")
     return
 
 @register(XRangeType)
 @register(EllipsisType)
 @register(NotImplementedType)
 def save_singleton(pickler, obj):
-    log.info("Si: %s" % obj)
+    _log_trace(pickler, "Si: %s", obj)
     pickler.save_reduce(_eval_repr, (obj.__repr__(),), obj=obj)
-    log.info("# Si")
+    _log_trace(pickler, "# Si")
     return
 
 def _proxy_helper(obj): # a dead proxy returns a reference to None
@@ -1702,10 +1701,10 @@ def _locate_object(address, module=None):
 @register(ReferenceType)
 def save_weakref(pickler, obj):
     refobj = obj()
-    log.info("R1: %s" % obj)
+    _log_trace(pickler, "R1: %s", obj)
    #refobj = ctypes.pythonapi.PyWeakref_GetObject(obj) # dead returns "None"
     pickler.save_reduce(_create_weakref, (refobj,), obj=obj)
-    log.info("# R1")
+    _log_trace(pickler, "# R1")
     return
 
 @register(ProxyType)
@@ -1714,15 +1713,15 @@ def save_weakproxy(pickler, obj):
     refobj = _locate_object(_proxy_helper(obj))
     try:
         _t = "R2"
-        log.info("%s: %s" % (_t, obj))
+        _log_trace(pickler, "%s: %s", _t, obj)
     except ReferenceError:
         _t = "R3"
-        log.info("%s: %s" % (_t, sys.exc_info()[1]))
+        _log_trace(pickler, "%s: %s", _t, sys.exc_info()[1])
    #callable = bool(getattr(refobj, '__call__', None))
     if type(obj) is CallableProxyType: callable = True
     else: callable = False
     pickler.save_reduce(_create_weakproxy, (refobj, callable), obj=obj)
-    log.info("# %s" % _t)
+    _log_trace(pickler, "# %s", _t)
     return
 
 def _is_builtin_module(module):
@@ -1744,72 +1743,72 @@ def save_module(pickler, obj):
             except RuntimeError:  # not memorised module, probably part of dill
                 pass
             else:
-                log.info("M2: %s with diff" % obj)
-                log.info("Diff: %s", changed.keys())
+                _log_trace(pickler, "M2: %s with diff", obj)
+                _log_trace(pickler, "Diff: %s", changed.keys())
                 pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
                                     state=changed)
-                log.info("# M2")
+                _log_trace(pickler, "# M2")
                 return
 
-        log.info("M1: %s" % obj)
+        _log_trace(pickler, "M1: %s", obj)
         pickler.save_reduce(_import_module, (obj.__name__,), obj=obj)
-        log.info("# M1")
+        _log_trace(pickler, "# M1")
     else:
         builtin_mod = _is_builtin_module(obj)
         if obj.__name__ not in ("builtins", "dill", "dill._dill") and not builtin_mod or \
                 is_dill(pickler, child=True) and obj is pickler._main:
-            log.info("M1: %s" % obj)
+            _log_trace(pickler, "M1: %s", obj)
             _main_dict = obj.__dict__.copy() #XXX: better no copy? option to copy?
             [_main_dict.pop(item, None) for item in singletontypes
                 + ["__builtins__", "__loader__"]]
             pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
                                 state=_main_dict)
-            log.info("# M1")
+            _log_trace(pickler, "# M1")
         elif PY3 and obj.__name__ == "dill._dill":
-            log.info("M2: %s" % obj)
+            _log_trace(pickler, "M2: %s", obj)
             pickler.save_global(obj, name="_dill")
-            log.info("# M2")
+            _log_trace(pickler, "# M2")
         else:
-            log.info("M2: %s" % obj)
+            _log_trace(pickler, "M2: %s", obj)
             pickler.save_reduce(_import_module, (obj.__name__,), obj=obj)
-            log.info("# M2")
+            _log_trace(pickler, "# M2")
         return
     return
 
 @register(TypeType)
 def save_type(pickler, obj, postproc_list=None):
     if obj in _typemap:
-        log.info("T1: %s" % obj)
+        _log_trace(pickler, "T1: %s", obj)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
-        log.info("# T1")
+        _log_trace(pickler, "# T1")
     elif obj.__bases__ == (tuple,) and all([hasattr(obj, attr) for attr in ('_fields','_asdict','_make','_replace')]):
         # special case: namedtuples
-        log.info("T6: %s" % obj)
+        _log_trace(pickler, "T6: %s", obj)
         if OLD37 or (not obj._field_defaults):
             pickler.save_reduce(_create_namedtuple, (obj.__name__, obj._fields, obj.__module__), obj=obj)
         else:
             defaults = [obj._field_defaults[field] for field in obj._fields]
             pickler.save_reduce(_create_namedtuple, (obj.__name__, obj._fields, obj.__module__, defaults), obj=obj)
-        log.info("# T6")
+        _log_trace(pickler, "# T6")
         return
 
     # special cases: NoneType, NotImplementedType, EllipsisType
     elif obj is type(None):
-        log.info("T7: %s" % obj)
+        _log_trace(pickler, "T7: %s", obj)
         #XXX: pickler.save_reduce(type, (None,), obj=obj)
         if PY3:
             pickler.write(bytes('c__builtin__\nNoneType\n', 'UTF-8'))
         else:
             pickler.write('c__builtin__\nNoneType\n')
-        log.info("# T7")
+        _log_trace(pickler, "# T7")
     elif obj is NotImplementedType:
-        log.info("T7: %s" % obj)
+        _log_trace(pickler, "T7: %s", obj)
         pickler.save_reduce(type, (NotImplemented,), obj=obj)
-        log.info("# T7")
+        _log_trace(pickler, "# T7")
     elif obj is EllipsisType:
-        log.info("T7: %s" % obj)
+        _log_trace(pickler, "T7: %s", obj)
         pickler.save_reduce(type, (Ellipsis,), obj=obj)
-        log.info("# T7")
+        _log_trace(pickler, "# T7")
 
     else:
         obj_name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
@@ -1820,11 +1819,11 @@ def save_type(pickler, obj, postproc_list=None):
             if issubclass(type(obj), type):
                 # thanks to Tom Stepleton pointing out pickler._session unneeded
                 _t = 'T2'
-                log.info("%s: %s" % (_t, obj))
+                _log_trace(pickler, "%s: %s", _t, obj)
                 _dict = _dict_from_dictproxy(obj.__dict__)
             else:
                 _t = 'T3'
-                log.info("%s: %s" % (_t, obj))
+                _log_trace(pickler, "%s: %s", _t, obj)
                 _dict = obj.__dict__
            #print (_dict)
            #print ("%s\n%s" % (type(obj), obj.__name__))
@@ -1838,9 +1837,9 @@ def save_type(pickler, obj, postproc_list=None):
             _save_with_postproc(pickler, (_create_type, (
                 type(obj), obj.__name__, obj.__bases__, _dict
             )), obj=obj, postproc_list=postproc_list)
-            log.info("# %s" % _t)
+            _log_trace(pickler, "# %s", _t)
         else:
-            log.info("T4: %s" % obj)
+            _log_trace(pickler, "T4: %s", obj)
             if incorrectly_named:
                 warnings.warn('Cannot locate reference to %r.' % (obj,), PicklingWarning)
             if obj_recursive:
@@ -1849,7 +1848,7 @@ def save_type(pickler, obj, postproc_list=None):
            #print ("%s\n%s" % (type(obj), obj.__name__))
            #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
             StockPickler.save_global(pickler, obj, name=obj_name)
-            log.info("# T4")
+            _log_trace(pickler, "# T4")
     return
 
 # Error in PyPy 2.7 when adding ABC support
@@ -1860,15 +1859,15 @@ if IS_PYPY2:
 
 @register(property)
 def save_property(pickler, obj):
-    log.info("Pr: %s" % obj)
+    _log_trace(pickler, "Pr: %s", obj)
     pickler.save_reduce(property, (obj.fget, obj.fset, obj.fdel, obj.__doc__),
                         obj=obj)
-    log.info("# Pr")
+    _log_trace(pickler, "# Pr")
 
 @register(staticmethod)
 @register(classmethod)
 def save_classmethod(pickler, obj):
-    log.info("Cm: %s" % obj)
+    _log_trace(pickler, "Cm: %s", obj)
     im_func = '__func__' if PY3 else 'im_func'
     try:
         orig_func = getattr(obj, im_func)
@@ -1889,12 +1888,12 @@ def save_classmethod(pickler, obj):
     #     state = None
 
     pickler.save_reduce(type(obj), (orig_func,), obj=obj)
-    log.info("# Cm")
+    _log_trace(pickler, "# Cm")
 
 @register(FunctionType)
 def save_function(pickler, obj):
     if not _locate_function(obj, pickler):
-        log.info("F1: %s" % obj)
+        _log_trace(pickler, "F1: %s", obj)
         _recurse = getattr(pickler, '_recurse', None)
         _byref = getattr(pickler, '_byref', None)
         _postproc = getattr(pickler, '_postproc', None)
@@ -1997,12 +1996,12 @@ def save_function(pickler, obj):
                     else:
                         pickler.write('0')
 
-        log.info("# F1")
+        _log_trace(pickler, "# F1")
     else:
-        log.info("F2: %s" % obj)
+        _log_trace(pickler, "F2: %s", obj)
         name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
         StockPickler.save_global(pickler, obj, name=name)
-        log.info("# F2")
+        _log_trace(pickler, "# F2")
     return
 
 # quick sanity checking
@@ -2098,9 +2097,15 @@ def _extend():
         try:
             StockPickler.dispatch[t] = func
         except: #TypeError, PicklingError, UnpicklingError
-            log.info("skip: %s" % t)
+            _log_trace(pickler, "skip: %s", t)
         else: pass
     return
+
+def _log_trace(pickler, *args, **kwargs):
+    if is_dill(pickler, child=False):
+        logger.log_trace(pickler, *args, **kwargs)
+    else:
+        logger.info(*args, **kwargs)
 
 del diff, _use_diff, use_diff
 
