@@ -96,7 +96,7 @@ class TraceAdapter(logging.LoggerAdapter):
                     pickler._size_stack.append(size)
                 else:
                     size -= pickler._size_stack.pop()
-                extra['size'] = size
+                    extra['size'] = size
             if pushed: pickler._trace_depth -= 1
             extra['depth'] = pickler._trace_depth
             kwargs['extra'] = extra
