@@ -136,6 +136,16 @@ def test_namedtuple():
     assert dill.copy(A.B).__doc__ == 'docstring'
     assert dill.copy(A.B).__module__ == 'testing'
 
+    if not dill._dill.OLD37:
+        from typing import NamedTuple
+
+        def A():
+            class B(NamedTuple):
+                x: int
+            return B
+
+        assert type(dill.copy(A()(8))).__qualname__ == type(A()(8)).__qualname__
+
 def test_dtype():
     try:
         import numpy as np
