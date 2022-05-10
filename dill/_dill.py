@@ -21,7 +21,7 @@ __all__ = ['dump','dumps','load','loads','dump_session','load_session',
            'UnpicklingError','HANDLE_FMODE','CONTENTS_FMODE','FILE_FMODE',
            'PickleError','PickleWarning','PicklingWarning','UnpicklingWarning']
 
-from .logger import adapter as logger
+from .logger import adapter as logger, trace as _trace
 import warnings
 
 import os

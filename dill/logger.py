@@ -112,7 +112,14 @@ class TraceFormatter(logging.Formatter):
     def format(self, record):
         fields = {'prefix': "", 'suffix': ""}
         if hasattr(record, 'depth'):
-            fields['prefix'] = record.depth*">" + " "
+            if record.depth <= 0:
+                fields['prefix'] = "" # ???
+            elif record.msg.startswith("#"):
+                fields['prefix'] = (record.depth-1)*"│" + "└ "
+            elif record.depth == 1:
+                fields['prefix'] = "┬ "
+            else:
+                fields['prefix'] = (record.depth-2)*"│" + "├┬ "
         if hasattr(record, 'size'):
             # Show object size in human-redable form.
             power = int(math.log(record.size, 2)) // 10
