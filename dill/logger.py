@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 #
 # Author: Leonardo Gama (@leogama)
 # Copyright (c) 2022 The Uncertainty Quantification Foundation.
@@ -57,9 +58,11 @@ substitute the formatter to customize the extra information display.
 
 __all__ = ['INFO_DETAIL', 'adapter', 'logger', 'trace']
 
-import logging, math
+import locale, logging, math
 
 INFO_DETAIL = (logging.INFO + logging.DEBUG) // 2
+
+TRANS_TABLE = {ord(k): ord(v) for k, v in zip(u"│├┬└", "||+`")}
 
 
 class TraceAdapter(logging.LoggerAdapter):
@@ -106,25 +109,28 @@ class TraceAdapter(logging.LoggerAdapter):
         else:
             self.info(msg, *args, **kwargs)
 
-
 class TraceFormatter(logging.Formatter):
     """generates message prefix and suffix from record"""
+    def __init__(self, *args, **kwargs):
+        super(TraceFormatter, self).__init__(*args, **kwargs)
+        self.is_utf8 = locale.getpreferredencoding() == 'UTF-8'
     def format(self, record):
         fields = {'prefix': "", 'suffix': ""}
-        if hasattr(record, 'depth'):
-            if record.depth <= 0:
-                fields['prefix'] = "" # ???
-            elif record.msg.startswith("#"):
-                fields['prefix'] = (record.depth-1)*"│" + "└ "
+        if getattr(record, 'depth', 0) > 0:
+            if record.msg.startswith("#"):
+                prefix = (record.depth-1)*u"│" + u"└ "
             elif record.depth == 1:
-                fields['prefix'] = "┬ "
+                prefix = u"┬ "
             else:
-                fields['prefix'] = (record.depth-2)*"│" + "├┬ "
+                prefix = (record.depth-2)*u"│" + u"├┬ "
+            if not self.is_utf8:
+                prefix = prefix[:-1].translate(TRANS_TABLE) + "- "
+            fields['prefix'] = prefix
         if hasattr(record, 'size'):
             # Show object size in human-redable form.
             power = int(math.log(record.size, 2)) // 10
             size = record.size >> power*10
-            fields['suffix'] = " (%d %sB)" % (size, "KMGTP"[power] + "i" if power else "")
+            fields['suffix'] = " [%d %sB]" % (size, "KMGTP"[power] + "i" if power else "")
         record.__dict__.update(fields)
         return super(TraceFormatter, self).format(record)
 

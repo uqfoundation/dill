@@ -36,9 +36,8 @@ if __name__ == '__main__':
     dill.detect.trace(True)
     test_logging(r'(# )?\w.*[^)]')
     dill.detect.trace(True, detail=True)
-    test_logging(r'>+ '                       # prefix indicating depth
-                 r'(\w.*[^)]'                 # begin pickling object
-                 r'|# \w.* \(\d+ (\wi)?B\))'  # object written (with size)
+    test_logging(r'(\S*┬ \w.*[^)]'              # begin pickling object
+                 r'|│*└ # \w.* \[\d+ (\wi)?B])' # object written (with size)
                  )
     dill.detect.trace(False)
     test_logging()
