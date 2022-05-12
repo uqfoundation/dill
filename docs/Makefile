@@ -24,5 +24,5 @@ html:
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)
 	-rm -f $(BUILDDIR)/../../scripts/_*py
 	-rm -f $(BUILDDIR)/../../scripts/_*pyc
-	-rm -f $(BUILDDIR)/../../scripts/__pycache__
+	-rm -rf $(BUILDDIR)/../../scripts/__pycache__
 
