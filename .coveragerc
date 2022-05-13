@@ -1,6 +1,7 @@
 [run]
 # source = dill
-include = */dill/*
+include =
+    */dill/*
 omit = 
     */tests/*
     */info.py
@@ -11,7 +12,14 @@ branch = true
 # data_file = $TRAVIS_BUILD_DIR/.coverage
 # debug = trace
 
+[paths]
+source =
+    dill
+    */site-packages/dill*/dill
+
 [report]
+include =
+    */dill/*
 exclude_lines =
     pragma: no cover
     raise NotImplementedError
