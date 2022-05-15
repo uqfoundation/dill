@@ -56,3 +56,4 @@ script:
 
 after_success:
     - if [[ $COVERAGE == "true" ]]; then bash <(curl -s https://codecov.io/bash); else echo ''; fi
+    - if [[ $COVERAGE == "true" ]]; then coverage report; fi

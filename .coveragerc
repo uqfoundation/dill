@@ -15,7 +15,8 @@ branch = true
 [paths]
 source =
     dill
-    */site-packages/dill*/dill
+    */site-packages/dill
+    */site-packages/dill-*/dill
 
 [report]
 include =
