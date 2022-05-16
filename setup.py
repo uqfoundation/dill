@@ -17,21 +17,42 @@ elif (3, 0) <= sys.version_info < (3, 7):
 if unsupported:
     raise ValueError(unsupported)
 
+# get distribution meta info
+here = os.path.abspath(os.path.dirname(__file__))
+meta_fh = open(os.path.join(here, 'dill/__init__.py'))
 try:
-    import builtins
-except ImportError:
-    import __builtin__ as builtins
-
-# This is a hack to import a minimal package for the build process
-builtins.__DILL_SETUP__ = True
-sys.path.append(os.path.abspath(os.path.curdir))
-import dill
+    meta = {}
+    for line in meta_fh:
+        if line.startswith('__version__'):
+            VERSION = line.split()[-1].strip("'").strip('"')
+            break
+    meta['VERSION'] = VERSION
+    for line in meta_fh:
+        if line.startswith('__author__'):
+            AUTHOR = line.split(' = ')[-1].strip().strip("'").strip('"')
+            break
+    meta['AUTHOR'] = AUTHOR
+    LONG_DOC = ""
+    DOC_STOP = "FAKE_STOP_12345"
+    for line in meta_fh:
+        if LONG_DOC:
+            if line.startswith(DOC_STOP):
+                LONG_DOC += DOC_STOP.rstrip()
+                break
+            else:
+                LONG_DOC += line
+        elif line.startswith('__doc__'):
+            DOC_STOP = line.split(' = ')[-1]
+            LONG_DOC += DOC_STOP
+    meta['LONG_DOC'] = LONG_DOC
+finally:
+    meta_fh.close()
 
 # get version numbers, long_description, etc
-AUTHOR = dill.__author__
-VERSION = dill.__version__
-LONG_DOC = dill.__doc__ #FIXME: near-duplicate of README.md
-#LICENSE = dill.__license__ #FIXME: duplicate of LICENSE
+AUTHOR = meta['AUTHOR']
+VERSION = meta['VERSION']
+LONG_DOC = meta['LONG_DOC'] #FIXME: near-duplicate of README.md
+#LICENSE = meta['LICENSE'] #FIXME: duplicate of LICENSE
 AUTHOR_EMAIL = 'mmckerns@uqfoundation.org'
 
 # check if setuptools is available
