@@ -756,22 +756,6 @@ def _load_type(name):
 def _create_type(typeobj, *args):
     return typeobj(*args)
 
-def _create_function(fcode, fglobals, fname=None, fdefaults=None,
-                     fclosure=None, fdict=None, fkwdefaults=None):
-    # same as FunctionType, but enable passing __dict__ to new function,
-    # __dict__ is the storehouse for attributes added after function creation
-    func = FunctionType(fcode, fglobals or dict(), fname, fdefaults, fclosure)
-    if fdict is not None:
-        func.__dict__.update(fdict) #XXX: better copy? option to copy?
-    if fkwdefaults is not None:
-        func.__kwdefaults__ = fkwdefaults
-    # 'recurse' only stores referenced modules/objects in fglobals,
-    # thus we need to make sure that we have __builtins__ as well
-    if "__builtins__" not in func.__globals__:
-        func.__globals__["__builtins__"] = globals()["__builtins__"]
-    # assert id(fglobals) == id(func.__globals__)
-    return func
-
 def _create_code(*args):
     if PY3 and hasattr(args[-3], 'encode'): #FIXME: from PY2 fails (optcode)
         args = list(args)
@@ -1905,6 +1889,7 @@ def save_function(pickler, obj):
             # recurse to get all globals referred to by obj
             from .detect import globalvars
             globs_copy = globalvars(obj, recurse=True, builtin=True)
+            globs_copy.setdefault('__builtins__', __builtin__)
 
             # Add the name of the module to the globs dictionary to prevent
             # the duplication of the dictionary. Pickle the unpopulated
@@ -1960,7 +1945,7 @@ def save_function(pickler, obj):
             if state_dict:
                 state = state, state_dict
 
-            _save_with_postproc(pickler, (_create_function, (
+            _save_with_postproc(pickler, (FunctionType, (
                   obj.__code__, globs, obj.__name__, obj.__defaults__,
                   closure
             ), state), obj=obj, postproc_list=postproc_list)
@@ -1973,7 +1958,7 @@ def save_function(pickler, obj):
             if obj.__dict__:
                 postproc_list.append((setattr, (obj, '__dict__', obj.__dict__)))
 
-            _save_with_postproc(pickler, (_create_function, (
+            _save_with_postproc(pickler, (FunctionType, (
                 obj.func_code, globs, obj.func_name, obj.func_defaults,
                 closure
             )), obj=obj, postproc_list=postproc_list)
