@@ -1059,11 +1059,50 @@ else:
         t = collections.namedtuple(name, fieldnames, defaults=defaults, module=modulename)
         return t
 
+# TODO: Remove this copy when #450 is pulled
+# https://github.com/python/cpython/blob/a8912a0f8d9eba6d502c37d522221f9933e976db/Lib/pickle.py#L322-L333
+def _getattribute(obj, name):
+    for subpath in name.split('.'):
+        if subpath == '<locals>':
+            raise AttributeError("Can't get local attribute {!r} on {!r}"
+                                 .format(name, obj))
+        try:
+            parent = obj
+            obj = getattr(obj, subpath)
+        except AttributeError:
+            raise AttributeError("Can't get attribute {!r} on {!r}"
+                                 .format(name, obj)) # In Py3: from None
+    return obj,
+
 def _create_capsule(pointer, name, context, destructor):
+    attr_found = False
     try:
-        # TODO: Somehow check this condition?
-        return _PyCapsule_Import(name, False)
+        # based on https://github.com/python/cpython/blob/f4095e53ab708d95e019c909d5928502775ba68f/Objects/capsule.c#L209-L231
+        if PY3:
+            uname = name.decode('utf8')
+        else:
+            uname = name
+        for i in range(1, uname.count('.')+1):
+            names = uname.rsplit('.', i)
+            try:
+                module = __import__(names[0])
+            except:
+                pass
+            obj = module
+            for attr in names[1:]:
+                obj = getattr(obj, attr)
+            capsule = obj
+            attr_found = True
+            break
     except:
+        pass
+
+    if attr_found:
+        if _PyCapsule_IsValid(capsule, name):
+            return capsule
+        raise UnpicklingError("%s object exists at %s but a PyCapsule object was expected." % (type(capsule), name))
+    else:
+        warnings.warn('Creating a new PyCapsule %s for a C data structure that may not be present in memory. Segmentation faults or other memory errors are possible.' % (name,), UnpicklingWarning)
         capsule = _PyCapsule_New(pointer, name, destructor)
         _PyCapsule_SetContext(capsule, context)
         return capsule
@@ -2030,9 +2069,9 @@ if HAS_CTYPES and hasattr(ctypes, 'pythonapi'):
     _PyCapsule_GetName = ctypes.pythonapi.PyCapsule_GetName
     _PyCapsule_GetName.argtypes = (ctypes.py_object,)
     _PyCapsule_GetName.restype = ctypes.c_char_p
-    _PyCapsule_Import = ctypes.pythonapi.PyCapsule_Import
-    _PyCapsule_Import.argtypes = (ctypes.c_char_p, ctypes.c_bool)
-    _PyCapsule_Import.restype = ctypes.py_object
+    _PyCapsule_IsValid = ctypes.pythonapi.PyCapsule_IsValid
+    _PyCapsule_IsValid.argtypes = (ctypes.py_object, ctypes.c_char_p)
+    _PyCapsule_IsValid.restype = ctypes.c_bool
     _PyCapsule_SetContext = ctypes.pythonapi.PyCapsule_SetContext
     _PyCapsule_SetContext.argtypes = (ctypes.py_object, ctypes.c_void_p)
     _PyCapsule_SetDestructor = ctypes.pythonapi.PyCapsule_SetDestructor
@@ -2041,20 +2080,18 @@ if HAS_CTYPES and hasattr(ctypes, 'pythonapi'):
     _PyCapsule_SetName.argtypes = (ctypes.py_object, ctypes.c_char_p)
     _PyCapsule_SetPointer = ctypes.pythonapi.PyCapsule_SetPointer
     _PyCapsule_SetPointer.argtypes = (ctypes.py_object, ctypes.c_void_p)
-    # _PyCapsule_CheckExact = ctypes.pythonapi.PyCapsule_CheckExact
-    _PyCapsule_IsValid = ctypes.pythonapi.PyCapsule_IsValid
     PyCapsuleType = type(
         _PyCapsule_New(
             ctypes.cast(_PyCapsule_New, ctypes.c_void_p),
-            ctypes.create_string_buffer(b'dill'),
+            ctypes.create_string_buffer(b'dill._testcapsule'),
             None
         )
     )
-    @register(PyCapsuleType) # TODO
+    @register(PyCapsuleType)
     def save_capsule(pickler, obj):
         log.info("Cap: %s", obj)
         name = _PyCapsule_GetName(obj)
-        warnings.warn('Pickling a PyCapsule does not pickle any C data structures and could cause segmentation faults or other memory errors when unpickling.' % (name,), PicklingWarning)
+        warnings.warn('Pickling a PyCapsule (%s) does not pickle any C data structures and could cause segmentation faults or other memory errors when unpickling.' % (name,), PicklingWarning)
         pointer = _PyCapsule_GetPointer(obj, name)
         context = _PyCapsule_GetContext(obj)
         destructor = _PyCapsule_GetDestructor(obj)
