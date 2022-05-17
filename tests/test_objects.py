@@ -57,6 +57,20 @@ def test_objects():
        #pickles(member, exact=True)
         pickles(member, exact=False)
 
+test_pycapsule = None
+
+if pickle._dill.HAS_CTYPES:
+    import ctypes
+    if hasattr(ctypes, 'pythonapi'):
+        def test_pycapsule():
+            capsule = pickle._dill._PyCapsule_New(
+                ctypes.cast(pickle._dill._PyCapsule_New, ctypes.c_void_p),
+                ctypes.create_string_buffer(b'dill'),
+                None
+            )
+            pickle.copy(capsule)
 
 if __name__ == '__main__':
     test_objects()
+    if test_pycapsule is not test_pycapsule:
+        test_pycapsule()
