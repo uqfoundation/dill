@@ -747,15 +747,31 @@ if PY3:
 else:
     _typemap = dict((v, k) for k, v in _reverse_typemap.iteritems())
 
-def _unmarshal(string):
-    return marshal.loads(string)
-
 def _load_type(name):
     return _reverse_typemap[name]
 
+from functools import wraps
+
+def unpack_args(func):
+    func_params = inspect.signature(func).parameters
+    last_param = next(reversed(func_params.values()))
+    if last_param.kind == last_param.VAR_POSITIONAL:
+        return func
+    n = len(func_params)
+
+    @wraps(func)
+    def wrapper(*args):
+        if len(args) > n:
+            warnings.warn("This pickle was created with a different version of dill. "
+                          "Extra arguments to the object constructor were discarded.")
+        return func(*args[:n])
+    return wrapper
+
+@unpack_args
 def _create_type(typeobj, *args):
     return typeobj(*args)
 
+@unpack_args
 def _create_code(*args):
     if PY3 and hasattr(args[-3], 'encode'): #FIXME: from PY2 fails (optcode)
         args = list(args)
@@ -799,6 +815,7 @@ def _create_code(*args):
     elif len(args) == 15: return CodeType(args[0], *args[2:])
     return CodeType(*args)
 
+@unpack_args
 def _create_ftype(ftypeobj, func, args, kwds):
     if kwds is None:
         kwds = {}
@@ -806,6 +823,7 @@ def _create_ftype(ftypeobj, func, args, kwds):
         args = ()
     return ftypeobj(func, *args, **kwds)
 
+@unpack_args
 def _create_lock(locked, *args): #XXX: ignores 'blocking'
     from threading import Lock
     lock = Lock()
@@ -814,6 +832,7 @@ def _create_lock(locked, *args): #XXX: ignores 'blocking'
             raise UnpicklingError("Cannot acquire lock")
     return lock
 
+@unpack_args
 def _create_rlock(count, owner, *args): #XXX: ignores 'blocking'
     lock = RLockType()
     if owner is not None:
@@ -823,6 +842,7 @@ def _create_rlock(count, owner, *args): #XXX: ignores 'blocking'
     return lock
 
 # thanks to matsjoyce for adding all the different file modes
+@unpack_args
 def _create_filehandle(name, mode, position, closed, open, strictio, fmode, fdata): # buffering=0
     # only pickles the handle, not the file contents... good? or StringIO(data)?
     # (for file contents see: http://effbot.org/librarybook/copy-reg.htm)
@@ -915,12 +935,14 @@ def _create_filehandle(name, mode, position, closed, open, strictio, fmode, fdat
         f.seek(position)
     return f
 
+@unpack_args
 def _create_stringi(value, position, closed):
     f = StringIO(value)
     if closed: f.close()
     else: f.seek(position)
     return f
 
+@unpack_args
 def _create_stringo(value, position, closed):
     f = StringIO()
     if closed: f.close()
@@ -975,18 +997,20 @@ _CELL_REF = None
 _CELL_EMPTY = Sentinel('_CELL_EMPTY')
 
 if PY3:
+    @unpack_args
     def _create_cell(contents=None):
         if contents is not _CELL_EMPTY:
             value = contents
         return (lambda: value).__closure__[0]
 
 else:
+    @unpack_args
     def _create_cell(contents=None):
         if contents is not _CELL_EMPTY:
             value = contents
         return (lambda: value).func_closure[0]
 
-
+@unpack_args
 def _create_weakref(obj, *args):
     from weakref import ref
     if obj is None: # it's dead
@@ -997,6 +1021,7 @@ def _create_weakref(obj, *args):
         return ref(UserDict(), *args)
     return ref(obj, *args)
 
+@unpack_args
 def _create_weakproxy(obj, callable=False, *args):
     from weakref import proxy
     if obj is None: # it's dead
@@ -1011,6 +1036,7 @@ def _create_weakproxy(obj, callable=False, *args):
 def _eval_repr(repr_str):
     return eval(repr_str)
 
+@unpack_args
 def _create_array(f, args, state, npdict=None):
    #array = numpy.core.multiarray._reconstruct(*args)
     array = f(*args)
@@ -1019,6 +1045,7 @@ def _create_array(f, args, state, npdict=None):
         array.__dict__.update(npdict)
     return array
 
+@unpack_args
 def _create_dtypemeta(scalar_type):
     if NumpyDType is True: __hook__() # a bit hacky I think
     if scalar_type is None:
@@ -1026,6 +1053,7 @@ def _create_dtypemeta(scalar_type):
     return type(NumpyDType(scalar_type))
 
 if OLD37:
+    @unpack_args
     def _create_namedtuple(name, fieldnames, modulename, defaults=None):
         class_ = _import_module(modulename + '.' + name, safe=True)
         if class_ is not None:
@@ -1035,6 +1063,7 @@ if OLD37:
         t.__module__ = modulename
         return t
 else:
+    @unpack_args
     def _create_namedtuple(name, fieldnames, modulename, defaults=None):
         class_ = _import_module(modulename + '.' + name, safe=True)
         if class_ is not None:
@@ -1147,6 +1176,9 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
             else:
                 pickler.write('0')
 
+#def _unmarshal(string):
+#    return marshal.loads(string)
+#
 #@register(CodeType)
 #def save_code(pickler, obj):
 #    log.info("Co: %s" % obj)
