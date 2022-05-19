@@ -7,7 +7,7 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 # author, version, license, and long description
-__version__ = '0.3.5.dev0'
+__version__ = '0.3.5'
 __author__ = 'Mike McKerns'
 
 __doc__ = """
