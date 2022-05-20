@@ -2,6 +2,5 @@
 # Further build requirements come from setup.py via the PEP 517 interface
 requires = [
     "setuptools>=42",
-    "wheel",
 ]
 build-backend = "setuptools.build_meta"
