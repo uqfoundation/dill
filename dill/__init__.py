@@ -7,7 +7,7 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 # author, version, license, and long description
-__version__ = '0.3.6.dev0'
+__version__ = '0.3.5.1.dev0'
 __author__ = 'Mike McKerns'
 
 __doc__ = """
@@ -118,7 +118,6 @@ Requirements
 
     - ``python`` (or ``pypy``), **==2.7** or **>=3.7**
     - ``setuptools``, **>=42**
-    - ``wheel``, **>=0.1**
 
 Optional requirements:
 
