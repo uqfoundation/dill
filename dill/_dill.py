@@ -1788,7 +1788,7 @@ def save_type(pickler, obj, postproc_list=None):
         if OLD37 or (not obj._field_defaults):
             pickler.save_reduce(_create_namedtuple, (obj.__name__, obj._fields, obj.__module__), obj=obj)
         else:
-            defaults = [obj._field_defaults[field] for field in obj._fields]
+            defaults = [obj._field_defaults[field] for field in obj._fields if field in obj._field_defaults]
             pickler.save_reduce(_create_namedtuple, (obj.__name__, obj._fields, obj.__module__, defaults), obj=obj)
         log.info("# T6")
         return
