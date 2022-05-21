@@ -783,34 +783,64 @@ def _create_code(*args):
                 args[-4] = args[-4].encode() # co_columntable
             if args[-5] is not None:
                 args[-5] = args[-5].encode() # co_endlinetable
+        elif len(args) == 18:
+            args[-3] = args[-3].encode() # co_exceptiontable
+            args[-4] = args[-4].encode() # co_lnotab
+            args[-12] = args[-12].encode() # co_code
         else:
             args[-3] = args[-3].encode() # co_lnotab
             args[-10] = args[-10].encode() # co_code
-    if hasattr(CodeType, 'co_exceptiontable'):
+    if hasattr(CodeType, 'co_endlinetable'):
         if len(args) == 20: return CodeType(*args)
+        elif len(args) == 18:
+            argz = (None, None)
+            argz = args[:-3] + argz + args[-3:]
+            return CodeType(*argz)
         elif len(args) == 16:
             argz = (None, None, b'')
             argz = args[:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
             return CodeType(*argz)
         elif len(args) == 15:
+            argz = (None, None, b'')
             argz = args[1:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
             return CodeType(args[0], 0, *argz)
+        argz = (None, None, b'')
+        argz = args[1:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
+        return CodeType(args[0], 0, 0, *argz)
+    elif hasattr(CodeType, 'co_exceptiontable'):
+        if len(args) == 20: return CodeType(*(args[:15] + args[17:]))
+        elif len(args) == 18: return CodeType(*args)
+        elif len(args) == 16:
+            argz = (b'',)
+            argz = args[:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
+            return CodeType(*argz)
+        elif len(args) == 15:
+            argz = (b'',)
+            argz = args[1:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
+            return CodeType(args[0], 0, *argz)
+        argz = (b'',)
         argz = args[1:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
         return CodeType(args[0], 0, 0, *argz)
     elif hasattr(CodeType, 'co_posonlyargcount'):
         if len(args) == 20:
             return CodeType(*(args[:12] + args[13:15] + args[18:]))
+        elif len(args) == 18:
+            return CodeType(*(args[:12] + args[13:15] + args[16:]))
         elif len(args) == 16: return CodeType(*args)
         elif len(args) == 15: return CodeType(args[0], 0, *args[1:])
         return CodeType(args[0], 0, 0, *args[1:])
     elif hasattr(CodeType, 'co_kwonlyargcount'):
         if len(args) == 20:
             return CodeType(*(args[:1] + args[2:12] + args[13:15] + args[18:]))
+        elif len(args) == 18:
+            return CodeType(*(args[:1] + args[2:12] + args[13:15] + args[16:]))
         elif len(args) == 16: return CodeType(args[0], *args[2:])
         elif len(args) == 15: return CodeType(*args)
         return CodeType(args[0], 0, *args[1:])
     if len(args) == 20:
         return CodeType(*(args[:1] + args[3:12] + args[13:15] + args[18:]))
+    elif len(args) == 18:
+        return CodeType(*(args[:1] + args[3:12] + args[13:15] + args[16:]))
     elif len(args) == 16: return CodeType(args[0], *args[3:])
     elif len(args) == 15: return CodeType(args[0], *args[2:])
     return CodeType(*args)
@@ -1178,7 +1208,7 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
 def save_code(pickler, obj):
     log.info("Co: %s" % obj)
     if PY3:
-        if hasattr(obj, "co_exceptiontable"):
+        if hasattr(obj, "co_endlinetable"):
             args = (
                 obj.co_argcount, obj.co_posonlyargcount,
                 obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
@@ -1187,6 +1217,15 @@ def save_code(pickler, obj):
                 obj.co_firstlineno, obj.co_lnotab, obj.co_endlinetable,
                 obj.co_columntable, obj.co_exceptiontable, obj.co_freevars,
                 obj.co_cellvars
+        )
+        elif hasattr(obj, "co_exceptiontable"):
+            args = (
+                obj.co_argcount, obj.co_posonlyargcount,
+                obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+                obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+                obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
+                obj.co_firstlineno, obj.co_lnotab, obj.co_exceptiontable,
+                obj.co_freevars, obj.co_cellvars
         )
         elif hasattr(obj, "co_posonlyargcount"):
             args = (
