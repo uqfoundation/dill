@@ -22,6 +22,7 @@ settings = {
     'fmode' : 0, #HANDLE_FMODE
     'recurse' : False,
     'ignore' : False,
+    'deterministic' : False,
 }
 
 del DEFAULT_PROTOCOL
