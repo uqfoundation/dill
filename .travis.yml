@@ -3,11 +3,6 @@ language: python
 
 matrix:
     include:
-        - python: '2.7'
-          dist: bionic
-          env:
-            - COVERAGE="true"
-
         - python: '3.7'
           env:
 
@@ -25,17 +20,11 @@ matrix:
         - python: '3.11-dev'
           env:
 
-        - python: 'pypy2.7-7.3.1' # most recent
-          dist: xenial
-          env:
-
         - python: 'pypy3.7-7.3.5' # most recent
           dist: bionic
           env:
 
     allow_failures:
-        - python: '2.7'
-        - python: 'pypy2.7-7.3.1'
         - python: '3.11-dev'
     fast_finish: true
 
