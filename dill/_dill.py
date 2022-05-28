@@ -21,6 +21,8 @@ __all__ = ['dump','dumps','load','loads','dump_session','load_session',
            'UnpicklingError','HANDLE_FMODE','CONTENTS_FMODE','FILE_FMODE',
            'PickleError','PickleWarning','PicklingWarning','UnpicklingWarning']
 
+__module__ = 'dill'
+
 import logging
 log = logging.getLogger("dill")
 log.addHandler(logging.StreamHandler())
@@ -323,7 +325,7 @@ def copy(obj, *args, **kwds):
     ignore = kwds.pop('ignore', Unpickler.settings['ignore'])
     return loads(dumps(obj, *args, **kwds), ignore=ignore)
 
-def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
+def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, portable=None, **kwds):#, strictio=None):
     """
     Pickle an object to a file.
 
@@ -332,11 +334,11 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, **kwds)
     from .settings import settings
     protocol = settings['protocol'] if protocol is None else int(protocol)
     _kwds = kwds.copy()
-    _kwds.update(dict(byref=byref, fmode=fmode, recurse=recurse))
+    _kwds.update(dict(byref=byref, fmode=fmode, recurse=recurse, portable=portable))
     Pickler(file, protocol, **_kwds).dump(obj)
     return
 
-def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
+def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None, portable=None, **kwds):#, strictio=None):
     """
     Pickle an object to a string.
 
@@ -360,9 +362,70 @@ def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, s
 
     Default values for keyword arguments can be set in :mod:`dill.settings`.
     """
+    if os.environ.get('CI') == 'true' and \
+            getattr(obj, '__qualname__', None) != 'test_getstate.<locals>.<lambda>' and \
+            __file__ != 'test_session.py':
+        _test_portable(obj, protocol, byref, fmode, recurse, **kwds)
     file = StringIO()
-    dump(obj, file, protocol, byref, fmode, recurse, **kwds)#, strictio)
+    dump(obj, file, protocol, byref, fmode, recurse, portable, **kwds)#, strictio)
     return file.getvalue()
+
+_tempd = None
+def _test_portable(obj, protocol, byref, fmode, recurse, **kwds):
+    import atexit, dill, subprocess, tempfile, textwrap
+    try:
+        import pox
+        python = pox.which_python(version=True, fullpath=False) or 'python'
+    except ImportError:
+        python = 'python'
+
+    global _tempd
+    if _tempd is None:
+        import shutil
+        from importlib.util import find_spec
+        _tempd = tempfile.mkdtemp()
+        atexit.register(shutil.rmtree, _tempd)
+        os.symlink(os.path.dirname(find_spec('numpy').origin), os.path.join(_tempd, 'numpy'), True)
+        os.symlink(find_spec('dill._objects').origin, os.path.join(_tempd, '_objects.py'))
+    temp = tempfile.NamedTemporaryFile()
+
+    script = textwrap.dedent(f"""\
+        import importlib, os, pickle, sys, types
+        dill_spec = importlib.util.find_spec('dill')
+        while (spec := importlib.util.find_spec("dill")) is not None:
+            sys.path.remove(os.path.dirname(os.path.dirname(spec.origin)))
+        try:
+            with open("{temp.name}", "rb") as f: pickle.load(f)
+        except ModuleNotFoundError:
+            import dill, _objects
+            dill.__path__ = os.path.dirname(dill_spec.origin)
+            dill._objects = sys.modules['dill._objects'] = _objects
+            dill.settings = dict()
+            sys.path.append(os.path.join(dill.__path__, 'tests'))
+            # try again
+            with open("{temp.name}", "rb") as f: pickle.load(f)
+        except AssertionError as e:
+            print
+        except Exception as e:
+            if not getattr(e.args[0], "args", None) == (9, "Bad file descriptor"):
+                raise
+
+        #print("dill:", tuple(vars(dill)))
+        #print("_dill:", tuple(vars(dill._dill)), end="\\n\\n")
+        """).encode('utf8')
+
+    with warnings.catch_warnings(record=True) as warns:
+        try:
+            warnings.simplefilter('default')
+            dump(obj, temp.file, protocol, byref, fmode, recurse, portable=True, **kwds)#, strictio)
+            if all('Cannot locate reference' not in str(warn.message) for warn in warns):
+                temp.file.flush()
+                dill_path = os.path.dirname(dill.__path__[0])
+                subprocess.run(python, input=script, cwd=_tempd, check=True)
+        finally:
+            warnings.simplefilter('error')
+            temp.file.close()
+            temp.close()
 
 def load(file, ignore=None, **kwds):
     """
@@ -483,6 +546,11 @@ def _restore_modules(unpickler, main_module):
 def dump_session(filename='/tmp/session.pkl', main=None, byref=False, **kwds):
     """pickle the current state of __main__ to a file"""
     from .settings import settings
+    if 'portable' in kwds:
+        raise TypeError("dump_session() got an unexpected keyword argument 'portable'")
+    if settings['portable']:
+        warnings.warn("dump_session() does not have a 'portable' mode (setting ignored)", PicklingWarning)
+
     protocol = settings['protocol']
     if main is None: main = _main_module
     if hasattr(filename, 'write'):
@@ -557,23 +625,41 @@ class Pickler(StockPickler):
     _session = False
     from .settings import settings
 
-    def __init__(self, *args, **kwds):
+    def __init__(self, file, *args, **kwds):
         settings = Pickler.settings
         _byref = kwds.pop('byref', None)
        #_strictio = kwds.pop('strictio', None)
         _fmode = kwds.pop('fmode', None)
         _recurse = kwds.pop('recurse', None)
-        StockPickler.__init__(self, *args, **kwds)
+        _portable = kwds.pop('portable', None)
+        super().__init__(file, *args, **kwds)
         self._main = _main_module
         self._diff_cache = {}
         self._byref = settings['byref'] if _byref is None else _byref
         self._strictio = False #_strictio
         self._fmode = settings['fmode'] if _fmode is None else _fmode
         self._recurse = settings['recurse'] if _recurse is None else _recurse
+        self._portable = settings['portable'] if _portable is None else _portable
         from collections import OrderedDict
         self._postproc = OrderedDict()
 
+        if not self._portable:
+            return
+        # file and protocol already passed all checks in StockPickler.__init__().
+        self.__file = file
+        # cPickle's Pickler don't have a 'proto' attribute.
+        try:
+            self.__presumed_proto = self.proto
+        except AttributeError:
+            # Logic copied from pickle.py
+            if protocol is None:
+                protocol = DEFAULT_PROTOCOL
+            if protocol < 0:
+                protocol = HIGHEST_PROTOCOL
+            self.__presumed_proto = int(protocol)
+
     def dump(self, obj): #NOTE: if settings change, need to update attributes
+        from ._bootstrap import bootstrap_header
         # register if the object is a numpy ufunc
         # thanks to Paul Kienzle for pointing out ufuncs didn't pickle
         if NumpyUfuncType and numpyufunc(obj):
@@ -616,11 +702,14 @@ class Pickler(StockPickler):
         if GENERATOR_FAIL and type(obj) == GeneratorType:
             msg = "Can't pickle %s: attribute lookup builtins.generator failed" % GeneratorType
             raise PicklingError(msg)
-        else:
-            StockPickler.dump(self, obj)
-        return
+
+        if self._portable:
+            # This is right in the beginning, before framing starts.
+            self.__file.write(bootstrap_header(self.__presumed_proto))
+
+        super().dump(obj)
+
     dump.__doc__ = StockPickler.dump.__doc__
-    pass
 
 class Unpickler(StockUnpickler):
     """python's Unpickler extended to interpreter sessions and more types"""
@@ -638,12 +727,12 @@ class Unpickler(StockUnpickler):
     def __init__(self, *args, **kwds):
         settings = Pickler.settings
         _ignore = kwds.pop('ignore', None)
-        StockUnpickler.__init__(self, *args, **kwds)
+        super().__init__(*args, **kwds)
         self._main = _main_module
         self._ignore = settings['ignore'] if _ignore is None else _ignore
 
     def load(self): #NOTE: if settings change, need to update attributes
-        obj = StockUnpickler.load(self)
+        obj = super().load()
         if type(obj).__module__ == getattr(_main_module, '__name__', '__main__'):
             if not self._ignore:
                 # point obj class to main
@@ -651,8 +740,8 @@ class Unpickler(StockUnpickler):
                 except (AttributeError,TypeError): pass # defined in a file
        #_main_module.__dict__.update(obj.__dict__) #XXX: should update globals ?
         return obj
+
     load.__doc__ = StockUnpickler.load.__doc__
-    pass
 
 '''
 def dispatch_table():
@@ -1204,9 +1293,7 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
 # Copyright (c) 2012, Regents of the University of California.
 # Copyright (c) 2009 `PiCloud, Inc. <http://www.picloud.com>`_.
 # License: https://github.com/cloudpipe/cloudpickle/blob/master/LICENSE
-@register(CodeType)
-def save_code(pickler, obj):
-    log.info("Co: %s" % obj)
+def _code_args(obj):
     if PY3:
         if hasattr(obj, "co_endlinetable"):
             args = (
@@ -1251,22 +1338,27 @@ def save_code(pickler, obj):
             obj.co_filename, obj.co_name, obj.co_firstlineno, obj.co_lnotab,
             obj.co_freevars, obj.co_cellvars
         )
+    return args
 
-    pickler.save_reduce(_create_code, args, obj=obj)
+@register(CodeType)
+def save_code(pickler, obj):
+    log.info("Co: %s" % obj)
+    pickler.save_reduce(_create_code, _code_args(obj), obj=obj)
     log.info("# Co")
     return
 
 @register(dict)
 def save_module_dict(pickler, obj):
     if is_dill(pickler, child=False) and obj == pickler._main.__dict__ and \
-            not (pickler._session and pickler._first_pass):
+            not (pickler._session and pickler._first_pass or pickler._portable):
         log.info("D1: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if PY3:
             pickler.write(bytes('c__builtin__\n__main__\n', 'UTF-8'))
         else:
-            pickler.write('c__builtin__\n__main__\n')
+            pickler.write('C__builtin__\n__main__\n')
         log.info("# D1")
-    elif (not is_dill(pickler, child=False)) and (obj == _main_module.__dict__):
+    elif (not is_dill(pickler, child=False) or pickler._portable) and \
+            (obj == _main_module.__dict__):
         log.info("D3: <dict%s" % str(obj.__repr__).split('dict')[-1]) # obj
         if PY3:
             pickler.write(bytes('c__main__\n__dict__\n', 'UTF-8'))
@@ -1836,7 +1928,9 @@ def save_type(pickler, obj, postproc_list=None):
     elif obj is type(None):
         log.info("T7: %s" % obj)
         #XXX: pickler.save_reduce(type, (None,), obj=obj)
-        if PY3:
+        if pickler._portable:
+            pickler.save_reduce(type, (None,), obj=obj)
+        elif PY3:
             pickler.write(bytes('c__builtin__\nNoneType\n', 'UTF-8'))
         else:
             pickler.write('c__builtin__\nNoneType\n')
