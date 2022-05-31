@@ -209,14 +209,14 @@ if __name__ == '__main__':
         dump = test_file.getvalue()
         test_file.close()
 
-        sys.modules[modname] = ModuleType(modname)  # empty
+        main = sys.modules[modname] = ModuleType(modname)  # empty
         # This should work after fixing https://github.com/uqfoundation/dill/issues/462
         test_file = dill._dill.StringIO(dump)
-        dill.load_session(test_file)
+        dill.load_session(test_file, main=main)
     finally:
         test_file.close()
 
-    assert x == 42
+    assert main.x == 42
 
 
     # Dump session for module that is not __main__:
