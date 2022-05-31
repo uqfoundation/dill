@@ -21,6 +21,8 @@ __all__ = ['dump','dumps','load','loads','dump_session','load_session',
            'UnpicklingError','HANDLE_FMODE','CONTENTS_FMODE','FILE_FMODE',
            'PickleError','PickleWarning','PicklingWarning','UnpicklingWarning']
 
+__module__ = 'dill'
+
 import logging
 log = logging.getLogger("dill")
 log.addHandler(logging.StreamHandler())
