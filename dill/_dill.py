@@ -797,7 +797,7 @@ def _create_code(*args):
     BYTES = (bytes, str)
     BYTES_NONE = (bytes, str, type(None))
     encode_bytes = lambda fields, patterns: {
-            key: val.encode() if pat == BYTES and isinstance(val, str) else val \
+            key: val.encode() if pat in (BYTES, BYTES_NONE) and isinstance(val, str) else val \
                     for (key, val), pat in zip(fields, patterns)
             }
 
@@ -840,11 +840,9 @@ def _create_code(*args):
 
     # Special case: lnotab and linetable
     if CODE_VERSION >= (3,10):
-        if not LNOTAB:  # came from <= 3.9
-            fields['linetable'] = b''
+        fields.setdefault('linetable', b'')
     else:
-        if LNOTAB or 'exceptiontable' in fields:  # came from >= 3.11 in the second case
-            fields['lnotab'] = LNOTAB
+        fields.setdefault('lnotab', LNOTAB)
 
     args = (fields[param] for param in CODE_PARAMS)
     return CodeType(*args)

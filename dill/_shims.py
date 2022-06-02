@@ -265,7 +265,7 @@ if _dill.OLD37:
 _setattr = Getattr(_dill, '_setattr', setattr)
 _delattr = Getattr(_dill, '_delattr', delattr)
 
-# Structural Patter Matching for reduce tuples.
+# Structural Pattern Matching for reduce tuples.
 @move_to(_dill)
 class match:
     """
@@ -299,7 +299,7 @@ class match:
     def __getattr__(self, item):
         return self.vars[item]
     def case(self, *args, **kwargs):
-        """just handles tuple patters"""
+        """just handles tuple patterns"""
         self.patterns = args + tuple(kwargs.values())
         if len(self.value) != len(self.patterns):
             return False
