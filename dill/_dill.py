@@ -895,10 +895,10 @@ def _create_code(*args):
         # obj.co_firstlineno, obj.co_lnotab, obj.co_freevars,
         # obj.co_cellvars
         if len(args) == 20: # from 3.11a
-            args = args[:12] + args[13:15] + (LNOTAB,) + args[19:]
+            args = args[:12] + args[13:14] + (LNOTAB,) + args[18:]
             return CodeType(*args)
         elif len(args) == 18: # from 3.11
-            args = args[:12] + args[13:15] + (LNOTAB,) + args[17:]
+            args = args[:12] + args[13:14] + (LNOTAB,) + args[16:]
             return CodeType(*args)
         elif len(args) == 16: # from 3.10 or from 3.8
             if LNOTAB: # here and above uses stored LNOTAB
@@ -913,10 +913,10 @@ def _create_code(*args):
         # obj.co_name, obj.co_firstlineno, obj.co_lnotab,
         # obj.co_freevars, obj.co_cellvars
         if len(args) == 20: # from 3.11a
-            args = args[:1] + args[2:12] + args[13:15] + (LNOTAB,) + args[19:]
+            args = args[:1] + args[2:12] + args[13:14] + (LNOTAB,) + args[18:]
             return CodeType(*args)
         elif len(args) == 18: # from 3.11
-            args = args[:1] + args[2:12] + args[13:15] + (LNOTAB,) + args[17:]
+            args = args[:1] + args[2:12] + args[13:14] + (LNOTAB,) + args[16:]
             return CodeType(*args)
         elif len(args) == 16: # from 3.10 or from 3.8
             if LNOTAB: # here and above uses stored LNOTAB
@@ -931,10 +931,10 @@ def _create_code(*args):
     # obj.co_filename, obj.co_name, obj.co_firstlineno, obj.co_lnotab,
     # obj.co_freevars, obj.co_cellvars
     if len(args) == 20: # from 3.11a
-        args = args[:1] + args[3:12] + args[13:15] + (LNOTAB,) + args[19:]
+        args = args[:1] + args[3:12] + args[13:14] + (LNOTAB,) + args[18:]
         return CodeType(*args)
     elif len(args) == 18: # from 3.11
-        args = args[:1] + args[3:12] + args[13:15] + (LNOTAB,) + args[17:]
+        args = args[:1] + args[3:12] + args[13:14] + (LNOTAB,) + args[16:]
         return CodeType(*args)
     elif len(args) == 16: # from 3.10 or from 3.8
         if LNOTAB: # here and above uses stored LNOTAB
