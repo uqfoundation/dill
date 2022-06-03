@@ -784,46 +784,176 @@ def _create_function(fcode, fglobals, fname=None, fdefaults=None,
     return func
 
 def _create_code(*args):
-    if PY3 and hasattr(args[-3], 'encode'): #FIXME: from PY2 fails (optcode)
+    if type(args[0]) is not int: # co_lnotab stored from >= 3.10
+        LNOTAB = args[0].encode() if hasattr(args[0], 'encode') else args[0]
+        args = args[1:]
+    else: # from < 3.10 (or pre-LNOTAB storage)
+        LNOTAB = b''
+    if PY3 and hasattr(args[-3], 'encode'): #NOTE: from PY2 fails (optcode)
         args = list(args)
-        if len(args) == 20:
+        if len(args) == 20: # from 3.11a
+            # obj.co_argcount, obj.co_posonlyargcount,
+            # obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+            # obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+            # obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
+            # obj.co_firstlineno, obj.co_linetable, obj.co_endlinetable,
+            # obj.co_columntable, obj.co_exceptiontable, obj.co_freevars,
+            # obj.co_cellvars
             args[-3] = args[-3].encode() # co_exceptiontable
-            args[-6] = args[-6].encode() # co_lnotab
+            args[-6] = args[-6].encode() # co_linetable
             args[-14] = args[-14].encode() # co_code
             if args[-4] is not None:
                 args[-4] = args[-4].encode() # co_columntable
             if args[-5] is not None:
                 args[-5] = args[-5].encode() # co_endlinetable
-        else:
-            args[-3] = args[-3].encode() # co_lnotab
+        elif len(args) == 18: # from 3.11
+            # obj.co_argcount, obj.co_posonlyargcount,
+            # obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+            # obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+            # obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
+            # obj.co_firstlineno, obj.co_linetable, obj.co_exceptiontable,
+            # obj.co_freevars, obj.co_cellvars
+            args[-3] = args[-3].encode() # co_exceptiontable
+            args[-4] = args[-4].encode() # co_linetable
+            args[-12] = args[-12].encode() # co_code
+        else: # from 3.10
+            # obj.co_argcount, obj.co_posonlyargcount,
+            # obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+            # obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+            # obj.co_varnames, obj.co_filename, obj.co_name,
+            # obj.co_firstlineno, obj.co_linetable, obj.co_freevars,
+            # obj.co_cellvars
+            args[-3] = args[-3].encode() # co_linetable (or co_lnotab)
             args[-10] = args[-10].encode() # co_code
-    if hasattr(CodeType, 'co_exceptiontable'):
+        args = tuple(args)
+    if hasattr(CodeType, 'co_endlinetable'): # python 3.11a
+        # obj.co_argcount, obj.co_posonlyargcount,
+        # obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+        # obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+        # obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
+        # obj.co_firstlineno, obj.co_linetable, obj.co_endlinetable,
+        # obj.co_columntable, obj.co_exceptiontable, obj.co_freevars,
+        # obj.co_cellvars
         if len(args) == 20: return CodeType(*args)
-        elif len(args) == 16:
-            argz = (None, None, b'')
-            argz = args[:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
+        elif len(args) == 18: # from 3.11
+            argz = (None, None)
+            argz = args[:-3] + argz + args[-3:]
             return CodeType(*argz)
-        elif len(args) == 15:
-            argz = args[1:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
+        elif len(args) == 16: # from 3.10 or from 3.8
+            if LNOTAB: # here and above uses stored co_linetable
+                argz = (None, None, b'')
+                argz = args[:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
+            else: # here and below drops stored co_lnotab
+                argz = (LNOTAB, None, None, b'')
+                argz = args[:-4] + args[-5:-4] + args[-4:-3] + argz + args[-2:]
+            return CodeType(*argz)
+        elif len(args) == 15: # from 3.7
+            argz = (LNOTAB, None, None, b'')
+            argz = args[1:-4] + args[-5:-4] + args[-4:-3] + argz + args[-2:]
             return CodeType(args[0], 0, *argz)
-        argz = args[1:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
+        argz = (LNOTAB, None, None, b'') # from 2.7
+        argz = args[1:-4] + args[-5:-4] + args[-4:-3] + argz + args[-2:]
         return CodeType(args[0], 0, 0, *argz)
-    elif hasattr(CodeType, 'co_posonlyargcount'):
-        if len(args) == 20:
+    elif hasattr(CodeType, 'co_exceptiontable'): # python 3.11
+        # obj.co_argcount, obj.co_posonlyargcount,
+        # obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+        # obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+        # obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
+        # obj.co_firstlineno, obj.co_linetable, obj.co_exceptiontable,
+        # obj.co_freevars, obj.co_cellvars
+        if len(args) == 20: return CodeType(*(args[:15] + args[17:]))
+        elif len(args) == 18: return CodeType(*args)
+        elif len(args) == 16: # from 3.10 or from 3.8
+            if LNOTAB: # here and above uses stored co_linetable
+                argz = (b'',)
+                argz = args[:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
+            else: # here and below drops stored co_lnotab
+                argz = (LNOTAB, b'')
+                argz = args[:-4] + args[-5:-4] + args[-4:-3] + argz + args[-2:]
+            return CodeType(*argz)
+        elif len(args) == 15: # from 3.7
+            argz = (LNOTAB, b'')
+            argz = args[1:-4] + args[-5:-4] + args[-4:-3] + argz + args[-2:]
+            return CodeType(args[0], 0, *argz)
+        argz = (LNOTAB, b'') # from 2.7
+        argz = args[1:-4] + args[-5:-4] + args[-4:-3] + argz + args[-2:]
+        return CodeType(args[0], 0, 0, *argz)
+    elif hasattr(CodeType, 'co_linetable'): # python 3.10
+        # obj.co_argcount, obj.co_posonlyargcount,
+        # obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+        # obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+        # obj.co_varnames, obj.co_filename, obj.co_name,
+        # obj.co_firstlineno, obj.co_linetable, obj.co_freevars,
+        # obj.co_cellvars
+        if len(args) == 20: # from 3.11a
             return CodeType(*(args[:12] + args[13:15] + args[18:]))
-        elif len(args) == 16: return CodeType(*args)
-        elif len(args) == 15: return CodeType(args[0], 0, *args[1:])
-        return CodeType(args[0], 0, 0, *args[1:])
-    elif hasattr(CodeType, 'co_kwonlyargcount'):
-        if len(args) == 20:
-            return CodeType(*(args[:1] + args[2:12] + args[13:15] + args[18:]))
-        elif len(args) == 16: return CodeType(args[0], *args[2:])
+        elif len(args) == 18: # from 3.11
+            return CodeType(*(args[:12] + args[13:15] + args[16:]))
+        elif len(args) == 16: # from 3.10 or from 3.8
+            if not LNOTAB: # here and below drops stored co_lnotab
+                args = args[:-3] + (LNOTAB,) + args[-2:]
+            return CodeType(*args)
+        elif len(args) == 15: # from 3.7
+            argz = args[1:-3] + (LNOTAB,) + args[-2:]
+            return CodeType(args[0], 0, *argz)
+        argz = args[1:-3] + (LNOTAB,) + args[-2:]
+        return CodeType(args[0], 0, 0, *argz) # from 2.7
+    elif hasattr(CodeType, 'co_posonlyargcount'): # python 3.8
+        # obj.co_argcount, obj.co_posonlyargcount,
+        # obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+        # obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+        # obj.co_varnames, obj.co_filename, obj.co_name,
+        # obj.co_firstlineno, obj.co_lnotab, obj.co_freevars,
+        # obj.co_cellvars
+        if len(args) == 20: # from 3.11a
+            args = args[:12] + args[13:14] + (LNOTAB,) + args[18:]
+            return CodeType(*args)
+        elif len(args) == 18: # from 3.11
+            args = args[:12] + args[13:14] + (LNOTAB,) + args[16:]
+            return CodeType(*args)
+        elif len(args) == 16: # from 3.10 or from 3.8
+            if LNOTAB: # here and above uses stored LNOTAB
+                args = args[:-3] + (LNOTAB,) + args[-2:]
+            return CodeType(*args)
+        elif len(args) == 15: return CodeType(args[0], 0, *args[1:]) # from 3.7
+        return CodeType(args[0], 0, 0, *args[1:]) # from 2.7
+    elif hasattr(CodeType, 'co_kwonlyargcount'): # python 3.7
+        # obj.co_argcount, obj.co_kwonlyargcount, obj.co_nlocals,
+        # obj.co_stacksize, obj.co_flags, obj.co_code, obj.co_consts,
+        # obj.co_names, obj.co_varnames, obj.co_filename,
+        # obj.co_name, obj.co_firstlineno, obj.co_lnotab,
+        # obj.co_freevars, obj.co_cellvars
+        if len(args) == 20: # from 3.11a
+            args = args[:1] + args[2:12] + args[13:14] + (LNOTAB,) + args[18:]
+            return CodeType(*args)
+        elif len(args) == 18: # from 3.11
+            args = args[:1] + args[2:12] + args[13:14] + (LNOTAB,) + args[16:]
+            return CodeType(*args)
+        elif len(args) == 16: # from 3.10 or from 3.8
+            if LNOTAB: # here and above uses stored LNOTAB
+                argz = args[2:-3] + (LNOTAB,) + args[-2:]
+            else:
+                argz = args[2:]
+            return CodeType(args[0], *argz)
         elif len(args) == 15: return CodeType(*args)
-        return CodeType(args[0], 0, *args[1:])
-    if len(args) == 20:
-        return CodeType(*(args[:1] + args[3:12] + args[13:15] + args[18:]))
-    elif len(args) == 16: return CodeType(args[0], *args[3:])
-    elif len(args) == 15: return CodeType(args[0], *args[2:])
+        return CodeType(args[0], 0, *args[1:]) # from 2.7
+    # obj.co_argcount, obj.co_nlocals, obj.co_stacksize, obj.co_flags,
+    # obj.co_code, obj.co_consts, obj.co_names, obj.co_varnames,
+    # obj.co_filename, obj.co_name, obj.co_firstlineno, obj.co_lnotab,
+    # obj.co_freevars, obj.co_cellvars
+    if len(args) == 20: # from 3.11a
+        args = args[:1] + args[3:12] + args[13:14] + (LNOTAB,) + args[18:]
+        return CodeType(*args)
+    elif len(args) == 18: # from 3.11
+        args = args[:1] + args[3:12] + args[13:14] + (LNOTAB,) + args[16:]
+        return CodeType(*args)
+    elif len(args) == 16: # from 3.10 or from 3.8
+        if LNOTAB: # here and above uses stored LNOTAB
+            argz = args[3:-3] + (LNOTAB,) + args[-2:]
+        else:
+            argz = args[3:]
+        return CodeType(args[0], *argz)
+    elif len(args) == 15: return CodeType(args[0], *args[2:]) # from 3.7
     return CodeType(*args)
 
 def _create_ftype(ftypeobj, func, args, kwds):
@@ -1211,17 +1341,38 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
 def save_code(pickler, obj):
     log.info("Co: %s" % obj)
     if PY3:
-        if hasattr(obj, "co_exceptiontable"):
+        if hasattr(obj, "co_endlinetable"): # python 3.11a (20 args)
             args = (
+                obj.co_lnotab, # for < python 3.10 [not counted in args]
                 obj.co_argcount, obj.co_posonlyargcount,
                 obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
                 obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
                 obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
-                obj.co_firstlineno, obj.co_lnotab, obj.co_endlinetable,
+                obj.co_firstlineno, obj.co_linetable, obj.co_endlinetable,
                 obj.co_columntable, obj.co_exceptiontable, obj.co_freevars,
                 obj.co_cellvars
         )
-        elif hasattr(obj, "co_posonlyargcount"):
+        elif hasattr(obj, "co_exceptiontable"): # python 3.11 (18 args)
+            args = (
+                obj.co_lnotab, # for < python 3.10 [not counted in args]
+                obj.co_argcount, obj.co_posonlyargcount,
+                obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+                obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+                obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
+                obj.co_firstlineno, obj.co_linetable, obj.co_exceptiontable,
+                obj.co_freevars, obj.co_cellvars
+        )
+        elif hasattr(obj, "co_linetable"): # python 3.10 (16 args)
+            args = (
+                obj.co_lnotab, # for < python 3.10 [not counted in args]
+                obj.co_argcount, obj.co_posonlyargcount,
+                obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+                obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+                obj.co_varnames, obj.co_filename, obj.co_name,
+                obj.co_firstlineno, obj.co_linetable, obj.co_freevars,
+                obj.co_cellvars
+        )
+        elif hasattr(obj, "co_posonlyargcount"): # python 3.8 (16 args)
             args = (
                 obj.co_argcount, obj.co_posonlyargcount,
                 obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
@@ -1230,7 +1381,7 @@ def save_code(pickler, obj):
                 obj.co_firstlineno, obj.co_lnotab, obj.co_freevars,
                 obj.co_cellvars
         )
-        else:
+        else: # python 3.7 (15 args)
             args = (
                 obj.co_argcount, obj.co_kwonlyargcount, obj.co_nlocals,
                 obj.co_stacksize, obj.co_flags, obj.co_code, obj.co_consts,
@@ -1238,7 +1389,7 @@ def save_code(pickler, obj):
                 obj.co_name, obj.co_firstlineno, obj.co_lnotab,
                 obj.co_freevars, obj.co_cellvars
         )
-    else:
+    else: # python 2.7 (14 args)
         args = (
             obj.co_argcount, obj.co_nlocals, obj.co_stacksize, obj.co_flags,
             obj.co_code, obj.co_consts, obj.co_names, obj.co_varnames,
@@ -1920,7 +2071,7 @@ def save_type(pickler, obj, postproc_list=None):
         if OLD37 or (not obj._field_defaults):
             _save_with_postproc(pickler, (_create_namedtuple, (obj.__name__, obj._fields, obj.__module__)), obj=obj, postproc_list=postproc_list)
         else:
-            defaults = [obj._field_defaults[field] for field in obj._fields]
+            defaults = [obj._field_defaults[field] for field in obj._fields if field in obj._field_defaults]
             _save_with_postproc(pickler, (_create_namedtuple, (obj.__name__, obj._fields, obj.__module__, defaults)), obj=obj, postproc_list=postproc_list)
         log.info("# T6")
         return
