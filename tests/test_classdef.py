@@ -90,19 +90,15 @@ def test_specialtypes():
     assert dill.pickles(type(NotImplemented))
     assert dill.pickles(type(Ellipsis))
 
-if hex(sys.hexversion) >= '0x20600f0':
-    from collections import namedtuple
-    Z = namedtuple("Z", ['a','b'])
-    Zi = Z(0,1)
-    X = namedtuple("Y", ['a','b'])
-    X.__name__ = "X"
-    if hex(sys.hexversion) >= '0x30300f0':
-        X.__qualname__ = "X" #XXX: name must 'match' or fails to pickle
-    Xi = X(0,1)
-    Bad = namedtuple("FakeName", ['a','b'])
-    Badi = Bad(0,1)
-else:
-    Z = Zi = X = Xi = Bad = Badi = None
+from collections import namedtuple
+Z = namedtuple("Z", ['a','b'])
+Zi = Z(0,1)
+X = namedtuple("Y", ['a','b'])
+X.__name__ = "X"
+X.__qualname__ = "X" #XXX: name must 'match' or fails to pickle
+Xi = X(0,1)
+Bad = namedtuple("FakeName", ['a','b'])
+Badi = Bad(0,1)
 
 # test namedtuple
 def test_namedtuple():
@@ -123,8 +119,7 @@ def test_namedtuple():
     assert dill.copy(a)
 
     assert dill.copy(A.B).__name__ == 'B'
-    if dill._dill.PY3:
-        assert dill.copy(A.B).__qualname__.endswith('.<locals>.A.B')
+    assert dill.copy(A.B).__qualname__.endswith('.<locals>.A.B')
     assert dill.copy(A.B).__doc__ == 'docstring'
     assert dill.copy(A.B).__module__ == 'testing'
 
@@ -168,12 +163,12 @@ def test_array_subclass():
                 return np.asarray(self), self.color
 
         a1 = TestArray(np.zeros(100), color='green')
-        if dill._dill.PY3 and not dill._dill.IS_PYPY:
+        if not dill._dill.IS_PYPY:
             assert dill.pickles(a1)
             assert a1.__dict__ == dill.copy(a1).__dict__
 
         a2 = a1[0:9]
-        if dill._dill.PY3 and not dill._dill.IS_PYPY:
+        if not dill._dill.IS_PYPY:
             assert dill.pickles(a2)
             assert a2.__dict__ == dill.copy(a2).__dict__
 
@@ -182,7 +177,7 @@ def test_array_subclass():
 
         a3 = TestArray2([1,2,3,4,5])
         a3.color = 'green'
-        if dill._dill.PY3 and not dill._dill.IS_PYPY:
+        if not dill._dill.IS_PYPY:
             assert dill.pickles(a3)
             assert a3.__dict__ == dill.copy(a3).__dict__
 
@@ -217,37 +212,21 @@ def test_slots():
     assert dill.copy(y).y == value
 
 def test_metaclass():
-    if dill._dill.PY3:
-        class metaclass_with_new(type):
-            def __new__(mcls, name, bases, ns, **kwds):
-                cls = super().__new__(mcls, name, bases, ns, **kwds)
-                assert mcls is not None
-                assert cls.method(mcls)
-                return cls
-            def method(cls, mcls):
-                return isinstance(cls, mcls)
+    class metaclass_with_new(type):
+        def __new__(mcls, name, bases, ns, **kwds):
+            cls = super().__new__(mcls, name, bases, ns, **kwds)
+            assert mcls is not None
+            assert cls.method(mcls)
+            return cls
+        def method(cls, mcls):
+            return isinstance(cls, mcls)
 
-        l = locals()
-        exec("""class subclass_with_new(metaclass=metaclass_with_new):
-            def __new__(cls):
-                self = super().__new__(cls)
-                return self""", None, l)
-        subclass_with_new = l['subclass_with_new']
-    else:
-        class metaclass_with_new(type):
-            def __new__(mcls, name, bases, ns, **kwds):
-                cls = super(mcls, metaclass_with_new).__new__(mcls, name, bases, ns, **kwds)
-                assert mcls is not None
-                assert cls.method(mcls)
-                return cls
-            def method(cls, mcls):
-                return isinstance(cls, mcls)
-
-        class subclass_with_new:
-            __metaclass__ = metaclass_with_new
-            def __new__(cls):
-                self = super(subclass_with_new, cls).__new__(cls)
-                return self
+    l = locals()
+    exec("""class subclass_with_new(metaclass=metaclass_with_new):
+        def __new__(cls):
+            self = super().__new__(cls)
+            return self""", None, l)
+    subclass_with_new = l['subclass_with_new']
 
     assert dill.copy(subclass_with_new())
 

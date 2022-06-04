@@ -15,22 +15,9 @@ __all__ = ['registered','failures','succeeds']
 # helper imports
 import warnings; warnings.filterwarnings("ignore", category=DeprecationWarning)
 import sys
-PY3 = (hex(sys.hexversion) >= '0x30000f0')
-if PY3:
-    import queue as Queue
-    import dbm as anydbm
-else:
-    import Queue
-    import anydbm
-    import sets # deprecated/removed
-    import mutex # removed
-try:
-    from cStringIO import StringIO # has StringI and StringO types
-except ImportError: # only has StringIO type
-    if PY3:
-        from io import BytesIO as StringIO
-    else:
-        from StringIO import StringIO
+import queue as Queue
+import dbm as anydbm
+from io import BytesIO as StringIO
 import re
 import array
 import collections
@@ -64,8 +51,7 @@ import contextlib
 try:
     import bz2
     import sqlite3
-    if PY3: import dbm.ndbm as dbm
-    else: import dbm
+    import dbm.ndbm as dbm
     HAS_ALL = True
 except ImportError: # Ubuntu
     HAS_ALL = False
@@ -157,12 +143,8 @@ a['ObjectType'] = object()
 a['StringType'] = _str = str(1)
 a['TupleType'] = _tuple = ()
 a['TypeType'] = type
-if PY3:
-    a['LongType'] = _int
-    a['UnicodeType'] = _str
-else:
-    a['LongType'] = long(1)
-    a['UnicodeType'] = unicode(1)
+a['LongType'] = _int
+a['UnicodeType'] = _str
 # built-in constants (CH 4)
 a['CopyrightType'] = copyright
 # built-in types (CH 5)
@@ -181,10 +163,6 @@ a['DefaultDictType'] = collections.defaultdict(_function, _dict)
 a['TZInfoType'] = datetime.tzinfo()
 a['DateTimeType'] = datetime.datetime.today()
 a['CalendarType'] = calendar.Calendar()
-if not PY3:
-    a['SetsType'] = sets.Set()
-    a['ImmutableSetType'] = sets.ImmutableSet()
-    a['MutexType'] = mutex.mutex()
 # numeric and mathematical types (CH 9)
 a['DecimalType'] = decimal.Decimal(1)
 a['CountType'] = itertools.count(0)
@@ -288,32 +266,22 @@ try: # oddities: deprecated
 except ImportError:
     pass
 # other (concrete) object types
-if PY3:
-    d['CellType'] = (_lambda)(0).__closure__[0]
-    a['XRangeType'] = _xrange = range(1)
-else:
-    d['CellType'] = (_lambda)(0).func_closure[0]
-    a['XRangeType'] = _xrange = xrange(1)
+d['CellType'] = (_lambda)(0).__closure__[0]
+a['XRangeType'] = _xrange = range(1)
 if not IS_PYPY:
     d['MethodDescriptorType'] = type.__dict__['mro']
     d['WrapperDescriptorType'] = type.__repr__
     a['WrapperDescriptorType2'] = type.__dict__['__module__']
-    d['ClassMethodDescriptorType'] = type.__dict__['__prepare__' if PY3 else 'mro']
+    d['ClassMethodDescriptorType'] = type.__dict__['__prepare__']
 # built-in functions (CH 2)
-if PY3 or IS_PYPY: 
-    _methodwrap = (1).__lt__
-else: 
-    _methodwrap = (1).__cmp__
+_methodwrap = (1).__lt__
 d['MethodWrapperType'] = _methodwrap
 a['StaticMethodType'] = staticmethod(_method)
 a['ClassMethodType'] = classmethod(_method)
 a['PropertyType'] = property()
 d['SuperType'] = super(Exception, _exception)
 # string services (CH 7)
-if PY3: 
-    _in = _bytes
-else: 
-    _in = _str
+_in = _bytes
 a['InputType'] = _cstrI = StringIO(_in)
 a['OutputType'] = _cstrO = StringIO()
 # data types (CH 8)
@@ -328,16 +296,12 @@ a['DeadCallableProxyType'] = weakref.proxy(_class2())
 a['QueueType'] = Queue.Queue()
 # numeric and mathematical types (CH 9)
 d['PartialType'] = functools.partial(int,base=2)
-if PY3:
-    a['IzipType'] = zip('0','1')
-else:
-    a['IzipType'] = itertools.izip('0','1')
+a['IzipType'] = zip('0','1')
 a['ChainType'] = itertools.chain('0','1')
 d['ItemGetterType'] = operator.itemgetter(0)
 d['AttrGetterType'] = operator.attrgetter('__repr__')
 # file and directory access (CH 10)
-if PY3: _fileW = _cstrO
-else: _fileW = _tmpf
+_fileW = _cstrO
 # data persistence (CH 11)
 if HAS_ALL:
     a['ConnectionType'] = _conn = sqlite3.connect(':memory:')
@@ -345,8 +309,7 @@ if HAS_ALL:
 a['ShelveType'] = shelve.Shelf({})
 # data compression and archiving (CH 12)
 if HAS_ALL:
-    if (hex(sys.hexversion) < '0x2070ef0') or PY3:
-        a['BZ2FileType'] = bz2.BZ2File(os.devnull) #FIXME: fail >= 3.3, 2.7.14
+    a['BZ2FileType'] = bz2.BZ2File(os.devnull) #FIXME: fail >= 3.3, 2.7.14
     a['BZ2CompressorType'] = bz2.BZ2Compressor()
     a['BZ2DecompressorType'] = bz2.BZ2Decompressor()
 #a['ZipFileType'] = _zip = zipfile.ZipFile(os.devnull,'w') #FIXME: fail >= 3.2
@@ -363,17 +326,10 @@ a['RLockType'] = threading.RLock()
 a['NamedLoggerType'] = _logger = logging.getLogger(__name__) #FIXME: fail >= 3.2 and <= 2.6
 #a['FrozenModuleType'] = __hello__ #FIXME: prints "Hello world..."
 # interprocess communication (CH 17)
-if PY3:
-    a['SocketType'] = _socket = socket.socket() #FIXME: fail >= 3.3
-    a['SocketPairType'] = socket.socketpair()[0] #FIXME: fail >= 3.3
-else:
-    a['SocketType'] = _socket = socket.socket()
-    a['SocketPairType'] = _socket._sock
+a['SocketType'] = _socket = socket.socket() #FIXME: fail >= 3.3
+a['SocketPairType'] = socket.socketpair()[0] #FIXME: fail >= 3.3
 # python runtime services (CH 27)
-if PY3:
-    a['GeneratorContextManagerType'] = contextlib.contextmanager(max)([1])
-else:
-    a['GeneratorContextManagerType'] = contextlib.GeneratorContextManager(max)
+a['GeneratorContextManagerType'] = contextlib.contextmanager(max)([1])
 
 try: # ipython
     __IPYTHON__ is True # is ipython
@@ -454,14 +410,9 @@ x['TracebackType'] = _function2()[1] #(see: inspect.getouterframes,getframeinfo)
 # built-in functions (CH 2)
 x['SetIteratorType'] = iter(_set) #XXX: empty vs non-empty
 # built-in types (CH 5)
-if PY3:
-    x['DictionaryItemIteratorType'] = iter(type.__dict__.items())
-    x['DictionaryKeyIteratorType'] = iter(type.__dict__.keys())
-    x['DictionaryValueIteratorType'] = iter(type.__dict__.values())
-else:
-    x['DictionaryItemIteratorType'] = type.__dict__.iteritems()
-    x['DictionaryKeyIteratorType'] = type.__dict__.iterkeys()
-    x['DictionaryValueIteratorType'] = type.__dict__.itervalues()
+x['DictionaryItemIteratorType'] = iter(type.__dict__.items())
+x['DictionaryKeyIteratorType'] = iter(type.__dict__.keys())
+x['DictionaryValueIteratorType'] = iter(type.__dict__.values())
 # string services (CH 7)
 x['StructType'] = struct.Struct('c')
 x['CallableIteratorType'] = _srepattern.finditer('')
@@ -484,7 +435,7 @@ x['CSVDictReaderType'] = csv.DictReader(_cstrI)
 x['CSVDictWriterType'] = csv.DictWriter(_cstrO,{})
 # cryptographic services (CH 14)
 x['HashType'] = hashlib.md5()
-if (hex(sys.hexversion) < '0x30800a1'):
+if (sys.hexversion < 0x30800a1):
     x['HMACType'] = hmac.new(_in)
 else:
     x['HMACType'] = hmac.new(_in, digestmod='md5')
@@ -524,14 +475,9 @@ try: # python 2.7
     # built-in types (CH 5)
     x['MemoryType'] = memoryview(_in) # 2.7
     x['MemoryType2'] = memoryview(bytearray(_in)) # 2.7
-    if PY3:
-        x['DictItemsType'] = _dict.items() # 2.7
-        x['DictKeysType'] = _dict.keys() # 2.7
-        x['DictValuesType'] = _dict.values() # 2.7
-    else:
-        x['DictItemsType'] = _dict.viewitems() # 2.7
-        x['DictKeysType'] = _dict.viewkeys() # 2.7
-        x['DictValuesType'] = _dict.viewvalues() # 2.7
+    x['DictItemsType'] = _dict.items() # 2.7
+    x['DictKeysType'] = _dict.keys() # 2.7
+    x['DictValuesType'] = _dict.values() # 2.7
     # generic operating system services (CH 15)
     x['RawTextHelpFormatterType'] = argparse.RawTextHelpFormatter('PROG')
     x['RawDescriptionHelpFormatterType'] = argparse.RawDescriptionHelpFormatter('PROG')
@@ -543,10 +489,8 @@ try: # python 2.7 (and not 3.1)
     x['CmpKeyObjType'] = _cmpkey('0') #2.7, >=3.2
 except AttributeError:
     pass
-if PY3: # oddities: removed, etc
-    x['BufferType'] = x['MemoryType']
-else:
-    x['BufferType'] = buffer('')
+# oddities: removed, etc
+x['BufferType'] = x['MemoryType']
 
 # -- cleanup ----------------------------------------------------------------
 a.update(d) # registered also succeed

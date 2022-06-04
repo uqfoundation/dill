@@ -114,9 +114,8 @@ def test_objects(main, copy_dict, byref):
         for obj in ('x', 'empty', 'names'):
             assert main_dict[obj] == copy_dict[obj]
 
-        globs = '__globals__' if dill._dill.PY3 else 'func_globals'
         for obj in ['squared', 'cubed']:
-            assert getattr(main_dict[obj], globs) is main_dict
+            assert main_dict[obj].__globals__ is main_dict
             assert main_dict[obj](3) == copy_dict[obj](3)
 
         assert main.Person.__module__ == main.__name__

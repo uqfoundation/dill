@@ -19,8 +19,6 @@ dill.settings['recurse'] = True
 fname = "_test_file.txt"
 rand_chars = list(string.ascii_letters) + ["\n"] * 40  # bias newline
 
-if sys.hexversion < 0x03030000:
-    FileNotFoundError = IOError
 buffer_error = ValueError("invalid buffer size")
 dne_error = FileNotFoundError("[Errno 2] No such file or directory: '%s'" % fname)
 

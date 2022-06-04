@@ -6,7 +6,6 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 import dill
-from dill._dill import PY3
 from functools import partial
 import warnings
 
@@ -113,9 +112,8 @@ class obj4(object):
 def test_circular_reference():
     assert copy(obj4())
     obj4_copy = dill.loads(dill.dumps(obj4()))
-    if PY3:
-        assert type(obj4_copy) is type(obj4_copy).__init__.__closure__[0].cell_contents
-        assert type(obj4_copy.b) is type(obj4_copy.b).__init__.__closure__[0].cell_contents
+    assert type(obj4_copy) is type(obj4_copy).__init__.__closure__[0].cell_contents
+    assert type(obj4_copy.b) is type(obj4_copy.b).__init__.__closure__[0].cell_contents
 
 
 def f():

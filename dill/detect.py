@@ -14,7 +14,6 @@ from inspect import ismethod, isfunction, istraceback, isframe, iscode
 from .pointers import parent, reference, at, parents, children
 
 from ._dill import _trace as trace
-from ._dill import PY3
 
 __all__ = ['baditems','badobjects','badtypes','code','errors','freevars',
            'getmodule','globalvars','nestedcode','nestedglobals','outermost',
@@ -25,9 +24,7 @@ def getmodule(object, _filename=None, force=False):
     from inspect import getmodule as getmod
     module = getmod(object, _filename)
     if module or not force: return module
-    if PY3: builtins = 'builtins'
-    else: builtins = '__builtin__'
-    builtins = __import__(builtins)
+    import builtins
     from .source import getname
     name = getname(object, force=True)
     return builtins if name in vars(builtins).keys() else None
@@ -37,22 +34,13 @@ def outermost(func): # is analogous to getsource(func,enclosing=True)
 
     NOTE: this is the object-equivalent of getsource(func, enclosing=True)
     """
-    if PY3:
-        if ismethod(func):
-            _globals = func.__func__.__globals__ or {}
-        elif isfunction(func):
-            _globals = func.__globals__ or {}
-        else:
-            return #XXX: or raise? no matches
-        _globals = _globals.items()
+    if ismethod(func):
+        _globals = func.__func__.__globals__ or {}
+    elif isfunction(func):
+        _globals = func.__globals__ or {}
     else:
-        if ismethod(func):
-            _globals = func.im_func.func_globals or {}
-        elif isfunction(func):
-            _globals = func.func_globals or {}
-        else:
-            return #XXX: or raise? no matches
-        _globals = _globals.iteritems()
+        return #XXX: or raise? no matches
+    _globals = _globals.items()
     # get the enclosing source
     from .source import getsourcelines
     try: lines,lnum = getsourcelines(func, enclosing=True)
@@ -87,12 +75,8 @@ def code(func):
 
     NOTE: use dill.source.getsource(CODEOBJ) to get the source code
     '''
-    if PY3:
-        im_func = '__func__'
-        func_code = '__code__'
-    else:
-        im_func = 'im_func'
-        func_code = 'func_code'
+    im_func = '__func__'
+    func_code = '__code__'
     if ismethod(func): func = getattr(func, im_func)
     if isfunction(func): func = getattr(func, func_code)
     if istraceback(func): func = func.tb_frame
@@ -109,12 +93,8 @@ def referrednested(func, recurse=True): #XXX: return dict of {__name__: obj} ?
     If possible, python builds code objects, but delays building functions
     until func() is called.
     """
-    if PY3:
-        att1 = '__code__'
-        att0 = '__func__'
-    else:
-        att1 = 'func_code' # functions
-        att0 = 'im_func'   # methods
+    att1 = '__code__'  # functions
+    att0 = '__func__'  # methods
 
     import gc
     funcs = set()
@@ -143,14 +123,9 @@ def freevars(func):
     """get objects defined in enclosing code that are referred to by func
 
     returns a dict of {name:object}"""
-    if PY3:
-        im_func = '__func__'
-        func_code = '__code__'
-        func_closure = '__closure__'
-    else:
-        im_func = 'im_func'
-        func_code = 'func_code'
-        func_closure = 'func_closure'
+    im_func = '__func__'
+    func_code = '__code__'
+    func_closure = '__closure__'
     if ismethod(func): func = getattr(func, im_func)
     if isfunction(func):
         closures = getattr(func, func_closure) or ()
@@ -175,7 +150,7 @@ def nestedglobals(func, recurse=True):
     if func is None: return list()
     import sys
     from .temp import capture
-    CAN_NULL = sys.hexversion >= 51052711 #NULL may be prepended >= 3.11a7
+    CAN_NULL = sys.hexversion >= 0x30b00a7 # NULL may be prepended >= 3.11a7
     names = set()
     with capture('stdout') as out:
         dis.dis(func) #XXX: dis.dis(None) disassembles last traceback
@@ -199,16 +174,10 @@ def globalvars(func, recurse=True, builtin=False):
     """get objects defined in global scope that are referred to by func
 
     return a dict of {name:object}"""
-    if PY3:
-        im_func = '__func__'
-        func_code = '__code__'
-        func_globals = '__globals__'
-        func_closure = '__closure__'
-    else:
-        im_func = 'im_func'
-        func_code = 'func_code'
-        func_globals = 'func_globals'
-        func_closure = 'func_closure'
+    im_func = '__func__'
+    func_code = '__code__'
+    func_globals = '__globals__'
+    func_closure = '__closure__'
     if ismethod(func): func = getattr(func, im_func)
     if isfunction(func):
         globs = vars(getmodule(sum)).copy() if builtin else {}

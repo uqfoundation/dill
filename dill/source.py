@@ -29,8 +29,6 @@ from inspect import (getblock, getfile, getmodule, getsourcefile, indentsize,
                      ismodule, istraceback)
 from tokenize import TokenError
 
-from ._dill import PY3
-
 
 def isfrommain(obj):
     "check if object was built in __main__"
@@ -165,16 +163,14 @@ def findsource(object):
         name = object.__name__
         if name == '<lambda>': pat1 = r'(.*(?<!\w)lambda(:|\s))'
         else: pat1 = r'^(\s*def\s)'
-        if PY3: object = object.__func__
-        else: object = object.im_func
+        object = object.__func__
     if isfunction(object):
         name = object.__name__
         if name == '<lambda>':
             pat1 = r'(.*(?<!\w)lambda(:|\s))'
             obj = object #XXX: better a copy?
         else: pat1 = r'^(\s*def\s)'
-        if PY3: object = object.__code__
-        else: object = object.func_code
+        object = object.__code__
     if istraceback(object):
         object = object.tb_frame
     if isframe(object):
@@ -455,8 +451,7 @@ def _intypes(object):
 
 def _isstring(object): #XXX: isstringlike better?
     '''check if object is a string-like type'''
-    if PY3: return isinstance(object, (str, bytes))
-    return isinstance(object, basestring)
+    return isinstance(object, (str, bytes))
 
 
 def indent(code, spaces=4):
@@ -542,10 +537,7 @@ def _wrap(f):
     func.__doc__ = f.__doc__
     return func
 ''' % ('__globals__', '__locals__')
-if PY3:
-    exec(wrap3)
-else:
-    exec(wrap2)
+exec(wrap3)
 del wrap2, wrap3
 
 
@@ -588,10 +580,7 @@ def dumpsource(object, alias='', new=False, enclose=True):
     else: #XXX: other cases where source code is needed???
         code += getsource(object.__class__, alias='', lstrip=True, force=True)
         mod = repr(object.__module__) # should have a module (no builtins here)
-        if PY3:
-            code += pre + 'dill.loads(%s.replace(b%s,bytes(__name__,"UTF-8")))\n' % (pik,mod)
-        else:
-            code += pre + 'dill.loads(%s.replace(%s,__name__))\n' % (pik,mod)
+        code += pre + 'dill.loads(%s.replace(b%s,bytes(__name__,"UTF-8")))\n' % (pik,mod)
        #code += 'del %s' % object.__class__.__name__ #NOTE: kills any existing!
 
     if enclose:

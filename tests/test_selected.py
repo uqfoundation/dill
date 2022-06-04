@@ -76,7 +76,7 @@ def test_frame_related():
   g = _g(1)
   f = g.gi_frame
   e,t = _f()
-  _is = lambda ok: not ok if dill._dill.IS_PYPY2 else ok
+  _is = lambda ok: ok
   ok = dill.pickles(f)
   if verbose: print ("%s: %s, %s" % (ok, type(f), f))
   assert not ok
