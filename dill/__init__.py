@@ -283,12 +283,13 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """
 
-from ._dill import dump, dumps, load, loads, dump_session, load_session, \
+from ._dill import dump, dumps, load, loads, \
     Pickler, Unpickler, register, copy, pickle, pickles, check, \
     HIGHEST_PROTOCOL, DEFAULT_PROTOCOL, PicklingError, UnpicklingError, \
     HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE, PickleError, PickleWarning, \
     PicklingWarning, UnpicklingWarning
-from . import source, temp, detect
+from .session import dump_session, load_session
+from . import detect, session, source, temp
 
 # get global settings
 from .settings import settings

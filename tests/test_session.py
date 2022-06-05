@@ -197,7 +197,7 @@ if __name__ == '__main__':
     main = ModuleType(modname)
     main.x = 42
 
-    _main = dill._dill._stash_modules(main)
+    _main = dill.session._stash_modules(main)
     if _main is not main:
         print("There are objects to save by referenece that shouldn't be:",
               _main.__dill_imported, _main.__dill_imported_as, _main.__dill_imported_top_level,
