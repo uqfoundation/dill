@@ -2237,13 +2237,12 @@ if HAS_CTYPES and hasattr(ctypes, 'pythonapi'):
     _PyCapsule_SetName.argtypes = (ctypes.py_object, ctypes.c_char_p)
     _PyCapsule_SetPointer = ctypes.pythonapi.PyCapsule_SetPointer
     _PyCapsule_SetPointer.argtypes = (ctypes.py_object, ctypes.c_void_p)
-    PyCapsuleType = type(
-        _PyCapsule_New(
-            ctypes.cast(_PyCapsule_New, ctypes.c_void_p),
-            ctypes.create_string_buffer(b'dill._testcapsule'),
-            None
-        )
+    _testcapsule = _PyCapsule_New(
+        ctypes.cast(_PyCapsule_New, ctypes.c_void_p),
+        ctypes.create_string_buffer(b'dill._dill._testcapsule'),
+        None
     )
+    PyCapsuleType = type(_testcapsule)
     @register(PyCapsuleType)
     def save_capsule(pickler, obj):
         log.info("Cap: %s", obj)
@@ -2254,6 +2253,8 @@ if HAS_CTYPES and hasattr(ctypes, 'pythonapi'):
         destructor = _PyCapsule_GetDestructor(obj)
         pickler.save_reduce(_create_capsule, (pointer, name, context, destructor), obj=obj)
         log.info("# Cap")
+else:
+    _testcapsule = None
 
 # quick sanity checking
 def pickles(obj,exact=False,safe=False,**kwds):

@@ -19,8 +19,6 @@ pickle.settings['recurse'] = True
 from dill import load_types, objects, extend
 load_types(pickleable=True,unpickleable=False)
 
-import warnings
-
 # uncomment the next two lines to test cloudpickle
 #extend(False)
 #import cloudpickle as pickle
@@ -59,36 +57,5 @@ def test_objects():
        #pickles(member, exact=True)
         pickles(member, exact=False)
 
-test_pycapsule = None
-
-if pickle._dill.HAS_CTYPES:
-    import ctypes
-    if hasattr(ctypes, 'pythonapi'):
-        def test_pycapsule():
-            name = ctypes.create_string_buffer(b'dill._testcapsule')
-            capsule = pickle._dill._PyCapsule_New(
-                ctypes.cast(pickle._dill._PyCapsule_New, ctypes.c_void_p),
-                name,
-                None
-            )
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                pickle.copy(capsule)
-            pickle._testcapsule = capsule
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                pickle.copy(capsule)
-            pickle._testcapsule = None
-            try:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", pickle.PicklingWarning)
-                    pickle.copy(capsule)
-            except pickle.UnpicklingError:
-                pass
-            else:
-                raise AssertionError("Expected a different error")
-
 if __name__ == '__main__':
     test_objects()
-    if test_pycapsule is not None:
-        test_pycapsule()

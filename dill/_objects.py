@@ -548,6 +548,11 @@ if PY3: # oddities: removed, etc
 else:
     x['BufferType'] = buffer('')
 
+from dill._dill import _testcapsule
+if _testcapsule is not None:
+    x['PyCapsuleType'] = _testcapsule
+del _testcapsule
+
 # -- cleanup ----------------------------------------------------------------
 a.update(d) # registered also succeed
 if sys.platform[:3] == 'win':
