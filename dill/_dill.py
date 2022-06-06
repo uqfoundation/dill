@@ -2210,7 +2210,6 @@ def save_function(pickler, obj):
     if not _locate_function(obj, pickler):
         log.info("F1: %s" % obj)
         _recurse = getattr(pickler, '_recurse', None)
-        _byref = getattr(pickler, '_byref', None)
         _postproc = getattr(pickler, '_postproc', None)
         _main_modified = getattr(pickler, '_main_modified', None)
         _original_main = getattr(pickler, '_original_main', __builtin__)#'None'

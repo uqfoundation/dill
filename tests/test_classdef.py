@@ -228,6 +228,15 @@ def test_origbases():
     if sys.hexversion >= 0x03070000:
         assert dill.copy(customIntList).__orig_bases__ == customIntList.__orig_bases__
 
+def test_attr():
+    import attr
+    @attr.s
+    class A:
+        a = attr.ib()
+
+    v = A(1)
+    assert dill.copy(v) == v
+
 def test_metaclass():
     if dill._dill.PY3:
         class metaclass_with_new(type):
