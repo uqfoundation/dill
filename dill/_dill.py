@@ -1230,13 +1230,35 @@ def _import_module(import_name, safe=False):
             return None
         raise
 
-def _locate_function(obj, pickler=None):
-    if obj.__module__ in ['__main__', None] or \
-            pickler and is_dill(pickler, child=False) and pickler._session and obj.__module__ == pickler._main.__name__:
-        return False
+# https://github.com/python/cpython/blob/a8912a0f8d9eba6d502c37d522221f9933e976db/Lib/pickle.py#L322-L333
+def _getattribute(obj, name):
+    for subpath in name.split('.'):
+        if subpath == '<locals>':
+            raise AttributeError("Can't get local attribute {!r} on {!r}"
+                                 .format(name, obj))
+        try:
+            parent = obj
+            obj = getattr(obj, subpath)
+        except AttributeError:
+            raise AttributeError("Can't get attribute {!r} on {!r}"
+                                 .format(name, obj))
+    return obj, parent
 
-    found = _import_module(obj.__module__ + '.' + obj.__name__, safe=True)
-    return found is obj
+def _locate_function(obj, pickler=None):
+    module_name = getattr(obj, '__module__', None)
+    if module_name in ['__main__', None] or \
+            pickler and is_dill(pickler, child=False) and pickler._session and module_name == pickler._main.__name__:
+        return False
+    if hasattr(obj, '__qualname__'):
+        module = _import_module(module_name, safe=True)
+        try:
+            found, _ = _getattribute(module, obj.__qualname__)
+            return found is obj
+        except:
+            return False
+    else:
+        found = _import_module(module_name + '.' + obj.__name__, safe=True)
+        return found is obj
 
 
 def _setitems(dest, source):
