@@ -150,7 +150,7 @@ def move_to(module, name=None):
         return func
     return decorator
 
-def soft_def(name, default):
+def register_shim(name, default):
     """
     A easier to understand and more compact way of "softly" defining a function.
     These two pieces of code are equivalent:
@@ -158,7 +158,7 @@ def soft_def(name, default):
     if _dill.OLD3X:
         def _create_class():
             ...
-    _create_class = soft_def('_create_class', types.new_class)
+    _create_class = register_shim('_create_class', types.new_class)
 
     if _dill.OLD3X:
         @move_to(_dill)
@@ -186,7 +186,7 @@ def soft_def(name, default):
 ## Compatibility Shims are defined below
 ######################
 
-_CELL_EMPTY = soft_def('_CELL_EMPTY', None)
+_CELL_EMPTY = register_shim('_CELL_EMPTY', None)
 
 if _dill.OLD37:
     if _dill.HAS_CTYPES and hasattr(_dill.ctypes, 'pythonapi') and hasattr(_dill.ctypes.pythonapi, 'PyCell_Set'):
@@ -288,5 +288,5 @@ if _dill.OLD37:
             else:
                 delattr(cell, name)
 
-_setattr = soft_def('_setattr', setattr)
-_delattr = soft_def('_delattr', delattr)
+_setattr = register_shim('_setattr', setattr)
+_delattr = register_shim('_delattr', delattr)
