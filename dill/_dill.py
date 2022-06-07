@@ -1189,6 +1189,39 @@ else:
         t = collections.namedtuple(name, fieldnames, defaults=defaults, module=modulename)
         return t
 
+def _create_capsule(pointer, name, context, destructor):
+    attr_found = False
+    try:
+        # based on https://github.com/python/cpython/blob/f4095e53ab708d95e019c909d5928502775ba68f/Objects/capsule.c#L209-L231
+        if PY3:
+            uname = name.decode('utf8')
+        else:
+            uname = name
+        for i in range(1, uname.count('.')+1):
+            names = uname.rsplit('.', i)
+            try:
+                module = __import__(names[0])
+            except:
+                pass
+            obj = module
+            for attr in names[1:]:
+                obj = getattr(obj, attr)
+            capsule = obj
+            attr_found = True
+            break
+    except:
+        pass
+
+    if attr_found:
+        if _PyCapsule_IsValid(capsule, name):
+            return capsule
+        raise UnpicklingError("%s object exists at %s but a PyCapsule object was expected." % (type(capsule), name))
+    else:
+        warnings.warn('Creating a new PyCapsule %s for a C data structure that may not be present in memory. Segmentation faults or other memory errors are possible.' % (name,), UnpicklingWarning)
+        capsule = _PyCapsule_New(pointer, name, destructor)
+        _PyCapsule_SetContext(capsule, context)
+        return capsule
+
 def _getattr(objclass, name, repr_str):
     # hack to grab the reference directly
     try: #XXX: works only for __builtin__ ?
@@ -2176,6 +2209,52 @@ def save_function(pickler, obj):
         StockPickler.save_global(pickler, obj, name=name)
         log.info("# F2")
     return
+
+if HAS_CTYPES and hasattr(ctypes, 'pythonapi'):
+    _PyCapsule_New = ctypes.pythonapi.PyCapsule_New
+    _PyCapsule_New.argtypes = (ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p)
+    _PyCapsule_New.restype = ctypes.py_object
+    _PyCapsule_GetPointer = ctypes.pythonapi.PyCapsule_GetPointer
+    _PyCapsule_GetPointer.argtypes = (ctypes.py_object, ctypes.c_char_p)
+    _PyCapsule_GetPointer.restype = ctypes.c_void_p
+    _PyCapsule_GetDestructor = ctypes.pythonapi.PyCapsule_GetDestructor
+    _PyCapsule_GetDestructor.argtypes = (ctypes.py_object,)
+    _PyCapsule_GetDestructor.restype = ctypes.c_void_p
+    _PyCapsule_GetContext = ctypes.pythonapi.PyCapsule_GetContext
+    _PyCapsule_GetContext.argtypes = (ctypes.py_object,)
+    _PyCapsule_GetContext.restype = ctypes.c_void_p
+    _PyCapsule_GetName = ctypes.pythonapi.PyCapsule_GetName
+    _PyCapsule_GetName.argtypes = (ctypes.py_object,)
+    _PyCapsule_GetName.restype = ctypes.c_char_p
+    _PyCapsule_IsValid = ctypes.pythonapi.PyCapsule_IsValid
+    _PyCapsule_IsValid.argtypes = (ctypes.py_object, ctypes.c_char_p)
+    _PyCapsule_IsValid.restype = ctypes.c_bool
+    _PyCapsule_SetContext = ctypes.pythonapi.PyCapsule_SetContext
+    _PyCapsule_SetContext.argtypes = (ctypes.py_object, ctypes.c_void_p)
+    _PyCapsule_SetDestructor = ctypes.pythonapi.PyCapsule_SetDestructor
+    _PyCapsule_SetDestructor.argtypes = (ctypes.py_object, ctypes.c_void_p)
+    _PyCapsule_SetName = ctypes.pythonapi.PyCapsule_SetName
+    _PyCapsule_SetName.argtypes = (ctypes.py_object, ctypes.c_char_p)
+    _PyCapsule_SetPointer = ctypes.pythonapi.PyCapsule_SetPointer
+    _PyCapsule_SetPointer.argtypes = (ctypes.py_object, ctypes.c_void_p)
+    _testcapsule = _PyCapsule_New(
+        ctypes.cast(_PyCapsule_New, ctypes.c_void_p),
+        ctypes.create_string_buffer(b'dill._dill._testcapsule'),
+        None
+    )
+    PyCapsuleType = type(_testcapsule)
+    @register(PyCapsuleType)
+    def save_capsule(pickler, obj):
+        log.info("Cap: %s", obj)
+        name = _PyCapsule_GetName(obj)
+        warnings.warn('Pickling a PyCapsule (%s) does not pickle any C data structures and could cause segmentation faults or other memory errors when unpickling.' % (name,), PicklingWarning)
+        pointer = _PyCapsule_GetPointer(obj, name)
+        context = _PyCapsule_GetContext(obj)
+        destructor = _PyCapsule_GetDestructor(obj)
+        pickler.save_reduce(_create_capsule, (pointer, name, context, destructor), obj=obj)
+        log.info("# Cap")
+else:
+    _testcapsule = None
 
 # quick sanity checking
 def pickles(obj,exact=False,safe=False,**kwds):
