@@ -275,6 +275,7 @@ except NameError:
     singletontypes = []
 
 from collections import OrderedDict
+from itertools import islice
 
 import inspect
 
@@ -304,6 +305,8 @@ class Sentinel(object):
 from . import _shims
 from ._shims import Reduce, Getattr
 
+from pickle import EMPTY_SET, MARK, ADDITEMS, POP_MARK, FROZENSET, POP
+
 ### File modes
 #: Pickles the file handle, preserving mode. The position of the unpickled
 #: object is as for a new file handle.
@@ -325,7 +328,7 @@ def copy(obj, *args, **kwds):
     ignore = kwds.pop('ignore', Unpickler.settings['ignore'])
     return loads(dumps(obj, *args, **kwds), ignore=ignore)
 
-def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
+def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, deterministic=None, **kwds):#, strictio=None):
     """
     Pickle an object to a file.
 
@@ -334,11 +337,11 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, **kwds)
     from .settings import settings
     protocol = settings['protocol'] if protocol is None else int(protocol)
     _kwds = kwds.copy()
-    _kwds.update(dict(byref=byref, fmode=fmode, recurse=recurse))
+    _kwds.update(dict(byref=byref, fmode=fmode, recurse=recurse, deterministic=deterministic))
     Pickler(file, protocol, **_kwds).dump(obj)
     return
 
-def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
+def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None, deterministic=None, **kwds):#, strictio=None):
     """
     Pickle an object to a string.
 
@@ -363,7 +366,7 @@ def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, s
     Default values for keyword arguments can be set in :mod:`dill.settings`.
     """
     file = StringIO()
-    dump(obj, file, protocol, byref, fmode, recurse, **kwds)#, strictio)
+    dump(obj, file, protocol, byref, fmode, recurse, deterministic, **kwds)#, strictio)
     return file.getvalue()
 
 def load(file, ignore=None, **kwds):
@@ -565,6 +568,7 @@ class Pickler(StockPickler):
        #_strictio = kwds.pop('strictio', None)
         _fmode = kwds.pop('fmode', None)
         _recurse = kwds.pop('recurse', None)
+        _deterministic = kwds.pop('deterministic', None)
         StockPickler.__init__(self, *args, **kwds)
         self._main = _main_module
         self._diff_cache = {}
@@ -572,6 +576,7 @@ class Pickler(StockPickler):
         self._strictio = False #_strictio
         self._fmode = settings['fmode'] if _fmode is None else _fmode
         self._recurse = settings['recurse'] if _recurse is None else _recurse
+        self._deterministic = settings['deterministic'] if _deterministic is None else _deterministic
         from collections import OrderedDict
         self._postproc = OrderedDict()
 
@@ -623,6 +628,91 @@ class Pickler(StockPickler):
         return
     dump.__doc__ = StockPickler.dump.__doc__
     pass
+
+    # https://github.com/python/cpython/blob/54b5e4da8a4c6ae527ab238fcd6b9ba0a3ed0fc7/Lib/pickle.py#L1009-L1054
+    # This code MUST be updated if Python changes their implementation.
+    def save_set(self, obj):
+        # This if statement was added to sort the elements of the set before
+        # pickling in the case that a "deterministic" pickle is required. The
+        # result is not truly deterministic, but it is more stable than would
+        # otherwise be possible without sorting. If the elements are
+        # incomparable, the elements will be sorted by hash instead. Some
+        # objects use the memory location as the hash, which will result in
+        # non-determinisitc elements regardless.
+        if getattr(self, '_deterministic', False):
+            try:
+                obj_list = obj_maybe_sorted = sorted(obj)
+            except Exception as e:
+                w = PicklingWarning("Cannot canonize a set with incomparable members")
+                w.__cause__ = e
+                warnings.warn(w)
+                obj_list = sorted(obj, key=hash)
+                obj_maybe_sorted = obj_list
+        else:
+            obj_list = list(obj)
+            obj_maybe_sorted = obj
+        # End determinism code
+
+        save = self.save
+        write = self.write
+
+        if self.proto < 4:
+            self.save_reduce(set, (obj_list,), obj=obj)
+            return
+
+        write(EMPTY_SET)
+        self.memoize(obj)
+
+        it = iter(obj_maybe_sorted)
+        while True:
+            batch = list(islice(it, self._BATCHSIZE))
+            n = len(batch)
+            if n > 0:
+                write(MARK)
+                for item in batch:
+                    save(item)
+                write(ADDITEMS)
+            if n < self._BATCHSIZE:
+                return
+    dispatch[set] = save_set
+
+    def save_frozenset(self, obj):
+        # Start determinism code. See save_set code for explanation.
+        if getattr(self, '_deterministic', False):
+            try:
+                obj_list = obj_maybe_sorted = sorted(obj)
+            except Exception as e:
+                w = PicklingWarning("Cannot canonize a frozenset with incomparable members")
+                w.__cause__ = e
+                warnings.warn(w)
+                obj_list = sorted(obj, key=hash)
+                obj_maybe_sorted = obj_list
+        else:
+            obj_list = list(obj)
+            obj_maybe_sorted = obj
+        # End determinism code
+
+        save = self.save
+        write = self.write
+
+        if self.proto < 4:
+            self.save_reduce(frozenset, (obj_list,), obj=obj)
+            return
+
+        write(MARK)
+        for item in obj_maybe_sorted:
+            save(item)
+
+        if id(obj) in self.memo:
+            # If the object is already in the memo, this means it is
+            # recursive. In this case, throw away everything we put on the
+            # stack, and fetch the object back from the memo.
+            write(POP_MARK + self.get(self.memo[id(obj)][0]))
+            return
+
+        write(FROZENSET)
+        self.memoize(obj)
+    dispatch[frozenset] = save_frozenset
 
 class Unpickler(StockUnpickler):
     """python's Unpickler extended to interpreter sessions and more types"""
@@ -1345,10 +1435,7 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
             else:
                 pickler.save_reduce(*reduction)
             # pop None created by calling preprocessing step off stack
-            if PY3:
-                pickler.write(bytes('0', 'UTF-8'))
-            else:
-                pickler.write('0')
+            pickler.write(POP)
 
 #@register(CodeType)
 #def save_code(pickler, obj):
@@ -1790,10 +1877,7 @@ def save_cell(pickler, obj):
         # The result of this function call will be None
         pickler.save_reduce(_shims._delattr, (obj, 'cell_contents'))
         # pop None created by calling _delattr off stack
-        if PY3:
-            pickler.write(bytes('0', 'UTF-8'))
-        else:
-            pickler.write('0')
+        pickler.write(POP)
         log.info("# Ce3")
         return
     if is_dill(pickler, child=True):
@@ -2137,6 +2221,8 @@ def save_function(pickler, obj):
             # In the case that the globals are copied, we need to ensure that
             # the globals dictionary is updated when all objects in the
             # dictionary are already created.
+            if getattr(pickler, '_deterministic', False):
+                globs_copy = dict(sorted(globs_copy.items()))
             if PY3:
                 glob_ids = {id(g) for g in globs_copy.values()}
             else:
@@ -2199,10 +2285,7 @@ def save_function(pickler, obj):
                     # Change the value of the cell
                     pickler.save_reduce(*possible_postproc)
                     # pop None created by calling preprocessing step off stack
-                    if PY3:
-                        pickler.write(bytes('0', 'UTF-8'))
-                    else:
-                        pickler.write('0')
+                    pickler.write(POP)
 
         log.info("# F1")
     else:

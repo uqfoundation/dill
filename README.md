@@ -145,6 +145,16 @@ as keyword arguments to several ``dill`` functions:
   remote system which does not have the original file on disk. Options are
   *HANDLE_FMODE* for just the handle, *CONTENTS_FMODE* for the file content
   and *FILE_FMODE* for content and handle.
+* with *deterministic=True*, dill will try to make pickles more likely to
+  be the same if an object is pickled multiple times. Currently, here is
+  the feature set:
+  * `set` and `frozenset` will be sorted before being pickled.
+    * Subclasses of `set` and `frozenset` will not be effected (and will remain nondeterministic) because they can implement their own `__reduce__` functions which don't have to follow the conventions of `set`'s pickling procedure.
+    * If the elements are incomparable (e.g. `complex`), they will be sorted by their hash instead. This will not create a natural order of elements that is easy to understand, but if the `__hash__` function of the class doesn't depend on `id`, it will be deterministic.
+    * If using the faster cPickle based pickler outlined in [#485](https://github.com/uqfoundation/dill/issues/485), this feature may be disabled.
+  * `dict` and subclasses will remain pickled in insertion order.
+    * Entries in global variable dictionaries will be in order for each function. The dictionary as a whole, however, will be ordered in visitation order by function and will not be sorted in alphabetical order. This will mean that the globals dictionaries will be deterministic given that the visitation order of functions is deterministic.
+    * This feature is guaranteed.
 * with *ignore=False*, objects reconstructed with types defined in the
   top-level script environment use the existing type in the environment
   rather than a possibly different reconstructed type.
