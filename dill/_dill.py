@@ -277,6 +277,10 @@ except NameError:
 from collections import OrderedDict
 
 import inspect
+import dataclasses
+
+from pickle import GLOBAL
+
 
 ### Shims for different versions of Python and dill
 class Sentinel(object):
@@ -2257,6 +2261,33 @@ if HAS_CTYPES and hasattr(ctypes, 'pythonapi'):
         log.info("# Cap")
 else:
     _testcapsule = None
+
+
+#############################
+# A quick fix for issue #500
+# This should be removed when a better solution is found.
+
+if hasattr(dataclasses, "_HAS_DEFAULT_FACTORY_CLASS"):
+    @register(dataclasses._HAS_DEFAULT_FACTORY_CLASS)
+    def save_dataclasses_HAS_DEFAULT_FACTORY_CLASS(pickler, obj):
+        pickler.write(GLOBAL + b"dataclasses\n_HAS_DEFAULT_FACTORY\n")
+
+if hasattr(dataclasses, "MISSING"):
+    @register(type(dataclasses.MISSING))
+    def save_dataclasses_MISSING_TYPE(pickler, obj):
+        pickler.write(GLOBAL + b"dataclasses\nMISSING\n")
+
+if hasattr(dataclasses, "KW_ONLY"):
+    @register(type(dataclasses.KW_ONLY))
+    def save_dataclasses_KW_ONLY_TYPE(pickler, obj):
+        pickler.write(GLOBAL + b"dataclasses\nKW_ONLY\n")
+
+if hasattr(dataclasses, "_FIELD_BASE"):
+    @register(dataclasses._FIELD_BASE)
+    def save_dataclasses_FIELD_BASE(pickler, obj):
+        pickler.write(GLOBAL + b"dataclasses\n" + obj.name.encode() + b"\n")
+
+#############################
 
 # quick sanity checking
 def pickles(obj,exact=False,safe=False,**kwds):
