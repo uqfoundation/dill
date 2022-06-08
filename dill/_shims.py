@@ -264,3 +264,22 @@ if _dill.OLD37:
 
 _setattr = Getattr(_dill, '_setattr', setattr)
 _delattr = Getattr(_dill, '_delattr', delattr)
+
+
+# Kept for backward compatibility, substituted by bare FunctionType.
+@move_to(_dill)
+def _create_function(fcode, fglobals, fname=None, fdefaults=None,
+                     fclosure=None, fdict=None, fkwdefaults=None):
+    # 'recurse' only stores referenced modules/objects in fglobals,
+    # thus we need to make sure that we have __builtins__ as well
+    if fglobals is None:
+        fglobals = {}
+    fglobals.setdefault('__builtins__', globals()['__builtins__'])
+    # same as FunctionType, but enable passing __dict__ to new function,
+    # __dict__ is the storehouse for attributes added after function creation
+    func = _dill.FunctionType(fcode, fglobals, fname, fdefaults, fclosure)
+    if fdict:
+        func.__dict__.update(fdict) #XXX: better copy? option to copy?
+    if fkwdefaults is not None:
+        func.__kwdefaults__ = fkwdefaults
+    return func

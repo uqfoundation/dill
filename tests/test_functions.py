@@ -8,6 +8,7 @@
 import functools
 import dill
 import sys
+from dill._dill import _create_function
 dill.settings['recurse'] = True
 
 
@@ -102,5 +103,26 @@ assert dill.loads(dumped_func_e)(1, 2, e2=3, e3=4) == 10
 assert dill.loads(dumped_func_e)(1, 2, 3, e2=4) == 12
 assert dill.loads(dumped_func_e)(1, 2, 3, e2=4, e3=5) == 15''')
 
+def test_legacy_constructor():
+    if is_py3():
+        fields = ('__code__', '__globals__', '__name__', '__defaults__',
+                    '__closure__', '__dict__', '__kwdefaults__')
+    else:
+        fields = ('func_code', 'func_globals', 'func_name', 'func_defaults',
+                    'func_closure', '__dict__')
+    members = [getattr(function_d, f) for f in fields]
+
+    # Old pickle.
+    old_func = _create_function(*members)
+    # Recent pickle (dill>=0.3.5).
+    new_func = _create_function(*members[:5])
+    setattr(new_func, fields[5], members[5])
+    if is_py3():
+        setattr(new_func, fields[6], members[6])
+
+    for field in fields:
+        assert getattr(old_func, field) == getattr(new_func, field)
+
 if __name__ == '__main__':
     test_functions()
+    test_legacy_constructor()
