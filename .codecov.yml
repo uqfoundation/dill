@@ -20,3 +20,9 @@ coverage:
         target: auto
         threshold: 1%
  
+fixes:
+  # reduces pip-installed path to git root and
+  # remove dist-name from setup-installed path
+  - "*/site-packages/::"
+  - "*/site-packages/dill-*::"
+
