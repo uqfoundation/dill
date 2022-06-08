@@ -743,7 +743,7 @@ _incedental_reverse_typemap = {
     "BytearrayIteratorType": type(iter(bytearray(b''))),
     "CallableIteratorType": type(iter(iter, None)),
     "MemoryIteratorType": type(iter(memoryview(b''))),
-    "RangeIteratorType": type(iter(range(3))),
+    "XRangeIteratorType": type(iter(range(3))),
     "SetIteratorType": type(iter(set())),
     "TupleIteratorType": type(iter(())),
 
@@ -757,9 +757,9 @@ if PY3:
         "DictValuesType": type({}.values()),
         "DictItemsType": type({}.items()),
 
-        "DictKeyiteratorType": type(iter({}.keys())),
-        "DictValueiteratorType": type(iter({}.values())),
-        "DictItemiteratorType": type(iter({}.items())),
+        "DictionaryKeyiteratorType": type(iter({}.keys())),
+        "DictionaryValueiteratorType": type(iter({}.values())),
+        "DictionaryItemiteratorType": type(iter({}.items())),
 
         "OdictKeysType": type(x.keys()),
         "OdictValuesType": type(x.values()),
@@ -779,9 +779,9 @@ else:
         "DictValuesType": type({}.viewvalues()),
         "DictItemsType": type({}.viewitems()),
 
-        "DictKeyiteratorType": type({}.iterkeys()),
-        "DictValueiteratorType": type({}.itervalues()),
-        "DictItemiteratorType": type({}.iteritems()),
+        "DictionaryKeyiteratorType": type({}.iterkeys()),
+        "DictionaryValueiteratorType": type({}.itervalues()),
+        "DictionaryItemiteratorType": type({}.iteritems()),
     })
 
 if ExitType:
@@ -805,14 +805,14 @@ except:
 if sys.hexversion >= 0x30a00a0:
     _incedental_reverse_typemap['LineIteratorType'] = type(compile('3', '', 'eval').co_lines())
 
-if sys.hexversion >= 0x30b00a0:
-    # from types import GenericAlias
-    # _incedental_reverse_typemap["GenericAliasIteratorType"] = type(iter(GenericAlias(list, (int,))))
+if sys.hexversion >= 0x30b00b0:
+    from types import GenericAlias
+    _incedental_reverse_typemap["GenericAliasIteratorType"] = type(iter(GenericAlias(list, (int,))))
     _incedental_reverse_typemap['PositionsIteratorType'] = type(compile('3', '', 'eval').co_positions())
 
 try:
     import winreg
-    _incedental_reverse_typemap["PyHKEY"] = winreg.HKEYType
+    _incedental_reverse_typemap["HKEYType"] = winreg.HKEYType
 except:
     pass
 
