@@ -10,12 +10,22 @@
 Pickle and restore the intepreter session.
 """
 
-__all__ = ['dump_session', 'load_session']
+__all__ = ['dump_session', 'load_session', 'ipython_filter', 'ExcludeRules', 'EXCLUDE', 'INCLUDE']
 
-import logging, sys
+import logging, re, sys
+from copy import copy
 
 from dill import _dill, Pickler, Unpickler
-from ._dill import ModuleType, _import_module, _is_builtin_module, _main_module, PY3
+from ._dill import ModuleType, _import_module, _is_builtin_module, _main_module
+from ._utils import AttrDict, ExcludeRules, Filter, RuleType
+from .settings import settings
+
+# Classes and abstract classes for type hints.
+from io import BytesIO
+from os import PathLike
+from typing import Iterable, NoReturn, Union
+
+EXCLUDE, INCLUDE = RuleType.EXCLUDE, RuleType.INCLUDE
 
 SESSION_IMPORTED_AS_TYPES = tuple([Exception] + [getattr(_dill, name) for name in
         ('ModuleType', 'TypeType', 'FunctionType', 'MethodType', 'BuiltinMethodType')])
@@ -24,11 +34,9 @@ log = logging.getLogger('dill')
 
 def _module_map():
     """get map of imported modules"""
-    from collections import defaultdict, namedtuple
-    modmap = namedtuple('Modmap', ['by_name', 'by_id', 'top_level'])
-    modmap = modmap(defaultdict(list), defaultdict(list), {})
-    items = 'items' if PY3 else 'iteritems'
-    for modname, module in getattr(sys.modules, items)():
+    from collections import defaultdict
+    modmap = AttrDict(by_name=defaultdict(list), by_id=defaultdict(list), top_level={})
+    for modname, module in sys.modules.items():
         if not isinstance(module, ModuleType):
             continue
         if '.' not in modname:
@@ -57,8 +65,7 @@ def _stash_modules(main_module):
     imported_as = []
     imported_top_level = []  # keep separeted for backwards compatibility
     original = {}
-    items = 'items' if PY3 else 'iteritems'
-    for name, obj in getattr(main_module.__dict__, items)():
+    for name, obj in vars(main_module).items():
         if obj is main_module:
             original[name] = newmod  # self-reference
             continue
@@ -101,36 +108,64 @@ def _restore_modules(unpickler, main_module):
     except KeyError:
         pass
 
-#NOTE: 06/03/15 renamed main_module to main
-def dump_session(filename='/tmp/session.pkl', main=None, byref=False, **kwds):
+def _filter_objects(main, exclude_extra, include_extra, obj=None):
+    filters = ExcludeRules(getattr(settings, 'session_exclude', None))
+    if exclude_extra is not None:
+        filters.update([(EXCLUDE, exclude_extra)])
+    if include_extra is not None:
+        filters.update([(INCLUDE, include_extra)])
+
+    namespace = filters.filter_namespace(vars(main), obj=obj)
+    if namespace is vars(main):
+        return main
+
+    main = ModuleType(main.__name__)
+    vars(main).update(namespace)
+    return main
+
+def dump_session(filename: Union[PathLike, BytesIO] = '/tmp/session.pkl',
+                 main: Union[str, ModuleType] = '__main__',
+                 byref: bool = False,
+                 exclude: Union[Filter, Iterable[Filter]] = None,
+                 include: Union[Filter, Iterable[Filter]] = None,
+                 **kwds) -> NoReturn:
     """pickle the current state of __main__ to a file"""
-    from .settings import settings
-    protocol = settings['protocol']
-    if main is None: main = _main_module
+    protocol = settings.protocol
+    if isinstance(main, str):
+        main = _import_module(main)
+    original_main = main
+    if byref:
+        #NOTE: *must* run before _filter_objects()
+        main = _stash_modules(main)
+    main = _filter_objects(main, exclude, include, obj=original_main)
+
+    print(list(vars(main)))
+
     if hasattr(filename, 'write'):
         f = filename
     else:
         f = open(filename, 'wb')
     try:
         pickler = Pickler(f, protocol, **kwds)
-        pickler._original_main = main
-        if byref:
-            main = _stash_modules(main)
         pickler._main = main     #FIXME: dill.settings are disabled
         pickler._byref = False   # disable pickling by name reference
         pickler._recurse = False # disable pickling recursion for globals
         pickler._session = True  # is best indicator of when pickling a session
         pickler._first_pass = True
-        pickler._main_modified = main is not pickler._original_main
+        if main is not original_main:
+            pickler._original_main = original_main
         pickler.dump(main)
     finally:
         if f is not filename:  # If newly opened file
             f.close()
     return
 
-def load_session(filename='/tmp/session.pkl', main=None, **kwds):
+def load_session(filename: Union[PathLike, BytesIO] = '/tmp/session.pkl',
+                 main: ModuleType = None,
+                 **kwds) -> NoReturn:
     """update the __main__ module with the state from the session file"""
-    if main is None: main = _main_module
+    if main is None:
+        main = _main_module
     if hasattr(filename, 'read'):
         f = filename
     else:
@@ -147,3 +182,43 @@ def load_session(filename='/tmp/session.pkl', main=None, **kwds):
         if f is not filename:  # If newly opened file
             f.close()
     return
+
+#############
+#  IPython  #
+#############
+
+def ipython_filter(*, keep_input=True, keep_output=False):
+    """filter factory for IPython sessions (can't be added to settings currently)
+
+    Usage:
+    >>> from dill.session import *
+    >>> dump_session(exclude=[ipython_filter()])
+    """
+    if not __builtins__.get('__IPYTHON__'):
+        # Return no-op filter if not in IPython.
+        return (lambda x: False)
+
+    from IPython import get_ipython
+    ipython_shell = get_ipython()
+
+    # Code snippet adapted from IPython.core.magics.namespace.who_ls()
+    user_ns = ipython_shell.user_ns
+    user_ns_hidden = ipython_shell.user_ns_hidden
+    nonmatching = object()  # This can never be in user_ns
+    interactive_vars = {x for x in user_ns if user_ns[x] is not user_ns_hidden.get(x, nonmatching)}
+
+    # Input and output history.
+    history_regex = []
+    if keep_input:
+        interactive_vars |= {'_ih', 'In', '_i', '_ii', '_iii'}
+        history_regex.append(re.compile(r'_i\d+'))
+    if keep_output:
+        interactive_vars |= {'_oh', 'Out', '_', '__', '___'}
+        history_regex.append(re.compile(r'_\d+'))
+
+    def not_interactive_var(obj):
+        if any(regex.fullmatch(obj.name) for regex in history_regex):
+            return False
+        return obj.name not in interactive_vars
+
+    return not_interactive_var

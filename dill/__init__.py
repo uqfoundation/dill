@@ -283,16 +283,17 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """
 
-from ._dill import dump, dumps, load, loads, \
-    Pickler, Unpickler, register, copy, pickle, pickles, check, \
-    HIGHEST_PROTOCOL, DEFAULT_PROTOCOL, PicklingError, UnpicklingError, \
-    HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE, PickleError, PickleWarning, \
-    PicklingWarning, UnpicklingWarning
+from ._dill import (
+    Pickler, Unpickler,
+    dump, dumps, load, loads, copy, check, pickle, pickles, register,
+    DEFAULT_PROTOCOL, HIGHEST_PROTOCOL, HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE,
+    PicklingError, UnpicklingError, PickleError, PicklingWarning, UnpicklingWarning, PickleWarning,
+    )
 from .session import dump_session, load_session
 from . import detect, session, source, temp
 
 # get global settings
-from .settings import settings
+from .settings import Settings, settings
 
 # make sure "trace" is turned off
 detect.trace(False)

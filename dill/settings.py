@@ -9,12 +9,15 @@
 global settings for Pickler
 """
 
+__all__ = ['settings', 'Settings']
+
 try:
     from pickle import DEFAULT_PROTOCOL
 except ImportError:
     from pickle import HIGHEST_PROTOCOL as DEFAULT_PROTOCOL
+from ._utils import AttrDict as Settings, ExcludeRules
 
-settings = {
+settings = Settings({
    #'main' : None,
     'protocol' : DEFAULT_PROTOCOL,
     'byref' : False,
@@ -22,7 +25,8 @@ settings = {
     'fmode' : 0, #HANDLE_FMODE
     'recurse' : False,
     'ignore' : False,
-}
+    'session_exclude': ExcludeRules(),
+})
 
 del DEFAULT_PROTOCOL
 

@@ -1917,8 +1917,7 @@ def save_function(pickler, obj):
         _recurse = getattr(pickler, '_recurse', None)
         _byref = getattr(pickler, '_byref', None)
         _postproc = getattr(pickler, '_postproc', None)
-        _main_modified = getattr(pickler, '_main_modified', None)
-        _original_main = getattr(pickler, '_original_main', __builtin__)#'None'
+        _original_main = getattr(pickler, '_original_main', None)
         postproc_list = []
         if _recurse:
             # recurse to get all globals referred to by obj
@@ -1935,7 +1934,7 @@ def save_function(pickler, obj):
 
             # If the globals is the __dict__ from the module being saved as a
             # session, substitute it by the dictionary being actually saved.
-            if _main_modified and globs_copy is _original_main.__dict__:
+            if _original_main and globs_copy is _original_main.__dict__:
                 globs_copy = getattr(pickler, '_main', _original_main).__dict__
                 globs = globs_copy
             # If the globals is a module __dict__, do not save it in the pickle.
