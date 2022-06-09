@@ -448,7 +448,7 @@ if sys.hexversion >= 0x30800a0:
 
 try:
     import symtable
-    a["SymtableStentryType"] = symtable.symtable("", "string", "exec")._table
+    a["SymtableEntryType"] = symtable.symtable("", "string", "exec")._table
 except:
     pass
 
