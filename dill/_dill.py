@@ -740,17 +740,6 @@ _incedental_reverse_typemap = {
     'PyBufferedReaderType': PyBufferedReaderType,
     'PyBufferedWriterType': PyBufferedWriterType,
     'PyTextWrapperType': PyTextWrapperType,
-
-    "BytesIteratorType": type(iter(b'')),
-    "BytearrayIteratorType": type(iter(bytearray(b''))),
-    "CallableIteratorType": type(iter(iter, None)),
-    "MemoryIteratorType": type(iter(memoryview(b''))),
-    "XRangeIteratorType": type(iter(range(3))),
-    "SetIteratorType": type(iter(set())),
-    "TupleIteratorType": type(iter(())),
-
-    "ListIteratorType": type(iter([])),
-    "ListReverseiteratorType": type(reversed([])),
 }
 
 if PY3:
@@ -759,31 +748,15 @@ if PY3:
         "DictValuesType": type({}.values()),
         "DictItemsType": type({}.items()),
 
-        "DictionaryKeyiteratorType": type(iter({}.keys())),
-        "DictionaryValueiteratorType": type(iter({}.values())),
-        "DictionaryItemiteratorType": type(iter({}.items())),
-
         "OdictKeysType": type(x.keys()),
         "OdictValuesType": type(x.values()),
         "OdictItemsType": type(x.items()),
-
-        "OdictIteratorType": iter(x.keys()),
     })
-    if not OLD38:
-        _incedental_reverse_typemap.update({
-            "DictReversekeyiteratorType": type(reversed({}.keys())),
-            "DictReversevalueiteratorType": type(reversed({}.values())),
-            "DictReverseitemiteratorType": type(reversed({}.items())),
-        })
 else:
     _incedental_reverse_typemap.update({
         "DictKeysType": type({}.viewkeys()),
         "DictValuesType": type({}.viewvalues()),
         "DictItemsType": type({}.viewitems()),
-
-        "DictionaryKeyiteratorType": type({}.iterkeys()),
-        "DictionaryValueiteratorType": type({}.itervalues()),
-        "DictionaryItemiteratorType": type({}.iteritems()),
     })
 
 if ExitType:
