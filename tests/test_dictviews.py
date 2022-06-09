@@ -7,7 +7,10 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 import dill
-from dill._dill import OLD310, MAPPING_PROXY_TRICK
+from dill._dill import OLD310, MAPPING_PROXY_TRICK, DictProxyType
+
+def test_dictproxy():
+    assert dill.copy(DictProxyType({'a': 2}))
 
 def test_dictviews():
     x = {'a': 1}
@@ -31,5 +34,6 @@ def test_dictproxy_trick():
         assert dict(seperate_views[1]) == new_x
 
 if __name__ == '__main__':
+    test_dictproxy()
     test_dictviews()
     test_dictproxy_trick()
