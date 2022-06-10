@@ -11,18 +11,8 @@ __all__ = ['AttrDict', 'ExcludeRules', 'Filter', 'RuleType']
 import logging
 logger = logging.getLogger('dill._utils')
 
-import inspect
-from functools import partialmethod
-
 class AttrDict(dict):
     """syntactic sugar for accessing dictionary items"""
-    _CAST = object()  # singleton
-    def __init__(self, *args, **kwargs):
-        data = args[0] if len(args) == 2 and args[1] is self._CAST else dict(*args, **kwargs)
-        for key, val in tuple(data.items()):
-            if isinstance(val, dict) and not isinstance(val, AttrDict):
-                data[key] = AttrDict(val, self._CAST)
-        super().__setattr__('_data', data)
     def _check_attr(self, name):
         try:
             super().__getattribute__(name)
@@ -33,33 +23,17 @@ class AttrDict(dict):
     def __getattr__(self, key):
         # This is called only if dict.__getattribute__(key) fails.
         try:
-            return self._data[key]
+            return self[key]
         except KeyError:
             raise AttributeError("'AttrDict' object has no attribute %r" % key)
     def __setattr__(self, key, value):
         self._check_attr(key)
-        if isinstance(value, dict):
-            self._data[key] = AttrDict(value, self._CAST)
-        else:
-            self._data[key] = value
+        self[key] = value
     def __delattr__(self, key):
         self._check_attr(key)
-        del self._data[key]
-    def __proxy__(self, method, *args, **kwargs):
-        return getattr(self._data, method)(*args, **kwargs)
+        del self[key]
     def __reduce__(self):
-        return AttrDict, (self._data,)
-    def copy(self):
-        # Deep copy.
-        copy = AttrDict(self._data)
-        for key, val in tuple(copy.items()):
-            if isinstance(val, AttrDict):
-                copy[key] = val.copy()
-        return copy
-
-for method, _ in inspect.getmembers(dict, inspect.ismethoddescriptor):
-    if method not in vars(AttrDict) and method not in {'__getattribute__', '__reduce_ex__'}:
-        setattr(AttrDict, method, partialmethod(AttrDict.__proxy__, method))
+        return type(self), (dict(self),)
 
 
 ### Namespace filtering

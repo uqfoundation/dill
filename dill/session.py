@@ -138,9 +138,6 @@ def dump_session(filename: Union[PathLike, BytesIO] = '/tmp/session.pkl',
         #NOTE: *must* run before _filter_objects()
         main = _stash_modules(main)
     main = _filter_objects(main, exclude, include, obj=original_main)
-
-    print(list(vars(main)))
-
     if hasattr(filename, 'write'):
         f = filename
     else:

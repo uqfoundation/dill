@@ -15,7 +15,34 @@ try:
     from pickle import DEFAULT_PROTOCOL
 except ImportError:
     from pickle import HIGHEST_PROTOCOL as DEFAULT_PROTOCOL
-from ._utils import AttrDict as Settings, ExcludeRules
+from collections.abc import MutableMapping
+from ._utils import AttrDict, ExcludeRules
+
+class Settings(AttrDict):
+    """allow multiple level attribute access"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for key, value in tuple(self.items()):
+            if isinstance(value, MutableMapping):
+                self[key] = Settings(value)
+    @staticmethod
+    def _cast_dict(obj):
+        return Settings(obj) if isinstance(obj, MutableMapping) else obj
+    def __setitem__(self, key, value):
+        super().__setitem__(key, self._cast_dict(value))
+    def setdefault(self, key, default=None):
+        super().setdefault(key, self._cast_dict(default))
+    def update(self, *args, **kwargs):
+        super().update(Settings(*args, **kwargs))
+    def __setattr__(self, key, value):
+        super().__setattr__(key, _cast_dict(value))
+    def copy(self):
+        # Deep copy.
+        copy = Settings(self)
+        for key, value in self.items():
+            if isinstance(value, Settings):
+                copy[key] = value.copy()
+        return copy
 
 settings = Settings({
    #'main' : None,
