@@ -56,7 +56,8 @@ if PY3: #XXX: get types from .objtypes ?
         from threading import _RLock as RLockType
    #from io import IOBase
     from types import CodeType, FunctionType, MethodType, GeneratorType, \
-        TracebackType, FrameType, ModuleType, BuiltinMethodType
+        TracebackType, FrameType, ModuleType, BuiltinMethodType, MethodWrapperType, \
+        MethodDescriptorType, WrapperDescriptorType, ClassMethodDescriptorType
     BufferType = memoryview #XXX: unregistered
     ClassType = type # no 'old-style' classes
     EllipsisType = type(Ellipsis)
@@ -210,16 +211,7 @@ if sys.hexversion >= 0x20500f0:
         class _member(object):
             __slots__ = ['descriptor']
         MemberDescriptorType = type(_member.descriptor)
-if IS_PYPY:
-    WrapperDescriptorType = MethodType
-    MethodDescriptorType = FunctionType
-    ClassMethodDescriptorType = FunctionType
-else:
-    WrapperDescriptorType = type(type.__repr__)
-    MethodDescriptorType = type(type.__dict__['mro'])
-    ClassMethodDescriptorType = type(type.__dict__['__prepare__' if PY3 else 'mro'])
 
-MethodWrapperType = type([].__repr__)
 PartialType = type(partial(int,base=2))
 SuperType = type(super(Exception, TypeError()))
 ItemGetterType = type(itemgetter(0))
