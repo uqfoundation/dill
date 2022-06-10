@@ -510,19 +510,17 @@ def dump_session(filename='/tmp/session.pkl', main=None, byref=False, **kwds):
 
 def load_session(filename='/tmp/session.pkl', main=None, **kwds):
     """update the __main__ module with the state from the session file"""
-    if main is None: main = _main_module
     if hasattr(filename, 'read'):
         f = filename
     else:
         f = open(filename, 'rb')
     try: #FIXME: dill.settings are disabled
         unpickler = Unpickler(f, **kwds)
-        unpickler._main = main
         unpickler._session = True
+        if main is not None:
+            unpickler._main = main
         module = unpickler.load()
-        unpickler._session = False
-        main.__dict__.update(module.__dict__)
-        _restore_modules(unpickler, main)
+        _restore_modules(unpickler, module)
     finally:
         if f is not filename:  # If newly opened file
             f.close()
