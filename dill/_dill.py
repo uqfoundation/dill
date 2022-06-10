@@ -1878,30 +1878,13 @@ if MAPPING_PROXY_TRICK:
         pickler.save_reduce(DictProxyType, (mapping,), obj=obj)
         log.info("# Mp")
         return
-elif not IS_PYPY:
-    if not OLD33:
-        @register(DictProxyType)
-        def save_dictproxy(pickler, obj):
-            log.info("Mp: %s" % obj)
-            pickler.save_reduce(DictProxyType, (obj.copy(),), obj=obj)
-            log.info("# Mp")
-            return
-    else:
-        # The following function is based on 'saveDictProxy' from spickle
-        # Copyright (c) 2011 by science+computing ag
-        # License: http://www.apache.org/licenses/LICENSE-2.0
-        @register(DictProxyType)
-        def save_dictproxy(pickler, obj):
-            log.info("Dp: %s" % obj)
-            attr = obj.get('__dict__')
-           #pickler.save_reduce(_create_dictproxy, (attr,'nested'), obj=obj)
-            if type(attr) == GetSetDescriptorType and attr.__name__ == "__dict__" \
-            and getattr(attr.__objclass__, "__dict__", None) == obj:
-                pickler.save_reduce(getattr, (attr.__objclass__,"__dict__"),obj=obj)
-                log.info("# Dp")
-                return
-            # all bad below... so throw ReferenceError or TypeError
-            raise ReferenceError("%s does not reference a class __dict__" % obj)
+else:
+    @register(DictProxyType)
+    def save_dictproxy(pickler, obj):
+        log.info("Mp: %s" % obj)
+        pickler.save_reduce(DictProxyType, (obj.copy(),), obj=obj)
+        log.info("# Mp")
+        return
 
 @register(SliceType)
 def save_slice(pickler, obj):
