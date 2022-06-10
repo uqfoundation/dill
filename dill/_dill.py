@@ -508,17 +508,52 @@ def dump_session(filename='/tmp/session.pkl', main=None, byref=False, **kwds):
             f.close()
     return
 
+def _inspect_pickle(file, main):
+    from pickletools import genops
+    UNICODE = {'UNICODE', 'BINUNICODE', 'SHORT_BINUNICODE'}
+    found_import = False
+    try:
+        for opcode, arg, pos in genops(file.peek(256)):
+            if not found_import:
+                if opcode.name in ('GLOBAL', 'SHORT_BINUNICODE') and \
+                        arg.endswith('_import_module'):
+                    found_import = True
+            else:
+                if opcode.name in UNICODE:
+                    if not all(name.isidentifier() for name in arg.split('.')):
+                        raise UnpicklingError("invalid module name: %r" % arg)
+                    return arg
+        else:
+            raise UnpicklingError("reached STOP without finding main module")
+    except (AttributeError, ValueError) as error:
+        if isinstance(error, AttributeError) and main is not None:
+            # File is not peekable, but we have main.
+            return None
+        raise UnpicklingError("unable to identify main module") from error
+
 def load_session(filename='/tmp/session.pkl', main=None, **kwds):
     """update the __main__ module with the state from the session file"""
     if hasattr(filename, 'read'):
         f = filename
+        if not hasattr(f, 'peek'):
+            try:
+                import io
+                f = io.BufferedReader(f)
+            except Exception:
+                pass  # ...and hope for the best
     else:
         f = open(filename, 'rb')
     try: #FIXME: dill.settings are disabled
         unpickler = Unpickler(f, **kwds)
         unpickler._session = True
+        pickle_main = _inspect_pickle(f, main)
         if main is not None:
+            if pickle_main is not None and main.__name__ != pickle_main:
+                raise UnpicklingError("can't load module %r into module %r" % \
+                                    (pickle_main, unpickler._main.__name__))
             unpickler._main = main
+        else:
+            unpickler._main = _import_module(pickle_main)
         module = unpickler.load()
         _restore_modules(unpickler, module)
     finally:
