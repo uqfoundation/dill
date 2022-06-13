@@ -43,13 +43,12 @@ from collections import abc, namedtuple
 from enum import Enum
 from functools import partialmethod
 from itertools import filterfalse
-from re import Pattern
-from typing import Callable, Iterable, Set, Tuple, Union
+from typing import Callable, Iterable, Pattern, Set, Tuple, Union
 
 RuleType = Enum('RuleType', 'EXCLUDE INCLUDE', module=__name__)
 NamedObj = namedtuple('NamedObj', 'name value', module=__name__)
 
-Filter = Union[str, Pattern, int, type, Callable]
+Filter = Union[str, Pattern[str], int, type, Callable]
 Rule = Tuple[RuleType, Union[Filter, Iterable[Filter]]]
 
 def isiterable(arg):
@@ -59,7 +58,7 @@ def isiterable(arg):
 class ExcludeFilters:
     ids: Set[int] = field(default_factory=set)
     names: Set[str] = field(default_factory=set)
-    regex: Set[Pattern] = field(default_factory=set)
+    regex: Set[Pattern[str]] = field(default_factory=set)
     types: Set[type] = field(default_factory=set)
     funcs: Set[Callable] = field(default_factory=set)
 
@@ -74,7 +73,7 @@ class ExcludeFilters:
                 field = 'names'
             else:
                 filter, field = re.compile(filter), 'regex'
-        elif isinstance(filter, Pattern):
+        elif isinstance(filter, re.Pattern):
             field = 'regex'
         elif isinstance(filter, int):
             field = 'ids'
