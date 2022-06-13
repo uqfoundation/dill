@@ -209,7 +209,7 @@ if __name__ == '__main__':
         dump = test_file.getvalue()
         test_file.close()
 
-        main = sys.modules[modname] = ModuleType(modname)  # empty
+        main = ModuleType(modname)  # empty
         # This should work after fixing https://github.com/uqfoundation/dill/issues/462
         test_file = dill._dill.StringIO(dump)
         dill.load_session(test_file, main=main)
