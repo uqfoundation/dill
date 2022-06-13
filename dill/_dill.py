@@ -488,11 +488,11 @@ def dump_session(filename='/tmp/session.pkl', main=None, byref=False, **kwds):
     protocol = settings['protocol']
     if main is None: main = _main_module
     if hasattr(filename, 'write'):
-        f = filename
+        file = filename
     else:
-        f = open(filename, 'wb')
+        file = open(filename, 'wb')
     try:
-        pickler = Pickler(f, protocol, **kwds)
+        pickler = Pickler(file, protocol, **kwds)
         pickler._original_main = main
         if byref:
             main = _stash_modules(main)
@@ -504,11 +504,11 @@ def dump_session(filename='/tmp/session.pkl', main=None, byref=False, **kwds):
         pickler._main_modified = main is not pickler._original_main
         pickler.dump(main)
     finally:
-        if f is not filename:  # If newly opened file
-            f.close()
+        if file is not filename:  # if newly opened file
+            file.close()
     return
 
-def _inspect_pickle(file, main):
+def _inspect_pickle(file, main_is_none):
     from pickletools import genops
     UNICODE = {'UNICODE', 'BINUNICODE', 'SHORT_BINUNICODE'}
     found_import = False
@@ -526,7 +526,7 @@ def _inspect_pickle(file, main):
         else:
             raise UnpicklingError("reached STOP without finding main module")
     except (AttributeError, ValueError) as error:
-        if isinstance(error, AttributeError) and main is not None:
+        if isinstance(error, AttributeError) and not main_is_none:
             # File is not peekable, but we have main.
             return None
         raise UnpicklingError("unable to identify main module") from error
@@ -534,32 +534,68 @@ def _inspect_pickle(file, main):
 def load_session(filename='/tmp/session.pkl', main=None, **kwds):
     """update the __main__ module with the state from the session file"""
     if hasattr(filename, 'read'):
-        f = filename
-        if not hasattr(f, 'peek'):
-            try:
-                import io
-                f = io.BufferedReader(f)
-            except Exception:
-                pass  # ...and hope for the best
+        file = filename
     else:
-        f = open(filename, 'rb')
-    try: #FIXME: dill.settings are disabled
-        unpickler = Unpickler(f, **kwds)
+        file = open(filename, 'rb')
+    if not hasattr(file, 'peek'):
+        try:
+            import io
+            file = io.BufferedReader(file)
+        except Exception:
+            pass  # ...and hope for the best
+    try:
+        #FIXME: dill.settings are disabled
+        unpickler = Unpickler(file, **kwds)
         unpickler._session = True
-        pickle_main = _inspect_pickle(f, main)
+        pickle_main = _inspect_pickle(file, main is None)
+
+        # Resolve unpickler._main
+        if main is None and pickle_main is not None:
+            main = pickle_main
+        if isinstance(main, str):
+            if main.startswith('__runtime__.'):
+                # Create runtime module to load the session into.
+                main = ModuleType(main.partition('.')[-1])
+            else:
+                main = _import_module(main)
         if main is not None:
-            if pickle_main is not None and main.__name__ != pickle_main:
-                raise UnpicklingError("can't load module %r into module %r" % \
-                                    (pickle_main, unpickler._main.__name__))
+            if not isinstance(main, ModuleType):
+                raise ValueError("%r is not a module" % main)
             unpickler._main = main
-        else:
-            unpickler._main = _import_module(pickle_main)
+        main = unpickler._main
+
+        # Check against the pickle's main.
+        is_main_imported = _is_imported_module(main)
+        if pickle_main is not None:
+            is_runtime_mod = pickle_main.startswith('__runtime__.')
+            if is_runtime_mod:
+                pickle_main = pickle_main.partition('.')[-1]
+            if is_runtime_mod and is_main_imported:
+                raise UnpicklingError("can't restore non-imported module %r into an imported one" \
+                                      % pickle_main)
+            if not is_runtime_mod and not is_main_imported:
+                raise UnpicklingError("can't restore imported module %r into a non-imported one" \
+                                      % pickle_main)
+            if main.__name__ != pickle_main:
+                raise UnpicklingError("can't restore module %r into module %r" \
+                                      % (pickle_main, main.__name__))
+
+        # This is for find_class() to be able to locate it.
+        if not is_main_imported:
+            runtime_main = '__runtime__.%s' % main.__name__
+            sys.modules[runtime_main] = main
+
         module = unpickler.load()
-        _restore_modules(unpickler, module)
     finally:
-        if f is not filename:  # If newly opened file
-            f.close()
-    return
+        if file is not filename:  # if newly opened file
+            file.close()
+        try:
+            del sys.modules[runtime_main]
+        except (KeyError, NameError):
+            pass
+    _restore_modules(unpickler, module)
+    if module is not _main_module:
+        return module
 
 ### End: Pickle the Interpreter
 
@@ -1286,14 +1322,16 @@ def _dict_from_dictproxy(dictproxy):
 
 def _import_module(import_name, safe=False):
     try:
-        if '.' in import_name:
+        if import_name.startswith('__runtime__.'):
+            return sys.modules[import_name]
+        elif '.' in import_name:
             items = import_name.split('.')
             module = '.'.join(items[:-1])
             obj = items[-1]
         else:
             return __import__(import_name)
         return getattr(__import__(module, None, None, [obj]), obj)
-    except (ImportError, AttributeError):
+    except (ImportError, AttributeError, KeyError):
         if safe:
             return None
         raise
@@ -1976,6 +2014,9 @@ def _is_builtin_module(module):
             module.__file__.endswith(EXTENSION_SUFFIXES) or \
             'site-packages' in module.__file__
 
+def _is_imported_module(module):
+    return getattr(module, '__loader__', None) is not None or module in sys.modules.values()
+
 @register(ModuleType)
 def save_module(pickler, obj):
     if False: #_use_diff:
@@ -2003,7 +2044,8 @@ def save_module(pickler, obj):
             _main_dict = obj.__dict__.copy() #XXX: better no copy? option to copy?
             [_main_dict.pop(item, None) for item in singletontypes
                 + ["__builtins__", "__loader__"]]
-            pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
+            mod_name = obj.__name__ if _is_imported_module(obj) else '__runtime__.%s' % obj.__name__
+            pickler.save_reduce(_import_module, (mod_name,), obj=obj,
                                 state=_main_dict)
             log.info("# M1")
         elif PY3 and obj.__name__ == "dill._dill":
