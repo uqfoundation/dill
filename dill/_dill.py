@@ -15,11 +15,12 @@ Initial port to python3 by Jonathan Dobson, continued by mmckerns.
 Test against "all" python types (Std. Lib. CH 1-15 @ 2.7) by mmckerns.
 Test against CH16+ Std. Lib. ... TBD.
 """
-__all__ = ['dump','dumps','load','loads','dump_session','load_session',
-           'Pickler','Unpickler','register','copy','pickle','pickles',
-           'check','HIGHEST_PROTOCOL','DEFAULT_PROTOCOL','PicklingError',
-           'UnpicklingError','HANDLE_FMODE','CONTENTS_FMODE','FILE_FMODE',
-           'PickleError','PickleWarning','PicklingWarning','UnpicklingWarning']
+__all__ = ['dump', 'dumps', 'load', 'loads', 'dump_session', 'load_session',
+           'load_session_copy', 'Pickler', 'Unpickler', 'register', 'copy',
+           'pickle', 'pickles', 'check', 'HIGHEST_PROTOCOL', 'DEFAULT_PROTOCOL',
+           'PicklingError', 'UnpicklingError', 'HANDLE_FMODE', 'CONTENTS_FMODE',
+           'FILE_FMODE', 'PickleError', 'PickleWarning', 'PicklingWarning',
+           'UnpicklingWarning']
 
 __module__ = 'dill'
 
@@ -508,6 +509,19 @@ def dump_session(filename='/tmp/session.pkl', main=None, byref=False, **kwds):
             file.close()
     return
 
+def _open_peekable(filename):
+    if hasattr(filename, 'read'):
+        file = filename
+    else:
+        file = open(filename, 'rb')
+    if not hasattr(file, 'peek'):
+        try:
+            import io
+            file = io.BufferedReader(file)
+        except Exception:
+            pass  # ...and hope for the best
+    return file
+
 def _inspect_pickle(file, main_is_none):
     from pickletools import genops
     UNICODE = {'UNICODE', 'BINUNICODE', 'SHORT_BINUNICODE'}
@@ -533,16 +547,7 @@ def _inspect_pickle(file, main_is_none):
 
 def load_session(filename='/tmp/session.pkl', main=None, **kwds):
     """update the __main__ module with the state from the session file"""
-    if hasattr(filename, 'read'):
-        file = filename
-    else:
-        file = open(filename, 'rb')
-    if not hasattr(file, 'peek'):
-        try:
-            import io
-            file = io.BufferedReader(file)
-        except Exception:
-            pass  # ...and hope for the best
+    file = _open_peekable(filename)
     try:
         #FIXME: dill.settings are disabled
         unpickler = Unpickler(file, **kwds)
@@ -587,15 +592,51 @@ def load_session(filename='/tmp/session.pkl', main=None, **kwds):
 
         module = unpickler.load()
     finally:
-        if file is not filename:  # if newly opened file
+        if not hasattr(filename, 'read'):  # if newly opened file
             file.close()
         try:
             del sys.modules[runtime_main]
         except (KeyError, NameError):
             pass
+    assert module is main
     _restore_modules(unpickler, module)
     if module is not _main_module:
         return module
+
+def load_session_copy(filename='/tmp/session.pkl', **kwds):
+    """
+    Load the state of a module saved to a session file into a runtime created module.
+
+    The loaded module's origin is stored in the '__session__' attribute.
+    Warning: this function is completely thread-unsafe.
+    """
+    if 'main' in kwds:
+        raise TypeError("'main' is an invalid keyword argument for load_session_copy()")
+    file = _open_peekable(filename)
+    try:
+        pickle_main = _inspect_pickle(file, main_is_none=True)
+        main = _import_module(pickle_main)
+        main_globals = vars(main).copy()
+        vars(main).clear()
+        for attr in ('__builtins__', '__loader__', '__name__'):
+            # Required by load_session().
+            if attr in main_globals:
+                setattr(main, attr, main_globals[attr])
+        load_session(file, **kwds)
+        module = ModuleType(main.__name__)
+        vars(module).update(vars(main))
+    finally:
+        if not hasattr(filename, 'read'):  # if newly opened file
+            file.close()
+        try:
+            vars(main).clear()
+            vars(main).update(main_globals)
+        except NameError:
+            pass
+    module.pop('__path__', None)
+    module.__loader__ = module.__spec__ = None
+    module.__session__ = filename if isinstance(filename, str) else repr(filename)
+    return module
 
 ### End: Pickle the Interpreter
 

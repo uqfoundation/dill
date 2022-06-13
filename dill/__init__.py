@@ -283,11 +283,13 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """
 
-from ._dill import dump, dumps, load, loads, dump_session, load_session, \
-    Pickler, Unpickler, register, copy, pickle, pickles, check, \
-    HIGHEST_PROTOCOL, DEFAULT_PROTOCOL, PicklingError, UnpicklingError, \
-    HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE, PickleError, PickleWarning, \
-    PicklingWarning, UnpicklingWarning
+from ._dill import (
+        dump, dumps, load, loads, dump_session, load_session, load_session_copy,
+        Pickler, Unpickler, register, copy, pickle, pickles, check,
+        HIGHEST_PROTOCOL, DEFAULT_PROTOCOL, PicklingError, UnpicklingError,
+        HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE, PickleError, PickleWarning,
+        PicklingWarning, UnpicklingWarning,
+        )
 from . import source, temp, detect
 
 # get global settings
