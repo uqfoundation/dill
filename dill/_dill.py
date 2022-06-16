@@ -1767,15 +1767,29 @@ if OLDER or not PY3:
             log.info("# B2")
         return
 
-    @register(MethodType) #FIXME: fails for 'hidden' or 'name-mangled' classes
-    def save_instancemethod0(pickler, obj):# example: cStringIO.StringI
-        log.info("Me: %s" % obj) #XXX: obj.__dict__ handled elsewhere?
-        if PY3:
-            pickler.save_reduce(MethodType, (obj.__func__, obj.__self__), obj=obj)
-        else:
-            pickler.save_reduce(MethodType, (obj.im_func, obj.im_self,
-                                             obj.im_class), obj=obj)
-        log.info("# Me")
+if IS_PYPY:
+    @register(MethodType)
+    def save_instancemethod0(pickler, obj):
+        code = getattr(obj.__func__, '__code__', None)
+        if code is not None and type(code) is not CodeType \
+              and getattr(obj.__self__, obj.__name__) == obj:
+            # Some PyPy builtin functions have no module name
+            log.info("Me2: %s" % obj)
+            # TODO: verify that this works for all PyPy builtin methods
+            pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
+            log.info("# Me2")
+            return
+
+        log.info("Me1: %s" % obj)
+        pickler.save_reduce(MethodType, (obj.__func__, obj.__self__), obj=obj)
+        log.info("# Me1")
+        return
+else:
+    @register(MethodType)
+    def save_instancemethod0(pickler, obj):
+        log.info("Me1: %s" % obj)
+        pickler.save_reduce(MethodType, (obj.__func__, obj.__self__), obj=obj)
+        log.info("# Me1")
         return
 
 if sys.hexversion >= 0x20500f0:
@@ -1800,17 +1814,6 @@ if sys.hexversion >= 0x20500f0:
                                            obj.__repr__()), obj=obj)
             log.info("# Wr")
             return
-
-    @register(MethodWrapperType)
-    def save_instancemethod(pickler, obj):
-        log.info("Mw: %s" % obj)
-        if IS_PYPY2 and obj.__self__ is None and obj.im_class:
-            # Can be a class method in PYPY2 if __self__ is none
-            pickler.save_reduce(getattr, (obj.im_class, obj.__name__), obj=obj)
-            return
-        pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
-        log.info("# Mw")
-        return
 
 elif not IS_PYPY:
     @register(MethodDescriptorType)
@@ -2139,6 +2142,27 @@ def save_classmethod(pickler, obj):
 @register(FunctionType)
 def save_function(pickler, obj):
     if not _locate_function(obj, pickler):
+        if type(obj.__code__) is not CodeType:
+            # Some PyPy builtin functions have no module name, and thus are not
+            # able to be located
+            module_name = getattr(obj, '__module__', None)
+            if module_name is None:
+                module_name = __builtin__.__name__
+            module = _import_module(module_name, safe=True)
+            _pypy_builtin = False
+            try:
+                found, _ = _getattribute(module, obj.__qualname__)
+                if getattr(found, '__func__', None) is obj:
+                    _pypy_builtin = True
+            except:
+                pass
+
+            if _pypy_builtin:
+                log.info("F3: %s" % obj)
+                pickler.save_reduce(getattr, (found, '__func__'), obj=obj)
+                log.info("# F3")
+                return
+
         log.info("F1: %s" % obj)
         _recurse = getattr(pickler, '_recurse', None)
         _postproc = getattr(pickler, '_postproc', None)
