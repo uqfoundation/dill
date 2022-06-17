@@ -6,59 +6,54 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 from __future__ import print_function
-import atexit, dill, os, sys, __main__
+import atexit, dill, io, os, sys, __main__
 
 session_file = os.path.join(os.path.dirname(__file__), 'session-byref-%s.pkl')
 
-def test_modules(main, byref):
-    main_dict = main.__dict__
+###################
+#  Child process  #
+###################
 
-    try:
-        for obj in ('json', 'url', 'local_mod', 'sax', 'dom'):
-            assert main_dict[obj].__name__ in sys.modules
+def _error_line(error, obj, byref):
+    import traceback
+    line = traceback.format_exc().splitlines()[-2].replace('[obj]', '['+repr(obj)+']')
+    return "while testing (with byref=%s):  %s" % (byref, line.lstrip())
 
-        for obj in ('Calendar', 'isleap'):
-            assert main_dict[obj] is sys.modules['calendar'].__dict__[obj]
-        assert main.day_name.__module__ == 'calendar'
-        if byref:
-            assert main.day_name is sys.modules['calendar'].__dict__['day_name']
-
-        assert main.complex_log is sys.modules['cmath'].__dict__['log']
-
-    except AssertionError:
-        import traceback
-        error_line = traceback.format_exc().splitlines()[-2].replace('[obj]', '['+repr(obj)+']')
-        print("Error while testing (byref=%s):" % byref, error_line, sep="\n", file=sys.stderr)
-        raise
-
-
-# Test session loading in a fresh interpreter session.
 if __name__ == '__main__' and len(sys.argv) >= 3 and sys.argv[1] == '--child':
-    byref = sys.argv[2] == 'True'
+    # Test session loading in a fresh interpreter session.
+    byref = (sys.argv[2] == 'True')
     dill.load_session(session_file % byref)
-    test_modules(__main__, byref)
+
+    def test_modules(byref):
+        # FIXME: In this test setting with CPython 3.7, 'calendar' is not included in sys.modules,
+        # independent of the value of byref. Tried to run garbage collection just before loading the
+        # session with no luck. It fails even when preceding them with 'import calendar'. Needed to
+        # run these kinds of tests in a supbrocess. Failing test sample:
+        #   assert globals()['day_name'] is vars(sys.modules['calendar'])['day_name']
+        try:
+            for obj in ('json', 'url', 'local_mod', 'sax', 'dom'):
+                assert globals()[obj].__name__ in sys.modules
+            assert 'calendar' in sys.modules and 'cmath' in sys.modules
+            import calendar, cmath
+
+            for obj in ('Calendar', 'isleap'):
+                assert globals()[obj] is sys.modules['calendar'].__dict__[obj]
+            assert __main__.day_name.__module__ == 'calendar'
+            if byref:
+                assert __main__.day_name is calendar.day_name
+
+            assert __main__.complex_log is cmath.log
+
+        except AssertionError as error:
+            error.args = (_error_line(error, obj, byref),)
+            raise
+
+    test_modules(byref)
     sys.exit()
 
-del test_modules
-
-
-def _clean_up_cache(module):
-    cached = module.__file__.split('.', 1)[0] + '.pyc'
-    cached = module.__cached__ if hasattr(module, '__cached__') else cached
-    pycache = os.path.join(os.path.dirname(module.__file__), '__pycache__')
-    for remove, file in [(os.remove, cached), (os.removedirs, pycache)]:
-        try:
-            remove(file)
-        except OSError:
-            pass
-
-
-# To clean up namespace before loading the session.
-original_modules = set(sys.modules.keys()) - \
-        set(['json', 'urllib', 'xml.sax', 'xml.dom.minidom', 'calendar', 'cmath'])
-original_objects = set(__main__.__dict__.keys())
-original_objects.add('original_objects')
-
+####################
+#  Parent process  #
+####################
 
 # Create various kinds of objects to test different internal logics.
 
@@ -68,7 +63,6 @@ import urllib as url                                # top-level module under ali
 from xml import sax                                 # submodule
 import xml.dom.minidom as dom                       # submodule under alias
 import test_dictviews as local_mod                  # non-builtin top-level module
-atexit.register(_clean_up_cache, local_mod)
 
 ## Imported objects.
 from calendar import Calendar, isleap, day_name     # class, function, other object
@@ -92,103 +86,116 @@ cal = CalendarSubclass()
 selfref = __main__
 
 
-def test_objects(main, copy_dict, byref):
-    main_dict = main.__dict__
+# Setup global namespace for session saving tests.
+class TestNamespace:
+    test_globals = globals().copy()
+    def __init__(self, **extra):
+        self.extra = extra
+    def __enter__(self):
+        self.backup = globals().copy()
+        globals().clear()
+        globals().update(self.test_globals)
+        globals().update(self.extra)
+        return self
+    def __exit__(self, *exc_info):
+        globals().clear()
+        globals().update(self.backup)
 
+
+def _clean_up_cache(module):
+    cached = module.__file__.split('.', 1)[0] + '.pyc'
+    cached = module.__cached__ if hasattr(module, '__cached__') else cached
+    pycache = os.path.join(os.path.dirname(module.__file__), '__pycache__')
+    for remove, file in [(os.remove, cached), (os.removedirs, pycache)]:
+        try:
+            remove(file)
+        except OSError:
+            pass
+
+atexit.register(_clean_up_cache, local_mod)
+
+
+def _test_objects(main, globals_copy, byref):
     try:
+        main_dict = vars(__main__)
+        global Person, person, Calendar, CalendarSubclass, cal, selfref
+
         for obj in ('json', 'url', 'local_mod', 'sax', 'dom'):
-            assert main_dict[obj].__name__ == copy_dict[obj].__name__
-
-        #FIXME: In the second test call, 'calendar' is not included in
-        # sys.modules, independent of the value of byref. Tried to run garbage
-        # collection before with no luck. This block fails even with
-        # "import calendar" before it. Needed to restore the original modules
-        # with the 'copy_modules' object. (Moved to "test_session_{1,2}.py".)
-
-        #for obj in ('Calendar', 'isleap'):
-        #    assert main_dict[obj] is sys.modules['calendar'].__dict__[obj]
-        #assert main_dict['day_name'].__module__ == 'calendar'
-        #if byref:
-        #    assert main_dict['day_name'] is sys.modules['calendar'].__dict__['day_name']
+            assert globals()[obj].__name__ == globals_copy[obj].__name__
 
         for obj in ('x', 'empty', 'names'):
-            assert main_dict[obj] == copy_dict[obj]
+            assert main_dict[obj] == globals_copy[obj]
 
         globs = '__globals__' if dill._dill.PY3 else 'func_globals'
         for obj in ['squared', 'cubed']:
             assert getattr(main_dict[obj], globs) is main_dict
-            assert main_dict[obj](3) == copy_dict[obj](3)
+            assert main_dict[obj](3) == globals_copy[obj](3)
 
-        assert main.Person.__module__ == main.__name__
-        assert isinstance(main.person, main.Person)
-        assert main.person.age == copy_dict['person'].age
+        assert Person.__module__ == __main__.__name__
+        assert isinstance(person, Person)
+        assert person.age == globals_copy['person'].age
 
-        assert issubclass(main.CalendarSubclass, main.Calendar)
-        assert isinstance(main.cal, main.CalendarSubclass)
-        assert main.cal.weekdays() == copy_dict['cal'].weekdays()
+        assert issubclass(CalendarSubclass, Calendar)
+        assert isinstance(cal, CalendarSubclass)
+        assert cal.weekdays() == globals_copy['cal'].weekdays()
 
-        assert main.selfref is main
+        assert selfref is __main__
 
-    except AssertionError:
-        import traceback
-        error_line = traceback.format_exc().splitlines()[-2].replace('[obj]', '['+repr(obj)+']')
-        print("Error while testing (byref=%s):" % byref, error_line, sep="\n", file=sys.stderr)
+    except AssertionError as error:
+        error.args = (_error_line(error, obj, byref),)
         raise
 
 
-if __name__ == '__main__':
+def test_session_main(byref):
+    """test dump/load_session() for __main__, both in this process and in a subprocess"""
+    extra_objects = {}
+    if byref:
+        # Test unpickleable imported object in main.
+        from sys import flags
+        extra_objects['flags'] = flags
 
-    # Test dump_session() and load_session().
-    for byref in (False, True):
-        if byref:
-            # Test unpickleable imported object in main.
-            from sys import flags
-
-        #print(sorted(set(sys.modules.keys()) - original_modules))
-        dill._test_file = dill._dill.StringIO()
+    with TestNamespace(**extra_objects) as ns:
         try:
-            # For the subprocess.
-            dill.dump_session(session_file % byref, byref=byref)
-
-            dill.dump_session(dill._test_file, byref=byref)
-            dump = dill._test_file.getvalue()
-            dill._test_file.close()
-
-            import __main__
-            copy_dict = __main__.__dict__.copy()
-            copy_modules = sys.modules.copy()
-            del copy_dict['dump']
-            del copy_dict['__main__']
-            for name in copy_dict.keys():
-                if name not in original_objects:
-                    del __main__.__dict__[name]
-            for module in list(sys.modules.keys()):
-                if module not in original_modules:
-                    del sys.modules[module]
-
-            dill._test_file = dill._dill.StringIO(dump)
-            dill.load_session(dill._test_file)
-            #print(sorted(set(sys.modules.keys()) - original_modules))
-
             # Test session loading in a new session.
+            dill.dump_session(session_file % byref, byref=byref)
             from dill.tests.__main__ import python, shell, sp
             error = sp.call([python, __file__, '--child', str(byref)], shell=shell)
             if error: sys.exit(error)
-            del python, shell, sp
-
         finally:
-            dill._test_file.close()
             try:
                 os.remove(session_file % byref)
             except OSError:
                 pass
 
-        test_objects(__main__, copy_dict, byref)
-        __main__.__dict__.update(copy_dict)
-        sys.modules.update(copy_modules)
-        del __main__, copy_dict, copy_modules, dump
+        # Test session loading in the same session.
+        session_buffer = io.BytesIO()
+        dill.dump_session(session_buffer, byref=byref)
+        session_buffer.seek(0)
+        dill.load_session(session_buffer)
+        ns.backup['_test_objects'](__main__, ns.backup, byref)
 
 
+def test_session_other():
+    """test dump/load_session() for a module other than __main__"""
+    import test_classdef as module
+    atexit.register(_clean_up_cache, module)
+    module.selfref = module
+    dict_objects = [obj for obj in module.__dict__.keys() if not obj.startswith('__')]
+
+    session_buffer = io.BytesIO()
+    dill.dump_session(test_file, main=module)
+
+    for obj in dict_objects:
+        del module.__dict__[obj]
+
+    session_buffer.seek(0)
+    dill.load_session(session_buffer) #, main=module)
+
+    assert all(obj in module.__dict__ for obj in dict_objects)
+    assert module.selfref is module
+
+
+def test_byref_without_byref_objects():
     # This is for code coverage, tests the use case of dump_session(byref=True)
     # without imported objects in the namespace. It's a contrived example because
     # even dill can't be in it.
@@ -203,41 +210,18 @@ if __name__ == '__main__':
               _main.__dill_imported, _main.__dill_imported_as, _main.__dill_imported_top_level,
               file=sys.stderr)
 
-    test_file = dill._dill.StringIO()
-    try:
-        dill.dump_session(test_file, main=main, byref=True)
-        dump = test_file.getvalue()
-        test_file.close()
-
-        main = ModuleType(modname)  # empty
-        # This should work after fixing https://github.com/uqfoundation/dill/issues/462
-        test_file = dill._dill.StringIO(dump)
-        dill.load_session(test_file, main=main)
-    finally:
-        test_file.close()
+    session_buffer = io.BytesIO()
+    dill.dump_session(session_buffer, main=main, byref=True)
+    main = ModuleType(modname)  # empty
+    session_buffer.seek(0)
+    # This should work after fixing https://github.com/uqfoundation/dill/issues/462
+    dill.load_session(test_file, main=main)
 
     assert main.x == 42
 
 
-    # Dump session for module that is not __main__:
-    import test_classdef as module
-    atexit.register(_clean_up_cache, module)
-    module.selfref = module
-    dict_objects = [obj for obj in module.__dict__.keys() if not obj.startswith('__')]
-
-    test_file = dill._dill.StringIO()
-    try:
-        dill.dump_session(test_file, main=module)
-        dump = test_file.getvalue()
-        test_file.close()
-
-        for obj in dict_objects:
-            del module.__dict__[obj]
-
-        test_file = dill._dill.StringIO(dump)
-        dill.load_session(test_file, main=module)
-    finally:
-        test_file.close()
-
-    assert all(obj in module.__dict__ for obj in dict_objects)
-    assert module.selfref is module
+if __name__ == '__main__':
+    test_session_main(byref=False)
+    test_session_main(byref=True)
+    test_session_other()
+    test_byref_without_byref_objects()
