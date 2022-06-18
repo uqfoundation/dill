@@ -630,7 +630,8 @@ class Pickler(StockPickler):
             fast = self.fast
             self.proto = 0
             self.fast = True
-            self.save_reduce(setattr, (_dill, '_version', version))
+            _setversion = Getattr(_dill, '_setversion', id)
+            self.save_reduce(_setversion, (version,))
             self.write(POP)
             self.proto = proto
             self.fast = fast
@@ -651,8 +652,6 @@ class Unpickler(StockUnpickler):
         elif (module, name) == ('__builtin__', 'NoneType'):
             return type(None) #XXX: special case: NoneType missing
         if module == 'dill.dill': module = 'dill._dill'
-        if name == '_version' and module == 'dill._dill':
-            return self._version
         return StockUnpickler.find_class(self, module, name)
 
     def __init__(self, *args, **kwds):
@@ -826,6 +825,39 @@ def _unmarshal(string):
 
 def _load_type(name):
     return _reverse_typemap[name]
+
+def _get_unpickler():
+    # Hack our way back to finding the unpickler that called us
+    frame = sys._getframe(0)
+    while frame is not None and (frame.f_code.co_filename != __file__ or
+            frame.f_code.co_name != 'load'):
+        frame = frame.f_back
+
+    if frame is None:
+        raise RuntimeError("dill is not currently unpickling something.")
+
+    # We should now have the stack frame of Unpickler.load
+    return frame.f_locals['self']
+
+def _setversion(val):
+    unpickler = _get_unpickler()
+
+    if isinstance(val, tuple):
+        pyver, dillver = val
+        if isinstance(pyver, tuple):
+            name, version, implementation_version = pyver
+            version = _shims.PythonVersionInfo.from_hexversion(version)
+            implementation_version = _shims.PythonVersionInfo(implementation_version)
+            pyver = SimpleNamespace(name=name, version=version, implementation_version=implementation_version)
+        else:
+            pyver = _shims.PythonVersionInfo.from_hexversion(pyver)
+            pyver = SimpleNamespace(name='cpython', version=pyver, implementation_version=pyver)
+        val = SimpleNamespace(python = pyver, dill = _shims.Version(dillver))
+    elif not isinstance(val, SimpleNamespace):
+        for k, v in val.items():
+            setattr(val, k, v)
+
+    unpickler._version = val
 
 def _create_type(typeobj, *args):
     return typeobj(*args)
@@ -2440,44 +2472,5 @@ def _extend():
     return
 
 del diff, _use_diff, use_diff
-
-# TODO: maybe use getattr to throw an error here
-
-def __setattr__(name, val):
-    if name == '_version':
-        # Hack our way back to finding the unpickler that called us
-        frame = sys._getframe(0)
-        while frame is not None and frame.f_code.co_filename != __file__ and \
-                frame.f_code.co_name != 'load':
-            frame = frame.f_back
-
-        if frame is None:
-            raise RuntimeError("Cannot set dill unpickling settings outside of an unpickler.")
-
-        # We should now have the stack frame of Unpickler.load
-
-        unpickler = frame.f_locals['self']
-        unpickler._version = val
-
-        if isinstance(val, tuple):
-            pyver, dillver = val
-            if isinstance(pyver, tuple):
-                name, version, implementation_version = pyver
-                version = PythonVersionInfo(version)
-                implementation_version = PythonVersionInfo(implementation_version)
-                pyver = SimpleNamespace(name=name, version=version, implementation_version=implementation_version)
-            else:
-                pyver = PythonVersionInfo(pyver)
-                pyver = SimpleNamespace(name='cpython', version=pyver, implementation_version=pyver)
-            val.python = pyver
-            val.dill = Version(dillver)
-        elif not isinstance(val, SimpleNamespace):
-            for k, v in val.items():
-                setattr(val, k, v)
-
-        return
-
-    # TODO: maybe something else belongs here?
-    ModuleType.__setattr__(_dill, val)
 
 # EOF
