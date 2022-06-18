@@ -49,6 +49,7 @@ See this PR for the discussion that lead to this system:
 https://github.com/uqfoundation/dill/pull/443
 """
 
+from typing import NamedTuple
 import inspect, sys
 
 _dill = sys.modules['dill._dill']
@@ -138,6 +139,78 @@ def Getattr(object, name, default=__NO_DEFAULT):
 
 Getattr.NO_DEFAULT = __NO_DEFAULT
 del __NO_DEFAULT
+
+class _PythonVersionInfo_Base(NamedTuple):
+    major: int
+    minor: int
+    micro: int
+    releaselevel: str
+    serial: int
+    hexversion: int
+
+    def __int__(self):
+        return self.hexversion
+
+class PythonVersionInfo(_PythonVersionInfo_Base):
+    '''
+    A reconstructable version of sys.version_info
+    '''
+    def __new__(cls, major, minor, micro, releaselevel, serial):
+
+        releaselevel_hex = {
+            'alpha':     0xa0,
+            'beta':      0xb0,
+            'candidate': 0xc0,
+            'final':     0xf0
+        }[releaselevel]
+
+        hexversion = (major << 24) + (minor << 16) + (micro << 8) + releaselevel_hex + serial
+        return super().__new__(cls, major, minor, micro, releaselevel, serial, hexversion)
+
+    @classmethod
+    def current(cls):
+        return cls(*sys.version_info, sys.hexversion)
+
+    @classmethod
+    def current_implementation(cls):
+        return cls(*sys.implementation.version, sys.implementation.hexversion)
+
+    @classmethod
+    def from_hexversion(cls, hexversion: int):
+        major = (hexversion & 0xff000000) >> 24
+        minor = (hexversion & 0x00ff0000) >> 16
+        micro = (hexversion & 0x0000ff00) >>  8
+
+        releaselevel = {
+            0xa0: 'alpha',
+            0xb0: 'beta',
+            0xc0: 'candidate',
+            0xf0: 'final'
+        }[hexversion & 0x000000f0]
+
+        serial = hexversion & 0x0000000f
+        return super().__new__(cls, major, minor, micro, releaselevel, serial, hexversion)
+
+
+try:
+    # Try to use a fancier version class to compare the dill version if available
+    from packaging.version import Version
+except:
+    # A versioning class that can only be used for comparing dill versions
+    class Version(tuple):
+        __slots__ = ()
+        def __new__(cls, version):
+            v = version.split('.')
+            if len(v) < 4:
+                v = [*v, *([0] * (4 - len(v)))]
+            else:
+                v = list(v)
+            if v[-1] == 'dev0':
+                v[-1] = -1
+            for i in range(len(v)):
+                v[i] = int(v[i])
+            return super().__new__(cls, v)
+
 
 def move_to(module, name=None):
     def decorator(func):

@@ -290,6 +290,9 @@ from ._dill import dump, dumps, load, loads, dump_session, load_session, \
     PicklingWarning, UnpicklingWarning
 from . import source, temp, detect
 
+_dill._dill = _dill
+_dill.__version__ = __version__
+
 # get global settings
 from .settings import settings
 

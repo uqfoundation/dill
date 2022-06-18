@@ -56,7 +56,7 @@ if PY3: #XXX: get types from .objtypes ?
         from threading import _RLock as RLockType
    #from io import IOBase
     from types import CodeType, FunctionType, MethodType, GeneratorType, \
-        TracebackType, FrameType, ModuleType, BuiltinMethodType
+        TracebackType, FrameType, ModuleType, BuiltinMethodType, SimpleNamespace
     BufferType = memoryview #XXX: unregistered
     ClassType = type # no 'old-style' classes
     EllipsisType = type(Ellipsis)
@@ -77,7 +77,8 @@ else:
     from types import CodeType, FunctionType, ClassType, MethodType, \
          GeneratorType, DictProxyType, XRangeType, SliceType, TracebackType, \
          NotImplementedType, EllipsisType, FrameType, ModuleType, \
-         BufferType, BuiltinMethodType, TypeType
+         BufferType, BuiltinMethodType, TypeType, SimpleNamespace
+
 from pickle import HIGHEST_PROTOCOL, PickleError, PicklingError, UnpicklingError
 try:
     from pickle import DEFAULT_PROTOCOL
@@ -303,6 +304,8 @@ class Sentinel(object):
 
 from . import _shims
 from ._shims import Reduce, Getattr
+
+from pickle import POP
 
 ### File modes
 #: Pickles the file handle, preserving mode. The position of the unpickled
@@ -618,6 +621,20 @@ class Pickler(StockPickler):
             msg = "Can't pickle %s: attribute lookup builtins.generator failed" % GeneratorType
             raise PicklingError(msg)
         else:
+            if sys.implementation.name != 'cpython':
+                version = ((sys.implementation.name, sys.hexversion, sys.implementation.hexversion), __version__)
+            else:
+                version = (sys.hexversion, __version__)
+
+            proto = self.proto
+            fast = self.fast
+            self.proto = 0
+            self.fast = True
+            self.save_reduce(setattr, (_dill, '_version', version))
+            self.write(POP)
+            self.proto = proto
+            self.fast = fast
+
             StockPickler.dump(self, obj)
         return
     dump.__doc__ = StockPickler.dump.__doc__
@@ -634,6 +651,8 @@ class Unpickler(StockUnpickler):
         elif (module, name) == ('__builtin__', 'NoneType'):
             return type(None) #XXX: special case: NoneType missing
         if module == 'dill.dill': module = 'dill._dill'
+        if name == '_version' and module == 'dill._dill':
+            return self._version
         return StockUnpickler.find_class(self, module, name)
 
     def __init__(self, *args, **kwds):
@@ -642,6 +661,7 @@ class Unpickler(StockUnpickler):
         StockUnpickler.__init__(self, *args, **kwds)
         self._main = _main_module
         self._ignore = settings['ignore'] if _ignore is None else _ignore
+        self._version = SimpleNamespace()
 
     def load(self): #NOTE: if settings change, need to update attributes
         obj = StockUnpickler.load(self)
@@ -653,7 +673,7 @@ class Unpickler(StockUnpickler):
        #_main_module.__dict__.update(obj.__dict__) #XXX: should update globals ?
         return obj
     load.__doc__ = StockUnpickler.load.__doc__
-    pass
+
 
 '''
 def dispatch_table():
@@ -2420,5 +2440,44 @@ def _extend():
     return
 
 del diff, _use_diff, use_diff
+
+# TODO: maybe use getattr to throw an error here
+
+def __setattr__(name, val):
+    if name == '_version':
+        # Hack our way back to finding the unpickler that called us
+        frame = sys._getframe(0)
+        while frame is not None and frame.f_code.co_filename != __file__ and \
+                frame.f_code.co_name != 'load':
+            frame = frame.f_back
+
+        if frame is None:
+            raise RuntimeError("Cannot set dill unpickling settings outside of an unpickler.")
+
+        # We should now have the stack frame of Unpickler.load
+
+        unpickler = frame.f_locals['self']
+        unpickler._version = val
+
+        if isinstance(val, tuple):
+            pyver, dillver = val
+            if isinstance(pyver, tuple):
+                name, version, implementation_version = pyver
+                version = PythonVersionInfo(version)
+                implementation_version = PythonVersionInfo(implementation_version)
+                pyver = SimpleNamespace(name=name, version=version, implementation_version=implementation_version)
+            else:
+                pyver = PythonVersionInfo(pyver)
+                pyver = SimpleNamespace(name='cpython', version=pyver, implementation_version=pyver)
+            val.python = pyver
+            val.dill = Version(dillver)
+        elif not isinstance(val, SimpleNamespace):
+            for k, v in val.items():
+                setattr(val, k, v)
+
+        return
+
+    # TODO: maybe something else belongs here?
+    ModuleType.__setattr__(_dill, val)
 
 # EOF
