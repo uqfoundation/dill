@@ -211,6 +211,15 @@ def test_slots():
     assert dill.pickles(Y.y)
     assert dill.copy(y).y == value
 
+def test_attr():
+    import attr
+    @attr.s
+    class A:
+        a = attr.ib()
+
+    v = A(1)
+    assert dill.copy(v) == v
+
 def test_metaclass():
     class metaclass_with_new(type):
         def __new__(mcls, name, bases, ns, **kwds):

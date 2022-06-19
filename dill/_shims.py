@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
-# Author: Anirudh Vegesana (avegesan@stanford.edu)
+# Author: Anirudh Vegesana (avegesan@cs.stanford.edu)
 # Copyright (c) 2021-2022 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
@@ -150,11 +150,43 @@ def move_to(module, name=None):
         return func
     return decorator
 
+def register_shim(name, default):
+    """
+    A easier to understand and more compact way of "softly" defining a function.
+    These two pieces of code are equivalent:
+
+    if _dill.OLD3X:
+        def _create_class():
+            ...
+    _create_class = register_shim('_create_class', types.new_class)
+
+    if _dill.OLD3X:
+        @move_to(_dill)
+        def _create_class():
+            ...
+    _create_class = Getattr(_dill, '_create_class', types.new_class)
+
+    Intuitively, it creates a function or object in the versions of dill/python
+    that require special reimplementations, and use a core library or default
+    implementation if that function or object does not exist.
+    """
+    func = globals().get(name)
+    if func is not None:
+        _dill.__dict__[name] = func
+        func.__module__ = _dill.__name__
+
+    if default is Getattr.NO_DEFAULT:
+        reduction = (getattr, (_dill, name))
+    else:
+        reduction = (getattr, (_dill, name, default))
+
+    return Reduce(*reduction, is_callable=callable(default))
+
 ######################
 ## Compatibility Shims are defined below
 ######################
 
-_CELL_EMPTY = Getattr(_dill, '_CELL_EMPTY', None)
+_CELL_EMPTY = register_shim('_CELL_EMPTY', None)
 
-_setattr = Getattr(_dill, '_setattr', setattr)
-_delattr = Getattr(_dill, '_delattr', delattr)
+_setattr = register_shim('_setattr', setattr)
+_delattr = register_shim('_delattr', delattr)

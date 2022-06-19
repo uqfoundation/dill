@@ -21,6 +21,8 @@ __all__ = ['dump','dumps','load','loads','dump_session','load_session',
            'UnpicklingError','HANDLE_FMODE','CONTENTS_FMODE','FILE_FMODE',
            'PickleError','PickleWarning','PicklingWarning','UnpicklingWarning']
 
+__module__ = 'dill'
+
 import logging
 log = logging.getLogger("dill")
 log.addHandler(logging.StreamHandler())
@@ -35,6 +37,7 @@ import os
 import sys
 diff = None
 _use_diff = False
+OLD38 = (sys.hexversion < 0x3080000)
 OLD39 = (sys.hexversion < 0x3090000)
 OLD310 = (sys.hexversion < 0x30a0000)
 #XXX: get types from .objtypes ?
@@ -64,6 +67,7 @@ import marshal
 import gc
 # import zlib
 from weakref import ReferenceType, ProxyType, CallableProxyType
+from collections import OrderedDict
 from functools import partial
 from operator import itemgetter, attrgetter
 GENERATOR_FAIL = False
@@ -214,8 +218,6 @@ except NameError:
     try: ExitType = type(exit) # apparently 'exit' can be removed
     except NameError: ExitType = None
     singletontypes = []
-
-from collections import OrderedDict
 
 import inspect
 
@@ -511,7 +513,6 @@ class Pickler(StockPickler):
         self._strictio = False #_strictio
         self._fmode = settings['fmode'] if _fmode is None else _fmode
         self._recurse = settings['recurse'] if _recurse is None else _recurse
-        from collections import OrderedDict
         self._postproc = OrderedDict()
 
     def dump(self, obj): #NOTE: if settings change, need to update attributes
@@ -657,6 +658,15 @@ _reverse_typemap.update({
     'SuperType': SuperType,
     'ItemGetterType': ItemGetterType,
     'AttrGetterType': AttrGetterType,
+})
+
+# "Incidental" implementation specific types. Unpickling these types in another
+# implementation of Python (PyPy -> CPython) is not gauranteed to work
+
+# This dictionary should contain all types that appear in Python implementations
+# but are not defined in https://docs.python.org/3/library/types.html#standard-interpreter-types
+x=OrderedDict()
+_incedental_reverse_typemap = {
     'FileType': FileType,
     'BufferedRandomType': BufferedRandomType,
     'BufferedReaderType': BufferedReaderType,
@@ -666,18 +676,55 @@ _reverse_typemap.update({
     'PyBufferedReaderType': PyBufferedReaderType,
     'PyBufferedWriterType': PyBufferedWriterType,
     'PyTextWrapperType': PyTextWrapperType,
+}
+
+_incedental_reverse_typemap.update({
+    "DictKeysType": type({}.keys()),
+    "DictValuesType": type({}.values()),
+    "DictItemsType": type({}.items()),
+
+    "OdictKeysType": type(x.keys()),
+    "OdictValuesType": type(x.values()),
+    "OdictItemsType": type(x.items()),
 })
+
 if ExitType:
-    _reverse_typemap['ExitType'] = ExitType
+    _incedental_reverse_typemap['ExitType'] = ExitType
 if InputType:
-    _reverse_typemap['InputType'] = InputType
-    _reverse_typemap['OutputType'] = OutputType
+    _incedental_reverse_typemap['InputType'] = InputType
+    _incedental_reverse_typemap['OutputType'] = OutputType
 if not IS_PYPY:
-    _reverse_typemap['WrapperDescriptorType'] = WrapperDescriptorType
-    _reverse_typemap['MethodDescriptorType'] = MethodDescriptorType
-    _reverse_typemap['ClassMethodDescriptorType'] = ClassMethodDescriptorType
+    _incedental_reverse_typemap['WrapperDescriptorType'] = WrapperDescriptorType
+    _incedental_reverse_typemap['MethodDescriptorType'] = MethodDescriptorType
+    _incedental_reverse_typemap['ClassMethodDescriptorType'] = ClassMethodDescriptorType
 else:
-    _reverse_typemap['MemberDescriptorType'] = MemberDescriptorType
+    _incedental_reverse_typemap['MemberDescriptorType'] = MemberDescriptorType
+
+try:
+    import symtable
+    _incedental_reverse_typemap["SymtableStentryType"] = type(symtable.symtable("", "string", "exec")._table)
+except:
+    pass
+
+if sys.hexversion >= 0x30a00a0:
+    _incedental_reverse_typemap['LineIteratorType'] = type(compile('3', '', 'eval').co_lines())
+
+if sys.hexversion >= 0x30b00b0:
+    from types import GenericAlias
+    _incedental_reverse_typemap["GenericAliasIteratorType"] = type(iter(GenericAlias(list, (int,))))
+    _incedental_reverse_typemap['PositionsIteratorType'] = type(compile('3', '', 'eval').co_positions())
+
+try:
+    import winreg
+    _incedental_reverse_typemap["HKEYType"] = winreg.HKEYType
+except:
+    pass
+
+_reverse_typemap.update(_incedental_reverse_typemap)
+_incedental_types = set(_incedental_reverse_typemap.values())
+
+del x
+
 _typemap = dict((v, k) for k, v in _reverse_typemap.items())
 
 def _unmarshal(string):
@@ -1058,6 +1105,36 @@ def _create_namedtuple(name, fieldnames, modulename, defaults=None):
     t = collections.namedtuple(name, fieldnames, defaults=defaults, module=modulename)
     return t
 
+def _create_capsule(pointer, name, context, destructor):
+    attr_found = False
+    try:
+        # based on https://github.com/python/cpython/blob/f4095e53ab708d95e019c909d5928502775ba68f/Objects/capsule.c#L209-L231
+        uname = name.decode('utf8')
+        for i in range(1, uname.count('.')+1):
+            names = uname.rsplit('.', i)
+            try:
+                module = __import__(names[0])
+            except:
+                pass
+            obj = module
+            for attr in names[1:]:
+                obj = getattr(obj, attr)
+            capsule = obj
+            attr_found = True
+            break
+    except:
+        pass
+
+    if attr_found:
+        if _PyCapsule_IsValid(capsule, name):
+            return capsule
+        raise UnpicklingError("%s object exists at %s but a PyCapsule object was expected." % (type(capsule), name))
+    else:
+        warnings.warn('Creating a new PyCapsule %s for a C data structure that may not be present in memory. Segmentation faults or other memory errors are possible.' % (name,), UnpicklingWarning)
+        capsule = _PyCapsule_New(pointer, name, destructor)
+        _PyCapsule_SetContext(capsule, context)
+        return capsule
+
 def _getattr(objclass, name, repr_str):
     # hack to grab the reference directly
     try: #XXX: works only for __builtin__ ?
@@ -1099,13 +1176,35 @@ def _import_module(import_name, safe=False):
             return None
         raise
 
-def _locate_function(obj, pickler=None):
-    if obj.__module__ in ['__main__', None] or \
-            pickler and is_dill(pickler, child=False) and pickler._session and obj.__module__ == pickler._main.__name__:
-        return False
+# https://github.com/python/cpython/blob/a8912a0f8d9eba6d502c37d522221f9933e976db/Lib/pickle.py#L322-L333
+def _getattribute(obj, name):
+    for subpath in name.split('.'):
+        if subpath == '<locals>':
+            raise AttributeError("Can't get local attribute {!r} on {!r}"
+                                 .format(name, obj))
+        try:
+            parent = obj
+            obj = getattr(obj, subpath)
+        except AttributeError:
+            raise AttributeError("Can't get attribute {!r} on {!r}"
+                                 .format(name, obj))
+    return obj, parent
 
-    found = _import_module(obj.__module__ + '.' + obj.__name__, safe=True)
-    return found is obj
+def _locate_function(obj, pickler=None):
+    module_name = getattr(obj, '__module__', None)
+    if module_name in ['__main__', None] or \
+            pickler and is_dill(pickler, child=False) and pickler._session and module_name == pickler._main.__name__:
+        return False
+    if hasattr(obj, '__qualname__'):
+        module = _import_module(module_name, safe=True)
+        try:
+            found, _ = _getattribute(module, obj.__qualname__)
+            return found is obj
+        except:
+            return False
+    else:
+        found = _import_module(module_name + '.' + obj.__name__, safe=True)
+        return found is obj
 
 
 def _setitems(dest, source):
@@ -1451,6 +1550,31 @@ def save_super(pickler, obj):
     log.info("# Su")
     return
 
+if IS_PYPY:
+    @register(MethodType)
+    def save_instancemethod0(pickler, obj):
+        code = getattr(obj.__func__, '__code__', None)
+        if code is not None and type(code) is not CodeType \
+              and getattr(obj.__self__, obj.__name__) == obj:
+            # Some PyPy builtin functions have no module name
+            log.info("Me2: %s" % obj)
+            # TODO: verify that this works for all PyPy builtin methods
+            pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
+            log.info("# Me2")
+            return
+
+        log.info("Me1: %s" % obj)
+        pickler.save_reduce(MethodType, (obj.__func__, obj.__self__), obj=obj)
+        log.info("# Me1")
+        return
+else:
+    @register(MethodType)
+    def save_instancemethod0(pickler, obj):
+        log.info("Me1: %s" % obj)
+        pickler.save_reduce(MethodType, (obj.__func__, obj.__self__), obj=obj)
+        log.info("# Me1")
+        return
+
 if not IS_PYPY:
     @register(MemberDescriptorType)
     @register(GetSetDescriptorType)
@@ -1472,13 +1596,6 @@ else:
                                        obj.__repr__()), obj=obj)
         log.info("# Wr")
         return
-
-@register(MethodWrapperType)
-def save_instancemethod(pickler, obj):
-    log.info("Mw: %s" % obj)
-    pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
-    log.info("# Mw")
-    return
 
 @register(CellType)
 def save_cell(pickler, obj):
@@ -1533,7 +1650,7 @@ if MAPPING_PROXY_TRICK:
         pickler.save_reduce(DictProxyType, (mapping,), obj=obj)
         log.info("# Mp")
         return
-elif not IS_PYPY:
+else:
     @register(DictProxyType)
     def save_dictproxy(pickler, obj):
         log.info("Mp: %s" % obj)
@@ -1675,6 +1792,8 @@ def save_module(pickler, obj):
 def save_type(pickler, obj, postproc_list=None):
     if obj in _typemap:
         log.info("T1: %s" % obj)
+        # if obj in _incedental_types:
+        #     warnings.warn('Type %r may only exist on this implementation of Python and cannot be unpickled in other implementations.' % (obj,), PicklingWarning)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
         log.info("# T1")
     elif obj.__bases__ == (tuple,) and all([hasattr(obj, attr) for attr in ('_fields','_asdict','_make','_replace')]):
@@ -1777,9 +1896,29 @@ def save_classmethod(pickler, obj):
 @register(FunctionType)
 def save_function(pickler, obj):
     if not _locate_function(obj, pickler):
+        if type(obj.__code__) is not CodeType:
+            # Some PyPy builtin functions have no module name, and thus are not
+            # able to be located
+            module_name = getattr(obj, '__module__', None)
+            if module_name is None:
+                module_name = __builtin__.__name__
+            module = _import_module(module_name, safe=True)
+            _pypy_builtin = False
+            try:
+                found, _ = _getattribute(module, obj.__qualname__)
+                if getattr(found, '__func__', None) is obj:
+                    _pypy_builtin = True
+            except:
+                pass
+
+            if _pypy_builtin:
+                log.info("F3: %s" % obj)
+                pickler.save_reduce(getattr, (found, '__func__'), obj=obj)
+                log.info("# F3")
+                return
+
         log.info("F1: %s" % obj)
         _recurse = getattr(pickler, '_recurse', None)
-        _byref = getattr(pickler, '_byref', None)
         _postproc = getattr(pickler, '_postproc', None)
         _main_modified = getattr(pickler, '_main_modified', None)
         _original_main = getattr(pickler, '_original_main', __builtin__)#'None'
@@ -1867,6 +2006,55 @@ def save_function(pickler, obj):
         StockPickler.save_global(pickler, obj, name=name)
         log.info("# F2")
     return
+
+if HAS_CTYPES and hasattr(ctypes, 'pythonapi'):
+    _PyCapsule_New = ctypes.pythonapi.PyCapsule_New
+    _PyCapsule_New.argtypes = (ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p)
+    _PyCapsule_New.restype = ctypes.py_object
+    _PyCapsule_GetPointer = ctypes.pythonapi.PyCapsule_GetPointer
+    _PyCapsule_GetPointer.argtypes = (ctypes.py_object, ctypes.c_char_p)
+    _PyCapsule_GetPointer.restype = ctypes.c_void_p
+    _PyCapsule_GetDestructor = ctypes.pythonapi.PyCapsule_GetDestructor
+    _PyCapsule_GetDestructor.argtypes = (ctypes.py_object,)
+    _PyCapsule_GetDestructor.restype = ctypes.c_void_p
+    _PyCapsule_GetContext = ctypes.pythonapi.PyCapsule_GetContext
+    _PyCapsule_GetContext.argtypes = (ctypes.py_object,)
+    _PyCapsule_GetContext.restype = ctypes.c_void_p
+    _PyCapsule_GetName = ctypes.pythonapi.PyCapsule_GetName
+    _PyCapsule_GetName.argtypes = (ctypes.py_object,)
+    _PyCapsule_GetName.restype = ctypes.c_char_p
+    _PyCapsule_IsValid = ctypes.pythonapi.PyCapsule_IsValid
+    _PyCapsule_IsValid.argtypes = (ctypes.py_object, ctypes.c_char_p)
+    _PyCapsule_IsValid.restype = ctypes.c_bool
+    _PyCapsule_SetContext = ctypes.pythonapi.PyCapsule_SetContext
+    _PyCapsule_SetContext.argtypes = (ctypes.py_object, ctypes.c_void_p)
+    _PyCapsule_SetDestructor = ctypes.pythonapi.PyCapsule_SetDestructor
+    _PyCapsule_SetDestructor.argtypes = (ctypes.py_object, ctypes.c_void_p)
+    _PyCapsule_SetName = ctypes.pythonapi.PyCapsule_SetName
+    _PyCapsule_SetName.argtypes = (ctypes.py_object, ctypes.c_char_p)
+    _PyCapsule_SetPointer = ctypes.pythonapi.PyCapsule_SetPointer
+    _PyCapsule_SetPointer.argtypes = (ctypes.py_object, ctypes.c_void_p)
+    _testcapsule = _PyCapsule_New(
+        ctypes.cast(_PyCapsule_New, ctypes.c_void_p),
+        ctypes.create_string_buffer(b'dill._dill._testcapsule'),
+        None
+    )
+    PyCapsuleType = type(_testcapsule)
+    @register(PyCapsuleType)
+    def save_capsule(pickler, obj):
+        log.info("Cap: %s", obj)
+        name = _PyCapsule_GetName(obj)
+        warnings.warn('Pickling a PyCapsule (%s) does not pickle any C data structures and could cause segmentation faults or other memory errors when unpickling.' % (name,), PicklingWarning)
+        pointer = _PyCapsule_GetPointer(obj, name)
+        context = _PyCapsule_GetContext(obj)
+        destructor = _PyCapsule_GetDestructor(obj)
+        pickler.save_reduce(_create_capsule, (pointer, name, context, destructor), obj=obj)
+        log.info("# Cap")
+    _incedental_reverse_typemap['PyCapsuleType'] = PyCapsuleType
+    _reverse_typemap['PyCapsuleType'] = PyCapsuleType
+    _incedental_types.add(PyCapsuleType)
+else:
+    _testcapsule = None
 
 # quick sanity checking
 def pickles(obj,exact=False,safe=False,**kwds):

@@ -373,9 +373,44 @@ except AttributeError:
 a['FileType'] = open(os.devnull, 'rb', buffering=0) # same 'wb','wb+','rb+'
 # FIXME: FileType fails >= 3.1
 # built-in functions (CH 2)
+# Iterators:
 a['ListIteratorType'] = iter(_list) # empty vs non-empty FIXME: fail < 3.2
+x['SetIteratorType'] = iter(_set) #XXX: empty vs non-empty
 a['TupleIteratorType']= iter(_tuple) # empty vs non-empty FIXME: fail < 3.2
 a['XRangeIteratorType'] = iter(_xrange) # empty vs non-empty FIXME: fail < 3.2
+a["BytesIteratorType"] = iter(b'')
+a["BytearrayIteratorType"] = iter(bytearray(b''))
+a["CallableIteratorType"] = iter(iter, None)
+a["MemoryIteratorType"] = iter(memoryview(b''))
+a["ListReverseiteratorType"] = reversed([])
+X = a['OrderedDictType']
+a["OdictKeysType"] = X.keys()
+a["OdictValuesType"] = X.values()
+a["OdictItemsType"] = X.items()
+a["OdictIteratorType"] = iter(X.keys())
+del X
+x['DictionaryItemIteratorType'] = iter(type.__dict__.items())
+x['DictionaryKeyIteratorType'] = iter(type.__dict__.keys())
+x['DictionaryValueIteratorType'] = iter(type.__dict__.values())
+if sys.hexversion >= 0x30800a0:
+    a["DictReversekeyiteratorType"] = reversed({}.keys())
+    a["DictReversevalueiteratorType"] = reversed({}.values())
+    a["DictReverseitemiteratorType"] = reversed({}.items())
+
+try:
+    import symtable
+    a["SymtableEntryType"] = symtable.symtable("", "string", "exec")._table
+except:
+    pass
+
+if sys.hexversion >= 0x30a00a0:
+    a['LineIteratorType'] = compile('3', '', 'eval').co_lines()
+
+if sys.hexversion >= 0x30b00b0:
+    from types import GenericAlias
+    a["GenericAliasIteratorType"] = iter(GenericAlias(list, (int,)))
+    a['PositionsIteratorType'] = compile('3', '', 'eval').co_positions()
+
 # data types (CH 8)
 a['PrettyPrinterType'] = pprint.PrettyPrinter() #FIXME: fail >= 3.2 and == 2.5
 # numeric and mathematical types (CH 9)
@@ -408,11 +443,7 @@ x['TracebackType'] = _function2()[1] #(see: inspect.getouterframes,getframeinfo)
 # other (concrete) object types
 # (also: Capsule / CObject ?)
 # built-in functions (CH 2)
-x['SetIteratorType'] = iter(_set) #XXX: empty vs non-empty
 # built-in types (CH 5)
-x['DictionaryItemIteratorType'] = iter(type.__dict__.items())
-x['DictionaryKeyIteratorType'] = iter(type.__dict__.keys())
-x['DictionaryValueIteratorType'] = iter(type.__dict__.values())
 # string services (CH 7)
 x['StructType'] = struct.Struct('c')
 x['CallableIteratorType'] = _srepattern.finditer('')
@@ -491,6 +522,11 @@ except AttributeError:
     pass
 # oddities: removed, etc
 x['BufferType'] = x['MemoryType']
+
+from dill._dill import _testcapsule
+if _testcapsule is not None:
+    x['PyCapsuleType'] = _testcapsule
+del _testcapsule
 
 # -- cleanup ----------------------------------------------------------------
 a.update(d) # registered also succeed

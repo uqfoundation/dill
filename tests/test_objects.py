@@ -57,6 +57,5 @@ def test_objects():
        #pickles(member, exact=True)
         pickles(member, exact=False)
 
-
 if __name__ == '__main__':
     test_objects()

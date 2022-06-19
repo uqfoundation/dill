@@ -235,6 +235,6 @@ if hasattr(builtins, "_"):
 
 # memorise all already imported modules. This implies that this must be
 # imported first for any changes to be recorded
-for mod in sys.modules.values():
+for mod in list(sys.modules.values()):
     memorise(mod)
 release_gone()
