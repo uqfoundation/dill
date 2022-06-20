@@ -40,6 +40,7 @@ PY3 = (sys.hexversion >= 0x3000000)
 OLDER = (PY3 and sys.hexversion < 0x3040000) or (sys.hexversion < 0x2070ab1)
 OLD33 = (sys.hexversion < 0x3030000)
 OLD37 = (sys.hexversion < 0x3070000)
+OLD38 = (sys.hexversion < 0x3080000)
 OLD39 = (sys.hexversion < 0x3090000)
 OLD310 = (sys.hexversion < 0x30a0000)
 PY34 = (0x3040000 <= sys.hexversion < 0x3050000)
@@ -772,6 +773,45 @@ def _create_function(fcode, fglobals, fname=None, fdefaults=None,
     # assert id(fglobals) == id(func.__globals__)
     return func
 
+class match:
+    """
+    Make avaialable a limited structural pattern matching-like syntax for Python < 3.10
+
+    Patterns can be only (tuples of) types currently.
+    Inspired by the package pattern-matching-PEP634.
+
+    Usage:
+    >>> with match(args) as m:
+    >>>     if   m.case('x', y=list):
+    >>>         # use m.x and m.y
+    >>>     elif m.case('x', y=list, z=(int, float)):
+    >>>         # use m.x, m.y and m.z
+
+    Equivalent native code for Python >= 3.10:
+    >>> match args:
+    >>>     case (x, list(y)):
+    >>>         # use x and y
+    >>>     case (x, list(y), int()|float() as z):
+    >>>         # use x, y and z
+    """
+    def __init__(self, value):
+        self.value = value
+    def __enter__(self):
+        return self
+    def __exit__(self, *exc_info):
+        return False
+    def __getattr__(self, item):
+        return self.vars[item]
+    def case(self, *args, **kwargs):
+        """just handles tuple patterns"""
+        if len(args) + len(kwargs) != len(self.value):
+            return False
+        if not all(isinstance(arg, pat) for arg, pat in zip(self.value[len(args):], kwargs.values())):
+            return False
+        args = (*args, *kwargs)
+        self.vars = dict(zip(args, self.value))
+        return True
+
 CODE_PARAMS = [
     # Version     New attribute         CodeType parameters
     ((3,11,'a'), 'co_endlinetable',    'argcount posonlyargcount kwonlyargcount nlocals stacksize flags code consts names varnames filename name qualname firstlineno linetable endlinetable columntable exceptiontable freevars cellvars'),
@@ -780,12 +820,13 @@ CODE_PARAMS = [
     ((3,8),      'co_posonlyargcount', 'argcount posonlyargcount kwonlyargcount nlocals stacksize flags code consts names varnames filename name          firstlineno lnotab                                            freevars cellvars'),
     ((3,7),      'co_kwonlyargcount',  'argcount                 kwonlyargcount nlocals stacksize flags code consts names varnames filename name          firstlineno lnotab                                            freevars cellvars'),
     ]
-
-for version, new_attr, params_list in CODE_PARAMS:
+for version, new_attr, params in CODE_PARAMS:
     if hasattr(CodeType, new_attr):
-        CODE_PARAMS = params_list.split()
         CODE_VERSION = version
+        CODE_PARAMS = params.split()
         break
+ENCODE_PARAMS = set(CODE_PARAMS).intersection(
+        ['code', 'lnotab', 'linetable', 'endlinetable', 'columntable', 'exceptiontable'])
 
 def _create_code(*args):
     if not isinstance(args[0], int): # co_lnotab stored from >= 3.10
@@ -796,49 +837,41 @@ def _create_code(*args):
 
     BYTES = (bytes, str)
     BYTES_NONE = (bytes, str, type(None))
-    encode_bytes = lambda fields, patterns: {
-            key: val.encode() if pat in (BYTES, BYTES_NONE) and isinstance(val, str) else val \
-                    for (key, val), pat in zip(fields, patterns)
-            }
-
     with match(args) as m:
-        # Python 3.11
-        if   m.case(argcount=int, posonlyargcount=int, kwonlyargcount=int, nlocals=int, stacksize=int, flags=int,
-                    code=BYTES, consts=tuple, names=tuple, varnames=tuple, filename=str, name=str, qualname=str,
-                    firstlineno=int, linetable=BYTES,
-                    exceptiontable=BYTES, freevars=tuple, cellvars=tuple):
-            fields = encode_bytes(m.vars.items(), m.patterns)
-
-        # Python 3.11a
-        elif m.case(argcount=int, posonlyargcount=int, kwonlyargcount=int, nlocals=int, stacksize=int, flags=int,
-                    code=BYTES, consts=tuple, names=tuple, varnames=tuple, filename=str, name=str, qualname=str,
-                    firstlineno=int, linetable=BYTES, endlinetable=BYTES_NONE, columntable=BYTES_NONE,
-                    exceptiontable=BYTES, freevars=tuple, cellvars=tuple):
-            fields = encode_bytes(m.vars.items(), m.patterns)
-
-        # Python 3.10 or 3.9/3.8
-        elif m.case(argcount=int, posonlyargcount=int, kwonlyargcount=int, nlocals=int, stacksize=int, flags=int,
-                    code=BYTES, consts=tuple, names=tuple, varnames=tuple, filename=str, name=str,
-                    firstlineno=int, LNOTAB_OR_LINETABLE=BYTES,
-                    freevars=tuple, cellvars=tuple):
-            fields = encode_bytes(m.vars.items(), m.patterns)
-            key = 'linetable' if CODE_VERSION >= (3,10) else 'lnotab'
-            fields[key] = fields['LNOTAB_OR_LINETABLE']
-
         # Python 3.7
-        elif m.case(argcount=int, kwonlyargcount=int, nlocals=int, stacksize=int, flags=int,
-                    code=BYTES, consts=tuple, names=tuple, varnames=tuple, filename=str, name=str,
-                    firstlineno=int, lnotab=BYTES,
+        if   m.case('argcount', 'kwonlyargcount', 'nlocals', 'stacksize',
+                    'flags', 'code', 'consts', 'names', 'varnames', 'filename', 'name',
+                    firstlineno=int, lnotab=BYTES, freevars=tuple, cellvars=tuple):
+            fields = m.vars
+        # Python 3.9/3.8 or 3.10
+        elif m.case('argcount', 'posonlyargcount', 'kwonlyargcount', 'nlocals', 'stacksize',
+                    'flags', 'code', 'consts', 'names', 'varnames', 'filename', 'name',
+                    firstlineno=int, LNOTAB_OR_LINETABLE=BYTES, freevars=tuple, cellvars=tuple):
+            fields = m.vars
+            key = 'linetable' if CODE_VERSION >= (3,10) else 'lnotab'
+            fields[key] = m.vars['LNOTAB_OR_LINETABLE']
+        # Python 3.11
+        elif m.case('argcount', 'posonlyargcount', 'kwonlyargcount', 'nlocals', 'stacksize',
+                    'flags', 'code', 'consts', 'names', 'varnames', 'filename', 'name',
+                    qualname=str, firstlineno=int, linetable=BYTES, exceptiontable=BYTES,
                     freevars=tuple, cellvars=tuple):
-            fields = encode_bytes(m.vars.items(), m.patterns)
+            fields = m.vars
+        # Python 3.11a
+        elif m.case('argcount', 'posonlyargcount', 'kwonlyargcount', 'nlocals', 'stacksize',
+                    'flags', 'code', 'consts', 'names', 'varnames', 'filename', 'name',
+                    qualname=str, firstlineno=int, linetable=BYTES, endlinetable=BYTES_NONE,
+                    columntable=BYTES_NONE, exceptiontable=BYTES, freevars=tuple, cellvars=tuple):
+            fields = m.vars
+        else:
+            raise UnpicklingError("pattern match for code object failed")
 
-    fields.setdefault('posonlyargcount', 0)         # from python <= 3.7
+    fields = {k: (v.encode() if k in ENCODE_PARAMS and hasattr(v, 'encode') else v) for k, v in fields.items()}
     fields.setdefault('qualname', fields['name'])   # from python <= 3.10
     fields.setdefault('exceptiontable', b'')        # from python <= 3.10
     fields.setdefault('endlinetable', None)         # from python != 3.11a
     fields.setdefault('columntable', None)          # from python != 3.11a
 
-    # Special case: lnotab and linetable
+    # Special case: co_lnotab and co_linetable
     if CODE_VERSION >= (3,10):
         fields.setdefault('linetable', b'')
     else:
