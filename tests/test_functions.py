@@ -95,7 +95,7 @@ def test_functions():
     assert 'empty' in str(cell_copy.__closure__[0])
     try:
         cell_copy()
-    except:
+    except Exception:
         # this is good
         pass
     else:

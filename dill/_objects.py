@@ -99,7 +99,7 @@ class _newclass2(object):
 def _function(x): yield x
 def _function2():
     try: raise
-    except:
+    except Exception:
         from sys import exc_info
         e, er, tb = exc_info()
         return er, tb
@@ -379,7 +379,7 @@ if sys.hexversion >= 0x30800a0:
 try:
     import symtable
     a["SymtableEntryType"] = symtable.symtable("", "string", "exec")._table
-except:
+except ImportError:
     pass
 
 if sys.hexversion >= 0x30a00a0:

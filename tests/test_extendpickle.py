@@ -44,7 +44,7 @@ def test_isdill():
         pickler = mp.reduction.ForkingPickler(obj_io)
         assert pickle._dill.is_dill(pickler, child=True) is True
         assert pickle._dill.is_dill(pickler, child=False) is False
-    except:
+    except Exception:
         pass
 
 

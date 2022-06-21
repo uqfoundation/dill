@@ -56,7 +56,7 @@ def _matchlambda(func, line):
     lhs,rhs = line.split('lambda ',1)[-1].split(":", 1) #FIXME: if !1 inputs
     try: #FIXME: unsafe
         _ = eval("lambda %s : %s" % (lhs,rhs), globals(),locals())
-    except: _ = dummy
+    except Exception: _ = dummy
     # get code objects, for comparison
     _, code = getcode(_).co_code, getcode(func).co_code
     # check if func is in closure
@@ -78,7 +78,7 @@ def _matchlambda(func, line):
         _lhs,_rhs = rhs.split('lambda ',1)[-1].split(":",1) #FIXME: if !1 inputs
         try: #FIXME: unsafe
             _f = eval("lambda %s : %s" % (_lhs,_rhs), globals(),locals())
-        except: _f = dummy
+        except Exception: _f = dummy
         # get code objects, for comparison
         _, code = getcode(_f).co_code, getcode(func).co_code
         if len(_) != len(code): return False
@@ -118,7 +118,7 @@ def findsource(object):
         try: 
             import readline
             err = ''
-        except:
+        except ImportError:
             import sys
             err = sys.exc_info()[1].args[0]
             if sys.platform[:3] == 'win':
@@ -514,7 +514,7 @@ def _wrap(f):
         try:
             # _ = eval(getsource(f, force=True)) #XXX: safer but less robust
             exec(getimportable(f, alias='_'), __globals__, __locals__)
-        except:
+        except Exception:
             raise ImportError('cannot import name ' + f.__name__)
         return _(*args, **kwds)
     func.__name__ = f.__name__
@@ -624,7 +624,7 @@ def _namespace(obj):
         if module in ['builtins','__builtin__']: # BuiltinFunctionType
             if _intypes(name): return ['types'] + [name]
         return qual + [name] #XXX: can be wrong for some aliased objects
-    except: pass
+    except Exception: pass
     # special case: numpy.inf and numpy.nan (we don't want them as floats)
     if str(obj) in ['inf','nan','Inf','NaN']: # is more, but are they needed?
         return ['numpy'] + [str(obj)]
@@ -712,7 +712,7 @@ def getimport(obj, alias='', verify=True, builtin=False, enclosing=False):
     try: # look for '<...>' and be mindful it might be in lists, dicts, etc...
         name = repr(obj).split('<',1)[1].split('>',1)[1]
         name = None # we have a 'object'-style repr
-    except: # it's probably something 'importable'
+    except Exception: # it's probably something 'importable'
         if head in ['builtins','__builtin__']:
             name = repr(obj) #XXX: catch [1,2], (1,2), set([1,2])... others?
         else:
@@ -770,7 +770,7 @@ def _importable(obj, alias='', source=None, enclosing=False, force=True, \
         try:
             return getsource(obj, alias, enclosing=enclosing, \
                              force=force, lstrip=lstrip, builtin=builtin)
-        except: pass
+        except Exception: pass
     try:
         if not _isinstance(obj):
             return getimport(obj, alias, enclosing=enclosing, \
@@ -785,12 +785,12 @@ def _importable(obj, alias='', source=None, enclosing=False, force=True, \
         if alias == name: _alias = ""
         return _import+_alias+"%s\n" % name
 
-    except: pass
+    except Exception: pass
     if not source: # try getsource, only if it hasn't been tried yet
         try:
             return getsource(obj, alias, enclosing=enclosing, \
                              force=force, lstrip=lstrip, builtin=builtin)
-        except: pass
+        except Exception: pass
     # get the name (of functions, lambdas, and classes)
     # or hope that obj can be built from the __repr__
     #XXX: what to do about class instances and such?
@@ -930,7 +930,7 @@ def importable(obj, alias='', source=None, builtin=True):
                 if len(src) > 1:
                     raise NotImplementedError('not implemented')
                 return list(src.values())[0]
-            except:
+            except Exception:
                 if tried_source: raise
                 tried_import = True
         # we want the source
@@ -969,7 +969,7 @@ def importable(obj, alias='', source=None, builtin=True):
             if not obj: return src
             if not src: return obj
             return obj + src
-        except:
+        except Exception:
             if tried_import: raise
             tried_source = True
             source = not source

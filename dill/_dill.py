@@ -631,7 +631,7 @@ def use_diff(on=True):
     if _use_diff and diff is None:
         try:
             from . import diff as d
-        except:
+        except ImportError:
             import diff as d
         diff = d
 
@@ -697,7 +697,7 @@ else:
 try:
     import symtable
     _incedental_reverse_typemap["SymtableStentryType"] = type(symtable.symtable("", "string", "exec")._table)
-except:
+except ImportError:
     pass
 
 if sys.hexversion >= 0x30a00a0:
@@ -711,7 +711,7 @@ if sys.hexversion >= 0x30b00b0:
 try:
     import winreg
     _incedental_reverse_typemap["HKEYType"] = winreg.HKEYType
-except:
+except ImportError:
     pass
 
 _reverse_typemap.update(_incedental_reverse_typemap)
@@ -941,7 +941,7 @@ def _create_filehandle(name, mode, position, closed, open, strictio, fmode, fdat
     else:
         try:
             exists = os.path.exists(name)
-        except:
+        except Exception:
             exists = False
         if not exists:
             if strictio:
@@ -1043,7 +1043,7 @@ try:
     # mapping referenced by the proxy. It may work for other implementations,
     # but is not guaranteed.
     MAPPING_PROXY_TRICK = __d is (DictProxyType(__d) | _dictproxy_helper_instance)
-except:
+except Exception:
     MAPPING_PROXY_TRICK = False
 del __d
 
@@ -1108,7 +1108,7 @@ def _create_capsule(pointer, name, context, destructor):
             names = uname.rsplit('.', i)
             try:
                 module = __import__(names[0])
-            except:
+            except ImportError:
                 pass
             obj = module
             for attr in names[1:]:
@@ -1116,7 +1116,7 @@ def _create_capsule(pointer, name, context, destructor):
             capsule = obj
             attr_found = True
             break
-    except:
+    except Exception:
         pass
 
     if attr_found:
@@ -1134,14 +1134,14 @@ def _getattr(objclass, name, repr_str):
     try: #XXX: works only for __builtin__ ?
         attr = repr_str.split("'")[3]
         return eval(attr+'.__dict__["'+name+'"]')
-    except:
+    except Exception:
         try:
             attr = objclass.__dict__
             if type(attr) is DictProxyType:
                 attr = attr[name]
             else:
                 attr = getattr(objclass,name)
-        except:
+        except (AttributeError, KeyError):
             attr = getattr(objclass,name)
         return attr
 
@@ -1194,7 +1194,7 @@ def _locate_function(obj, pickler=None):
         try:
             found, _ = _getattribute(module, obj.__qualname__)
             return found is obj
-        except:
+        except AttributeError:
             return False
     else:
         found = _import_module(module_name + '.' + obj.__name__, safe=True)
@@ -1595,7 +1595,7 @@ else:
 def save_cell(pickler, obj):
     try:
         f = obj.cell_contents
-    except:
+    except ValueError:
         log.info("Ce3: %s" % obj)
         # _shims._CELL_EMPTY is defined in _shims.py to support PyPy 2.7.
         # It unpickles to a sentinel object _dill._CELL_EMPTY, also created in
@@ -1902,7 +1902,7 @@ def save_function(pickler, obj):
                 found, _ = _getattribute(module, obj.__qualname__)
                 if getattr(found, '__func__', None) is obj:
                     _pypy_builtin = True
-            except:
+            except AttributeError:
                 pass
 
             if _pypy_builtin:
@@ -2142,9 +2142,8 @@ def _extend():
     for t,func in Pickler.dispatch.items():
         try:
             StockPickler.dispatch[t] = func
-        except: #TypeError, PicklingError, UnpicklingError
+        except Exception: #TypeError, PicklingError, UnpicklingError
             log.info("skip: %s" % t)
-        else: pass
     return
 
 del diff, _use_diff, use_diff

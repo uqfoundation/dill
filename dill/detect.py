@@ -44,7 +44,7 @@ def outermost(func): # is analogous to getsource(func,enclosing=True)
     # get the enclosing source
     from .source import getsourcelines
     try: lines,lnum = getsourcelines(func, enclosing=True)
-    except: #TypeError, IOError
+    except Exception: #TypeError, IOError
         lines,lnum = [],None
     code = ''.join(lines)
     # get all possible names,objects that are named in the enclosing source
@@ -53,7 +53,7 @@ def outermost(func): # is analogous to getsource(func,enclosing=True)
     for name,obj in _locals: #XXX: don't really need 'name'
         try:
             if getsourcelines(obj) == (lines,lnum): return obj
-        except: #TypeError, IOError
+        except Exception: #TypeError, IOError
             pass
     return #XXX: or raise? no matches
 
@@ -137,7 +137,7 @@ def freevars(func):
         for (name,c) in zip(func,closures):
             try:
                 cell_contents = c.cell_contents
-            except:
+            except ValueError:
                 continue
             yield (name,c.cell_contents)
 
@@ -186,7 +186,7 @@ def globalvars(func, recurse=True, builtin=False):
         for obj in getattr(orig_func, func_closure) or {}:
             try:
                 cell_contents = obj.cell_contents
-            except:
+            except ValueError:
                 pass
             else:
                 _vars = globalvars(cell_contents, recurse, builtin) or {}

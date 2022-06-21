@@ -14,7 +14,7 @@ import builtins, os, sys, types
 try:
     import numpy
     HAS_NUMPY = True
-except:
+except ImportError:
     HAS_NUMPY = False
 
 # pypy doesn't use reference counting
@@ -38,10 +38,7 @@ def get_attrs(obj):
     if type(obj) in builtins_types \
        or type(obj) is type and obj in builtins_types:
         return
-    try:
-        return obj.__dict__
-    except:
-        return
+    return getattr(obj, '__dict__', None)
 
 
 def get_seq(obj, cache={str: False, frozenset: False, list: True, set: True,

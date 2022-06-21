@@ -19,7 +19,7 @@ def test_dict_contents():
   for i,j in c.items():
    #try:
     ok = dill.pickles(j)
-   #except:
+   #except Exception:
    #  print ("FAIL: %s with %s" % (i, dill.detect.errors(j)))
     if verbose: print ("%s: %s, %s" % (ok, type(j), j))
     assert ok
@@ -29,7 +29,7 @@ def _g(x): yield x;
 
 def _f():
   try: raise
-  except:
+  except Exception:
     from sys import exc_info
     e, er, tb = exc_info()
     return er, tb

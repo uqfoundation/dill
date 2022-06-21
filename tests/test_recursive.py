@@ -14,7 +14,7 @@ def copy(obj, byref=False, recurse=False):
     if byref:
         try:
             return dill.copy(obj, byref=byref, recurse=recurse)
-        except:
+        except Exception:
             pass
         else:
             raise AssertionError('Copy of %s with byref=True should have given a warning!' % (obj,))
@@ -144,7 +144,7 @@ def test_recursive_function():
     for _fib in (fib3, fib4):
         try:
             _fib(5)
-        except:
+        except Exception:
             # This is expected to fail because fib no longer exists
             pass
         else:
