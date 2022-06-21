@@ -506,39 +506,20 @@ def outdent(code, spaces=None, all=True):
 
 
 #XXX: not sure what the point of _wrap is...
-#exec_ = lambda s, *a: eval(compile(s, '<string>', 'exec'), *a)
 __globals__ = globals()
 __locals__ = locals()
-wrap2 = '''
 def _wrap(f):
     """ encapsulate a function and it's __import__ """
     def func(*args, **kwds):
         try:
             # _ = eval(getsource(f, force=True)) #XXX: safer but less robust
-            exec getimportable(f, alias='_') in %s, %s
+            exec(getimportable(f, alias='_'), __globals__, __locals__)
         except:
             raise ImportError('cannot import name ' + f.__name__)
         return _(*args, **kwds)
     func.__name__ = f.__name__
     func.__doc__ = f.__doc__
     return func
-''' % ('__globals__', '__locals__')
-wrap3 = '''
-def _wrap(f):
-    """ encapsulate a function and it's __import__ """
-    def func(*args, **kwds):
-        try:
-            # _ = eval(getsource(f, force=True)) #XXX: safer but less robust
-            exec(getimportable(f, alias='_'), %s, %s)
-        except:
-            raise ImportError('cannot import name ' + f.__name__)
-        return _(*args, **kwds)
-    func.__name__ = f.__name__
-    func.__doc__ = f.__doc__
-    return func
-''' % ('__globals__', '__locals__')
-exec(wrap3)
-del wrap2, wrap3
 
 
 def _enclose(object, alias=''): #FIXME: needs alias to hold returned object
