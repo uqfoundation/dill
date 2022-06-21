@@ -296,23 +296,9 @@ from .settings import settings
 # make sure "trace" is turned off
 detect.trace(False)
 
-try:
-    from importlib import reload
-except ImportError:
-    try:
-        from imp import reload
-    except ImportError:
-        pass
+from importlib import reload
 
-# put the objects in order, if possible
-try:
-    from collections import OrderedDict as odict
-except ImportError:
-    try:
-        from ordereddict import OrderedDict as odict
-    except ImportError:
-        odict = dict
-objects = odict()
+objects = {}
 # local import of dill._objects
 #from . import _objects
 #objects.update(_objects.succeeds)
@@ -373,7 +359,6 @@ def extend(use_dill=True):
     return
 
 extend()
-del odict
 
 
 def license():

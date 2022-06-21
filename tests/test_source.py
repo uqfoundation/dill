@@ -83,14 +83,9 @@ def test_dynamic():
 
 # classes and class instances
 def test_classes():
-  try: #XXX: should this be a 'special case'?
-    from StringIO import StringIO
-    y = "from StringIO import StringIO\n"
-    x = y
-  except ImportError:
-    from io import BytesIO as StringIO
-    y = "from _io import BytesIO\n"
-    x = y if (IS_PYPY or sys.hexversion >= PY310b) else "from io import BytesIO\n"
+  from io import BytesIO as StringIO
+  y = "from _io import BytesIO\n"
+  x = y if (IS_PYPY or sys.hexversion >= PY310b) else "from io import BytesIO\n"
   s = StringIO()
 
   assert likely_import(StringIO) == x

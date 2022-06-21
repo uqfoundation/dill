@@ -10,18 +10,12 @@
 Module to show if an object has changed since it was memorised
 """
 
-import os
-import sys
-import types
+import builtins, os, sys, types
 try:
     import numpy
     HAS_NUMPY = True
 except:
     HAS_NUMPY = False
-try:
-    import builtins
-except ImportError:
-    import __builtin__ as builtins
 
 # pypy doesn't use reference counting
 getrefcount = getattr(sys, 'getrefcount', lambda x:0)

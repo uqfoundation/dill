@@ -43,6 +43,7 @@ import hashlib
 import hmac
 import os
 import logging
+import logging.handlers
 import optparse
 #import __hello__
 import threading
@@ -109,20 +110,12 @@ if HAS_CTYPES:
 _filedescrip, _tempfile = tempfile.mkstemp('r') # deleted in cleanup
 _tmpf = tempfile.TemporaryFile('w')
 
-# put the objects in order, if possible
-try:
-    from collections import OrderedDict as odict
-except ImportError:
-    try:
-        from ordereddict import OrderedDict as odict
-    except ImportError:
-        odict = dict
 # objects used by dill for type declaration
-registered = d = odict()
+registered = d = {}
 # objects dill fails to pickle
-failures = x = odict()
+failures = x = {}
 # all other type objects
-succeeds = a = odict()
+succeeds = a = {}
 
 # types module (part of CH 8)
 a['BooleanType'] = bool(1)
@@ -169,7 +162,7 @@ a['CountType'] = itertools.count(0)
 # data compression and archiving (CH 12)
 a['TarInfoType'] = tarfile.TarInfo()
 # generic operating system services (CH 15)
-a['LoggerType'] = logging.getLogger()
+a['LoggerType'] = _logger = logging.getLogger()
 a['FormatterType'] = logging.Formatter() # pickle ok
 a['FilterType'] = logging.Filter() # pickle ok
 a['LogRecordType'] = logging.makeLogRecord(_dict) # pickle ok
@@ -201,40 +194,32 @@ if HAS_CTYPES:
 #NOTE: ctypes.c_int._objects is memberdescriptor for object's __dict__
 #NOTE: base class of all ctypes data types is non-public _CData
 
-try: # python 2.6
-    import fractions
-    import number
-    import io
-    from io import StringIO as TextIO
-    # built-in functions (CH 2)
-    a['ByteArrayType'] = bytearray([1])
-    # numeric and mathematical types (CH 9)
-    a['FractionType'] = fractions.Fraction()
-    a['NumberType'] = numbers.Number()
-    # generic operating system services (CH 15)
-    a['IOBaseType'] = io.IOBase()
-    a['RawIOBaseType'] = io.RawIOBase()
-    a['TextIOBaseType'] = io.TextIOBase()
-    a['BufferedIOBaseType'] = io.BufferedIOBase()
-    a['UnicodeIOType'] = TextIO() # the new StringIO
-    a['LoggingAdapterType'] = logging.LoggingAdapter(_logger,_dict) # pickle ok
-    if HAS_CTYPES:
-        a['CBoolType'] = ctypes.c_bool(1)
-        a['CLongDoubleType'] = ctypes.c_longdouble()
-except ImportError:
-    pass
-try: # python 2.7
-    import argparse
-    # data types (CH 8)
-    a['OrderedDictType'] = collections.OrderedDict(_dict)
-    a['CounterType'] = collections.Counter(_dict)
-    if HAS_CTYPES:
-        a['CSSizeTType'] = ctypes.c_ssize_t()
-    # generic operating system services (CH 15)
-    a['NullHandlerType'] = logging.NullHandler() # pickle ok  # new 2.7
-    a['ArgParseFileType'] = argparse.FileType() # pickle ok
-except (AttributeError, ImportError):
-    pass
+import fractions
+import io
+from io import StringIO as TextIO
+# built-in functions (CH 2)
+a['ByteArrayType'] = bytearray([1])
+# numeric and mathematical types (CH 9)
+a['FractionType'] = fractions.Fraction()
+# generic operating system services (CH 15)
+a['IOBaseType'] = io.IOBase()
+a['RawIOBaseType'] = io.RawIOBase()
+a['TextIOBaseType'] = io.TextIOBase()
+a['BufferedIOBaseType'] = io.BufferedIOBase()
+a['UnicodeIOType'] = TextIO() # the new StringIO
+a['LoggerAdapterType'] = logging.LoggerAdapter(_logger,_dict) # pickle ok
+if HAS_CTYPES:
+    a['CBoolType'] = ctypes.c_bool(1)
+    a['CLongDoubleType'] = ctypes.c_longdouble()
+import argparse
+# data types (CH 8)
+a['OrderedDictType'] = collections.OrderedDict(_dict)
+a['CounterType'] = collections.Counter(_dict)
+if HAS_CTYPES:
+    a['CSSizeTType'] = ctypes.c_ssize_t()
+# generic operating system services (CH 15)
+a['NullHandlerType'] = logging.NullHandler() # pickle ok  # new 2.7
+a['ArgParseFileType'] = argparse.FileType() # pickle ok
 
 # -- pickle fails on all below here -----------------------------------------
 # types module (part of CH 8)
@@ -346,27 +331,21 @@ try: # numpy #FIXME: slow... 0.05 to 0.1 sec to import numpy
     a['NumpyInt32Type'] = _numpy_int32
 except ImportError:
     pass
-try: # python 2.6
-    # numeric and mathematical types (CH 9)
-    a['ProductType'] = itertools.product('0','1')
-    # generic operating system services (CH 15)
-    a['FileHandlerType'] = logging.FileHandler(os.devnull) #FIXME: fail >= 3.2 and <= 2.6
-    a['RotatingFileHandlerType'] = logging.handlers.RotatingFileHandler(os.devnull)
-    a['SocketHandlerType'] = logging.handlers.SocketHandler('localhost',514)
-    a['MemoryHandlerType'] = logging.handlers.MemoryHandler(1)
-except AttributeError:
-    pass
-try: # python 2.7
-    # data types (CH 8)
-    a['WeakSetType'] = weakref.WeakSet() # 2.7
-#   # generic operating system services (CH 15) [errors when dill is imported]
-#   a['ArgumentParserType'] = _parser = argparse.ArgumentParser('PROG')
-#   a['NamespaceType'] = _parser.parse_args() # pickle ok
-#   a['SubParsersActionType'] = _parser.add_subparsers()
-#   a['MutuallyExclusiveGroupType'] = _parser.add_mutually_exclusive_group()
-#   a['ArgumentGroupType'] = _parser.add_argument_group()
-except AttributeError:
-    pass
+# numeric and mathematical types (CH 9)
+a['ProductType'] = itertools.product('0','1')
+# generic operating system services (CH 15)
+a['FileHandlerType'] = logging.FileHandler(os.devnull) #FIXME: fail >= 3.2 and <= 2.6
+a['RotatingFileHandlerType'] = logging.handlers.RotatingFileHandler(os.devnull)
+a['SocketHandlerType'] = logging.handlers.SocketHandler('localhost',514)
+a['MemoryHandlerType'] = logging.handlers.MemoryHandler(1)
+# data types (CH 8)
+a['WeakSetType'] = weakref.WeakSet() # 2.7
+# generic operating system services (CH 15) [errors when dill is imported]
+#a['ArgumentParserType'] = _parser = argparse.ArgumentParser('PROG')
+#a['NamespaceType'] = _parser.parse_args() # pickle ok
+#a['SubParsersActionType'] = _parser.add_subparsers()
+#a['MutuallyExclusiveGroupType'] = _parser.add_mutually_exclusive_group()
+#a['ArgumentGroupType'] = _parser.add_argument_group()
 
 # -- dill fails in some versions below here ---------------------------------
 # types module (part of CH 8)
@@ -412,28 +391,21 @@ if sys.hexversion >= 0x30b00b0:
     a['PositionsIteratorType'] = compile('3', '', 'eval').co_positions()
 
 # data types (CH 8)
-a['PrettyPrinterType'] = pprint.PrettyPrinter() #FIXME: fail >= 3.2 and == 2.5
+a['PrettyPrinterType'] = pprint.PrettyPrinter() #FIXME: fail >= 3.2
 # numeric and mathematical types (CH 9)
 a['CycleType'] = itertools.cycle('0') #FIXME: fail < 3.2
 # file and directory access (CH 10)
-a['TemporaryFileType'] = _tmpf #FIXME: fail >= 3.2 and == 2.5
+a['TemporaryFileType'] = _tmpf #FIXME: fail >= 3.2
 # data compression and archiving (CH 12)
-a['GzipFileType'] = gzip.GzipFile(fileobj=_fileW) #FIXME: fail > 3.2 and <= 2.6
+a['GzipFileType'] = gzip.GzipFile(fileobj=_fileW) #FIXME: fail > 3.2
 # generic operating system services (CH 15)
-a['StreamHandlerType'] = logging.StreamHandler() #FIXME: fail >= 3.2 and == 2.5
-try: # python 2.6
-    # numeric and mathematical types (CH 9)
-    a['PermutationsType'] = itertools.permutations('0') #FIXME: fail < 3.2
-    a['CombinationsType'] = itertools.combinations('0',1) #FIXME: fail < 3.2
-except AttributeError:
-    pass
-try: # python 2.7
-    # numeric and mathematical types (CH 9)
-    a['RepeatType'] = itertools.repeat(0) #FIXME: fail < 3.2
-    a['CompressType'] = itertools.compress('0',[1]) #FIXME: fail < 3.2
-    #XXX: ...and etc
-except AttributeError:
-    pass
+a['StreamHandlerType'] = logging.StreamHandler() #FIXME: fail >= 3.2
+# numeric and mathematical types (CH 9)
+a['PermutationsType'] = itertools.permutations('0')
+a['CombinationsType'] = itertools.combinations('0',1)
+a['RepeatType'] = itertools.repeat(0)
+a['CompressType'] = itertools.compress('0',[1])
+#XXX: ...and etc
 
 # -- dill fails on all below here -------------------------------------------
 # types module (part of CH 8)
@@ -497,29 +469,20 @@ if HAS_CTYPES:
     x['FieldType'] = _field = _Struct._field
     x['CFUNCTYPEType'] = _cfunc = ctypes.CFUNCTYPE(ctypes.c_char)
     x['CFunctionType'] = _cfunc(str)
-try: # python 2.6
-    # numeric and mathematical types (CH 9)
-    x['MethodCallerType'] = operator.methodcaller('mro') # 2.6
-except AttributeError:
-    pass
-try: # python 2.7
-    # built-in types (CH 5)
-    x['MemoryType'] = memoryview(_in) # 2.7
-    x['MemoryType2'] = memoryview(bytearray(_in)) # 2.7
-    x['DictItemsType'] = _dict.items() # 2.7
-    x['DictKeysType'] = _dict.keys() # 2.7
-    x['DictValuesType'] = _dict.values() # 2.7
-    # generic operating system services (CH 15)
-    x['RawTextHelpFormatterType'] = argparse.RawTextHelpFormatter('PROG')
-    x['RawDescriptionHelpFormatterType'] = argparse.RawDescriptionHelpFormatter('PROG')
-    x['ArgDefaultsHelpFormatterType'] = argparse.ArgumentDefaultsHelpFormatter('PROG')
-except NameError:
-    pass
-try: # python 2.7 (and not 3.1)
-    x['CmpKeyType'] = _cmpkey = functools.cmp_to_key(_methodwrap) # 2.7, >=3.2
-    x['CmpKeyObjType'] = _cmpkey('0') #2.7, >=3.2
-except AttributeError:
-    pass
+# numeric and mathematical types (CH 9)
+x['MethodCallerType'] = operator.methodcaller('mro') # 2.6
+# built-in types (CH 5)
+x['MemoryType'] = memoryview(_in) # 2.7
+x['MemoryType2'] = memoryview(bytearray(_in)) # 2.7
+x['DictItemsType'] = _dict.items() # 2.7
+x['DictKeysType'] = _dict.keys() # 2.7
+x['DictValuesType'] = _dict.values() # 2.7
+# generic operating system services (CH 15)
+x['RawTextHelpFormatterType'] = argparse.RawTextHelpFormatter('PROG')
+x['RawDescriptionHelpFormatterType'] = argparse.RawDescriptionHelpFormatter('PROG')
+x['ArgDefaultsHelpFormatterType'] = argparse.ArgumentDefaultsHelpFormatter('PROG')
+x['CmpKeyType'] = _cmpkey = functools.cmp_to_key(_methodwrap) # 2.7, >=3.2
+x['CmpKeyObjType'] = _cmpkey('0') #2.7, >=3.2
 # oddities: removed, etc
 x['BufferType'] = x['MemoryType']
 

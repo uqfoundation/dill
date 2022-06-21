@@ -5,14 +5,12 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
-import glob
-import os
+import glob, os, subprocess as sp
 try:
     import pox
-    python = pox.which_python(version=True, fullpath=False) or 'python'
+    python = pox.which_python(version=True, fullpath=False) or 'python3'
 except ImportError:
-    python = 'python'
-import subprocess as sp
+    python = 'python3'
 from sys import platform
 shell = platform[:3] == 'win'
 

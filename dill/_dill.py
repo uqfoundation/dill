@@ -57,11 +57,7 @@ SliceType = slice
 TypeType = type # 'new-style' classes #XXX: unregistered
 XRangeType = range
 from types import MappingProxyType as DictProxyType
-from pickle import HIGHEST_PROTOCOL, PickleError, PicklingError, UnpicklingError
-try:
-    from pickle import DEFAULT_PROTOCOL
-except ImportError:
-    DEFAULT_PROTOCOL = HIGHEST_PROTOCOL
+from pickle import DEFAULT_PROTOCOL, HIGHEST_PROTOCOL, PickleError, PicklingError, UnpicklingError
 import __main__ as _main_module
 import marshal
 import gc
@@ -206,10 +202,8 @@ except ImportError:
 from io import BytesIO as StringIO
 InputType = OutputType = None
 from socket import socket as SocketType
-try: #FIXME: additionally calls ForkingPickler.register several times
-    from multiprocessing.reduction import _reduce_socket as reduce_socket
-except ImportError:
-    from multiprocessing.reduction import reduce_socket
+#FIXME: additionally calls ForkingPickler.register several times
+from multiprocessing.reduction import _reduce_socket as reduce_socket
 try:
     __IPYTHON__ is True # is ipython
     ExitType = None     # IPython.core.autocall.ExitAutocall
