@@ -5,7 +5,6 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
-from __future__ import print_function
 import atexit, dill, os, sys, __main__
 
 session_file = os.path.join(os.path.dirname(__file__), 'session-byref-%s.pkl')
