@@ -26,5 +26,5 @@ if __name__ == '__main__':
     for test in tests:
         p = sp.Popen([python, test], shell=shell).wait()
         if not p:
-            print('.', end='')
+            print('.', end='', flush=True)
     print('')

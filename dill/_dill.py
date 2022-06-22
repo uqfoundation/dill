@@ -21,6 +21,8 @@ __all__ = ['dump','dumps','load','loads','dump_session','load_session',
            'UnpicklingError','HANDLE_FMODE','CONTENTS_FMODE','FILE_FMODE',
            'PickleError','PickleWarning','PicklingWarning','UnpicklingWarning']
 
+__module__ = 'dill'
+
 from .logger import adapter as logger
 import warnings
 
@@ -33,6 +35,7 @@ PY3 = (sys.hexversion >= 0x3000000)
 OLDER = (PY3 and sys.hexversion < 0x3040000) or (sys.hexversion < 0x2070ab1)
 OLD33 = (sys.hexversion < 0x3030000)
 OLD37 = (sys.hexversion < 0x3070000)
+OLD38 = (sys.hexversion < 0x3080000)
 OLD39 = (sys.hexversion < 0x3090000)
 OLD310 = (sys.hexversion < 0x30a0000)
 PY34 = (0x3040000 <= sys.hexversion < 0x3050000)
@@ -78,6 +81,7 @@ import marshal
 import gc
 # import zlib
 from weakref import ReferenceType, ProxyType, CallableProxyType
+from collections import OrderedDict
 from functools import partial
 from operator import itemgetter, attrgetter
 # new in python3.3
@@ -264,8 +268,6 @@ except NameError:
     try: ExitType = type(exit) # apparently 'exit' can be removed
     except NameError: ExitType = None
     singletontypes = []
-
-from collections import OrderedDict
 
 import inspect
 
@@ -564,7 +566,6 @@ class Pickler(StockPickler):
         self._strictio = False #_strictio
         self._fmode = settings['fmode'] if _fmode is None else _fmode
         self._recurse = settings['recurse'] if _recurse is None else _recurse
-        from collections import OrderedDict
         self._postproc = OrderedDict()
         self._file = file
 
@@ -715,6 +716,15 @@ _reverse_typemap.update({
     'SuperType': SuperType,
     'ItemGetterType': ItemGetterType,
     'AttrGetterType': AttrGetterType,
+})
+
+# "Incidental" implementation specific types. Unpickling these types in another
+# implementation of Python (PyPy -> CPython) is not gauranteed to work
+
+# This dictionary should contain all types that appear in Python implementations
+# but are not defined in https://docs.python.org/3/library/types.html#standard-interpreter-types
+x=OrderedDict()
+_incedental_reverse_typemap = {
     'FileType': FileType,
     'BufferedRandomType': BufferedRandomType,
     'BufferedReaderType': BufferedReaderType,
@@ -724,18 +734,62 @@ _reverse_typemap.update({
     'PyBufferedReaderType': PyBufferedReaderType,
     'PyBufferedWriterType': PyBufferedWriterType,
     'PyTextWrapperType': PyTextWrapperType,
-})
-if ExitType:
-    _reverse_typemap['ExitType'] = ExitType
-if InputType:
-    _reverse_typemap['InputType'] = InputType
-    _reverse_typemap['OutputType'] = OutputType
-if not IS_PYPY:
-    _reverse_typemap['WrapperDescriptorType'] = WrapperDescriptorType
-    _reverse_typemap['MethodDescriptorType'] = MethodDescriptorType
-    _reverse_typemap['ClassMethodDescriptorType'] = ClassMethodDescriptorType
+}
+
+if PY3:
+    _incedental_reverse_typemap.update({
+        "DictKeysType": type({}.keys()),
+        "DictValuesType": type({}.values()),
+        "DictItemsType": type({}.items()),
+
+        "OdictKeysType": type(x.keys()),
+        "OdictValuesType": type(x.values()),
+        "OdictItemsType": type(x.items()),
+    })
 else:
-    _reverse_typemap['MemberDescriptorType'] = MemberDescriptorType
+    _incedental_reverse_typemap.update({
+        "DictKeysType": type({}.viewkeys()),
+        "DictValuesType": type({}.viewvalues()),
+        "DictItemsType": type({}.viewitems()),
+    })
+
+if ExitType:
+    _incedental_reverse_typemap['ExitType'] = ExitType
+if InputType:
+    _incedental_reverse_typemap['InputType'] = InputType
+    _incedental_reverse_typemap['OutputType'] = OutputType
+if not IS_PYPY:
+    _incedental_reverse_typemap['WrapperDescriptorType'] = WrapperDescriptorType
+    _incedental_reverse_typemap['MethodDescriptorType'] = MethodDescriptorType
+    _incedental_reverse_typemap['ClassMethodDescriptorType'] = ClassMethodDescriptorType
+else:
+    _incedental_reverse_typemap['MemberDescriptorType'] = MemberDescriptorType
+
+try:
+    import symtable
+    _incedental_reverse_typemap["SymtableStentryType"] = type(symtable.symtable("", "string", "exec")._table)
+except:
+    pass
+
+if sys.hexversion >= 0x30a00a0:
+    _incedental_reverse_typemap['LineIteratorType'] = type(compile('3', '', 'eval').co_lines())
+
+if sys.hexversion >= 0x30b00b0:
+    from types import GenericAlias
+    _incedental_reverse_typemap["GenericAliasIteratorType"] = type(iter(GenericAlias(list, (int,))))
+    _incedental_reverse_typemap['PositionsIteratorType'] = type(compile('3', '', 'eval').co_positions())
+
+try:
+    import winreg
+    _incedental_reverse_typemap["HKEYType"] = winreg.HKEYType
+except:
+    pass
+
+_reverse_typemap.update(_incedental_reverse_typemap)
+_incedental_types = set(_incedental_reverse_typemap.values())
+
+del x
+
 if PY3:
     _typemap = dict((v, k) for k, v in _reverse_typemap.items())
 else:
@@ -767,46 +821,176 @@ def _create_function(fcode, fglobals, fname=None, fdefaults=None,
     return func
 
 def _create_code(*args):
-    if PY3 and hasattr(args[-3], 'encode'): #FIXME: from PY2 fails (optcode)
+    if type(args[0]) is not int: # co_lnotab stored from >= 3.10
+        LNOTAB = args[0].encode() if hasattr(args[0], 'encode') else args[0]
+        args = args[1:]
+    else: # from < 3.10 (or pre-LNOTAB storage)
+        LNOTAB = b''
+    if PY3 and hasattr(args[-3], 'encode'): #NOTE: from PY2 fails (optcode)
         args = list(args)
-        if len(args) == 20:
+        if len(args) == 20: # from 3.11a
+            # obj.co_argcount, obj.co_posonlyargcount,
+            # obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+            # obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+            # obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
+            # obj.co_firstlineno, obj.co_linetable, obj.co_endlinetable,
+            # obj.co_columntable, obj.co_exceptiontable, obj.co_freevars,
+            # obj.co_cellvars
             args[-3] = args[-3].encode() # co_exceptiontable
-            args[-6] = args[-6].encode() # co_lnotab
+            args[-6] = args[-6].encode() # co_linetable
             args[-14] = args[-14].encode() # co_code
             if args[-4] is not None:
                 args[-4] = args[-4].encode() # co_columntable
             if args[-5] is not None:
                 args[-5] = args[-5].encode() # co_endlinetable
-        else:
-            args[-3] = args[-3].encode() # co_lnotab
+        elif len(args) == 18: # from 3.11
+            # obj.co_argcount, obj.co_posonlyargcount,
+            # obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+            # obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+            # obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
+            # obj.co_firstlineno, obj.co_linetable, obj.co_exceptiontable,
+            # obj.co_freevars, obj.co_cellvars
+            args[-3] = args[-3].encode() # co_exceptiontable
+            args[-4] = args[-4].encode() # co_linetable
+            args[-12] = args[-12].encode() # co_code
+        else: # from 3.10
+            # obj.co_argcount, obj.co_posonlyargcount,
+            # obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+            # obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+            # obj.co_varnames, obj.co_filename, obj.co_name,
+            # obj.co_firstlineno, obj.co_linetable, obj.co_freevars,
+            # obj.co_cellvars
+            args[-3] = args[-3].encode() # co_linetable (or co_lnotab)
             args[-10] = args[-10].encode() # co_code
-    if hasattr(CodeType, 'co_exceptiontable'):
+        args = tuple(args)
+    if hasattr(CodeType, 'co_endlinetable'): # python 3.11a
+        # obj.co_argcount, obj.co_posonlyargcount,
+        # obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+        # obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+        # obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
+        # obj.co_firstlineno, obj.co_linetable, obj.co_endlinetable,
+        # obj.co_columntable, obj.co_exceptiontable, obj.co_freevars,
+        # obj.co_cellvars
         if len(args) == 20: return CodeType(*args)
-        elif len(args) == 16:
-            argz = (None, None, b'')
-            argz = args[:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
+        elif len(args) == 18: # from 3.11
+            argz = (None, None)
+            argz = args[:-3] + argz + args[-3:]
             return CodeType(*argz)
-        elif len(args) == 15:
-            argz = args[1:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
+        elif len(args) == 16: # from 3.10 or from 3.8
+            if LNOTAB: # here and above uses stored co_linetable
+                argz = (None, None, b'')
+                argz = args[:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
+            else: # here and below drops stored co_lnotab
+                argz = (LNOTAB, None, None, b'')
+                argz = args[:-4] + args[-5:-4] + args[-4:-3] + argz + args[-2:]
+            return CodeType(*argz)
+        elif len(args) == 15: # from 3.7
+            argz = (LNOTAB, None, None, b'')
+            argz = args[1:-4] + args[-5:-4] + args[-4:-3] + argz + args[-2:]
             return CodeType(args[0], 0, *argz)
-        argz = args[1:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
+        argz = (LNOTAB, None, None, b'') # from 2.7
+        argz = args[1:-4] + args[-5:-4] + args[-4:-3] + argz + args[-2:]
         return CodeType(args[0], 0, 0, *argz)
-    elif hasattr(CodeType, 'co_posonlyargcount'):
-        if len(args) == 20:
+    elif hasattr(CodeType, 'co_exceptiontable'): # python 3.11
+        # obj.co_argcount, obj.co_posonlyargcount,
+        # obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+        # obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+        # obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
+        # obj.co_firstlineno, obj.co_linetable, obj.co_exceptiontable,
+        # obj.co_freevars, obj.co_cellvars
+        if len(args) == 20: return CodeType(*(args[:15] + args[17:]))
+        elif len(args) == 18: return CodeType(*args)
+        elif len(args) == 16: # from 3.10 or from 3.8
+            if LNOTAB: # here and above uses stored co_linetable
+                argz = (b'',)
+                argz = args[:-4] + args[-5:-4] + args[-4:-2] + argz + args[-2:]
+            else: # here and below drops stored co_lnotab
+                argz = (LNOTAB, b'')
+                argz = args[:-4] + args[-5:-4] + args[-4:-3] + argz + args[-2:]
+            return CodeType(*argz)
+        elif len(args) == 15: # from 3.7
+            argz = (LNOTAB, b'')
+            argz = args[1:-4] + args[-5:-4] + args[-4:-3] + argz + args[-2:]
+            return CodeType(args[0], 0, *argz)
+        argz = (LNOTAB, b'') # from 2.7
+        argz = args[1:-4] + args[-5:-4] + args[-4:-3] + argz + args[-2:]
+        return CodeType(args[0], 0, 0, *argz)
+    elif hasattr(CodeType, 'co_linetable'): # python 3.10
+        # obj.co_argcount, obj.co_posonlyargcount,
+        # obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+        # obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+        # obj.co_varnames, obj.co_filename, obj.co_name,
+        # obj.co_firstlineno, obj.co_linetable, obj.co_freevars,
+        # obj.co_cellvars
+        if len(args) == 20: # from 3.11a
             return CodeType(*(args[:12] + args[13:15] + args[18:]))
-        elif len(args) == 16: return CodeType(*args)
-        elif len(args) == 15: return CodeType(args[0], 0, *args[1:])
-        return CodeType(args[0], 0, 0, *args[1:])
-    elif hasattr(CodeType, 'co_kwonlyargcount'):
-        if len(args) == 20:
-            return CodeType(*(args[:1] + args[2:12] + args[13:15] + args[18:]))
-        elif len(args) == 16: return CodeType(args[0], *args[2:])
+        elif len(args) == 18: # from 3.11
+            return CodeType(*(args[:12] + args[13:15] + args[16:]))
+        elif len(args) == 16: # from 3.10 or from 3.8
+            if not LNOTAB: # here and below drops stored co_lnotab
+                args = args[:-3] + (LNOTAB,) + args[-2:]
+            return CodeType(*args)
+        elif len(args) == 15: # from 3.7
+            argz = args[1:-3] + (LNOTAB,) + args[-2:]
+            return CodeType(args[0], 0, *argz)
+        argz = args[1:-3] + (LNOTAB,) + args[-2:]
+        return CodeType(args[0], 0, 0, *argz) # from 2.7
+    elif hasattr(CodeType, 'co_posonlyargcount'): # python 3.8
+        # obj.co_argcount, obj.co_posonlyargcount,
+        # obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+        # obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+        # obj.co_varnames, obj.co_filename, obj.co_name,
+        # obj.co_firstlineno, obj.co_lnotab, obj.co_freevars,
+        # obj.co_cellvars
+        if len(args) == 20: # from 3.11a
+            args = args[:12] + args[13:14] + (LNOTAB,) + args[18:]
+            return CodeType(*args)
+        elif len(args) == 18: # from 3.11
+            args = args[:12] + args[13:14] + (LNOTAB,) + args[16:]
+            return CodeType(*args)
+        elif len(args) == 16: # from 3.10 or from 3.8
+            if LNOTAB: # here and above uses stored LNOTAB
+                args = args[:-3] + (LNOTAB,) + args[-2:]
+            return CodeType(*args)
+        elif len(args) == 15: return CodeType(args[0], 0, *args[1:]) # from 3.7
+        return CodeType(args[0], 0, 0, *args[1:]) # from 2.7
+    elif hasattr(CodeType, 'co_kwonlyargcount'): # python 3.7
+        # obj.co_argcount, obj.co_kwonlyargcount, obj.co_nlocals,
+        # obj.co_stacksize, obj.co_flags, obj.co_code, obj.co_consts,
+        # obj.co_names, obj.co_varnames, obj.co_filename,
+        # obj.co_name, obj.co_firstlineno, obj.co_lnotab,
+        # obj.co_freevars, obj.co_cellvars
+        if len(args) == 20: # from 3.11a
+            args = args[:1] + args[2:12] + args[13:14] + (LNOTAB,) + args[18:]
+            return CodeType(*args)
+        elif len(args) == 18: # from 3.11
+            args = args[:1] + args[2:12] + args[13:14] + (LNOTAB,) + args[16:]
+            return CodeType(*args)
+        elif len(args) == 16: # from 3.10 or from 3.8
+            if LNOTAB: # here and above uses stored LNOTAB
+                argz = args[2:-3] + (LNOTAB,) + args[-2:]
+            else:
+                argz = args[2:]
+            return CodeType(args[0], *argz)
         elif len(args) == 15: return CodeType(*args)
-        return CodeType(args[0], 0, *args[1:])
-    if len(args) == 20:
-        return CodeType(*(args[:1] + args[3:12] + args[13:15] + args[18:]))
-    elif len(args) == 16: return CodeType(args[0], *args[3:])
-    elif len(args) == 15: return CodeType(args[0], *args[2:])
+        return CodeType(args[0], 0, *args[1:]) # from 2.7
+    # obj.co_argcount, obj.co_nlocals, obj.co_stacksize, obj.co_flags,
+    # obj.co_code, obj.co_consts, obj.co_names, obj.co_varnames,
+    # obj.co_filename, obj.co_name, obj.co_firstlineno, obj.co_lnotab,
+    # obj.co_freevars, obj.co_cellvars
+    if len(args) == 20: # from 3.11a
+        args = args[:1] + args[3:12] + args[13:14] + (LNOTAB,) + args[18:]
+        return CodeType(*args)
+    elif len(args) == 18: # from 3.11
+        args = args[:1] + args[3:12] + args[13:14] + (LNOTAB,) + args[16:]
+        return CodeType(*args)
+    elif len(args) == 16: # from 3.10 or from 3.8
+        if LNOTAB: # here and above uses stored LNOTAB
+            argz = args[3:-3] + (LNOTAB,) + args[-2:]
+        else:
+            argz = args[3:]
+        return CodeType(args[0], *argz)
+    elif len(args) == 15: return CodeType(args[0], *args[2:]) # from 3.7
     return CodeType(*args)
 
 def _create_ftype(ftypeobj, func, args, kwds):
@@ -1053,6 +1237,39 @@ else:
         t = collections.namedtuple(name, fieldnames, defaults=defaults, module=modulename)
         return t
 
+def _create_capsule(pointer, name, context, destructor):
+    attr_found = False
+    try:
+        # based on https://github.com/python/cpython/blob/f4095e53ab708d95e019c909d5928502775ba68f/Objects/capsule.c#L209-L231
+        if PY3:
+            uname = name.decode('utf8')
+        else:
+            uname = name
+        for i in range(1, uname.count('.')+1):
+            names = uname.rsplit('.', i)
+            try:
+                module = __import__(names[0])
+            except:
+                pass
+            obj = module
+            for attr in names[1:]:
+                obj = getattr(obj, attr)
+            capsule = obj
+            attr_found = True
+            break
+    except:
+        pass
+
+    if attr_found:
+        if _PyCapsule_IsValid(capsule, name):
+            return capsule
+        raise UnpicklingError("%s object exists at %s but a PyCapsule object was expected." % (type(capsule), name))
+    else:
+        warnings.warn('Creating a new PyCapsule %s for a C data structure that may not be present in memory. Segmentation faults or other memory errors are possible.' % (name,), UnpicklingWarning)
+        capsule = _PyCapsule_New(pointer, name, destructor)
+        _PyCapsule_SetContext(capsule, context)
+        return capsule
+
 def _getattr(objclass, name, repr_str):
     # hack to grab the reference directly
     try: #XXX: works only for __builtin__ ?
@@ -1094,13 +1311,35 @@ def _import_module(import_name, safe=False):
             return None
         raise
 
-def _locate_function(obj, pickler=None):
-    if obj.__module__ in ['__main__', None] or \
-            pickler and is_dill(pickler, child=False) and pickler._session and obj.__module__ == pickler._main.__name__:
-        return False
+# https://github.com/python/cpython/blob/a8912a0f8d9eba6d502c37d522221f9933e976db/Lib/pickle.py#L322-L333
+def _getattribute(obj, name):
+    for subpath in name.split('.'):
+        if subpath == '<locals>':
+            raise AttributeError("Can't get local attribute {!r} on {!r}"
+                                 .format(name, obj))
+        try:
+            parent = obj
+            obj = getattr(obj, subpath)
+        except AttributeError:
+            raise AttributeError("Can't get attribute {!r} on {!r}"
+                                 .format(name, obj))
+    return obj, parent
 
-    found = _import_module(obj.__module__ + '.' + obj.__name__, safe=True)
-    return found is obj
+def _locate_function(obj, pickler=None):
+    module_name = getattr(obj, '__module__', None)
+    if module_name in ['__main__', None] or \
+            pickler and is_dill(pickler, child=False) and pickler._session and module_name == pickler._main.__name__:
+        return False
+    if hasattr(obj, '__qualname__'):
+        module = _import_module(module_name, safe=True)
+        try:
+            found, _ = _getattribute(module, obj.__qualname__)
+            return found is obj
+        except:
+            return False
+    else:
+        found = _import_module(module_name + '.' + obj.__name__, safe=True)
+        return found is obj
 
 
 def _setitems(dest, source):
@@ -1172,17 +1411,38 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
 def save_code(pickler, obj):
     logger.trace(pickler, "Co: %s", obj)
     if PY3:
-        if hasattr(obj, "co_exceptiontable"):
+        if hasattr(obj, "co_endlinetable"): # python 3.11a (20 args)
             args = (
+                obj.co_lnotab, # for < python 3.10 [not counted in args]
                 obj.co_argcount, obj.co_posonlyargcount,
                 obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
                 obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
                 obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
-                obj.co_firstlineno, obj.co_lnotab, obj.co_endlinetable,
+                obj.co_firstlineno, obj.co_linetable, obj.co_endlinetable,
                 obj.co_columntable, obj.co_exceptiontable, obj.co_freevars,
                 obj.co_cellvars
         )
-        elif hasattr(obj, "co_posonlyargcount"):
+        elif hasattr(obj, "co_exceptiontable"): # python 3.11 (18 args)
+            args = (
+                obj.co_lnotab, # for < python 3.10 [not counted in args]
+                obj.co_argcount, obj.co_posonlyargcount,
+                obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+                obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+                obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
+                obj.co_firstlineno, obj.co_linetable, obj.co_exceptiontable,
+                obj.co_freevars, obj.co_cellvars
+        )
+        elif hasattr(obj, "co_linetable"): # python 3.10 (16 args)
+            args = (
+                obj.co_lnotab, # for < python 3.10 [not counted in args]
+                obj.co_argcount, obj.co_posonlyargcount,
+                obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+                obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+                obj.co_varnames, obj.co_filename, obj.co_name,
+                obj.co_firstlineno, obj.co_linetable, obj.co_freevars,
+                obj.co_cellvars
+        )
+        elif hasattr(obj, "co_posonlyargcount"): # python 3.8 (16 args)
             args = (
                 obj.co_argcount, obj.co_posonlyargcount,
                 obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
@@ -1191,7 +1451,7 @@ def save_code(pickler, obj):
                 obj.co_firstlineno, obj.co_lnotab, obj.co_freevars,
                 obj.co_cellvars
         )
-        else:
+        else: # python 3.7 (15 args)
             args = (
                 obj.co_argcount, obj.co_kwonlyargcount, obj.co_nlocals,
                 obj.co_stacksize, obj.co_flags, obj.co_code, obj.co_consts,
@@ -1199,7 +1459,7 @@ def save_code(pickler, obj):
                 obj.co_name, obj.co_firstlineno, obj.co_lnotab,
                 obj.co_freevars, obj.co_cellvars
         )
-    else:
+    else: # python 2.7 (14 args)
         args = (
             obj.co_argcount, obj.co_nlocals, obj.co_stacksize, obj.co_flags,
             obj.co_code, obj.co_consts, obj.co_names, obj.co_varnames,
@@ -1501,15 +1761,29 @@ if OLDER or not PY3:
             logger.trace(pickler, "# B2")
         return
 
-    @register(MethodType) #FIXME: fails for 'hidden' or 'name-mangled' classes
-    def save_instancemethod0(pickler, obj):# example: cStringIO.StringI
-        logger.trace(pickler, "Me: %s", obj) #XXX: obj.__dict__ handled elsewhere?
-        if PY3:
-            pickler.save_reduce(MethodType, (obj.__func__, obj.__self__), obj=obj)
-        else:
-            pickler.save_reduce(MethodType, (obj.im_func, obj.im_self,
-                                             obj.im_class), obj=obj)
-        logger.trace(pickler, "# Me")
+if IS_PYPY:
+    @register(MethodType)
+    def save_instancemethod0(pickler, obj):
+        code = getattr(obj.__func__, '__code__', None)
+        if code is not None and type(code) is not CodeType \
+              and getattr(obj.__self__, obj.__name__) == obj:
+            # Some PyPy builtin functions have no module name
+            logger.trace(pickler, "Me2: %s" % obj)
+            # TODO: verify that this works for all PyPy builtin methods
+            pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
+            logger.trace(pickler, "# Me2")
+            return
+
+        logger.trace(pickler, "Me1: %s" % obj)
+        pickler.save_reduce(MethodType, (obj.__func__, obj.__self__), obj=obj)
+        logger.trace(pickler, "# Me1")
+        return
+else:
+    @register(MethodType)
+    def save_instancemethod0(pickler, obj):
+        logger.trace(pickler, "Me1: %s" % obj)
+        pickler.save_reduce(MethodType, (obj.__func__, obj.__self__), obj=obj)
+        logger.trace(pickler, "# Me1")
         return
 
 if sys.hexversion >= 0x20500f0:
@@ -1534,17 +1808,6 @@ if sys.hexversion >= 0x20500f0:
                                            obj.__repr__()), obj=obj)
             logger.trace(pickler, "# Wr")
             return
-
-    @register(MethodWrapperType)
-    def save_instancemethod(pickler, obj):
-        logger.trace(pickler, "Mw: %s", obj)
-        if IS_PYPY2 and obj.__self__ is None and obj.im_class:
-            # Can be a class method in PYPY2 if __self__ is none
-            pickler.save_reduce(getattr, (obj.im_class, obj.__name__), obj=obj)
-            return
-        pickler.save_reduce(getattr, (obj.__self__, obj.__name__), obj=obj)
-        logger.trace(pickler, "# Mw")
-        return
 
 elif not IS_PYPY:
     @register(MethodDescriptorType)
@@ -1612,30 +1875,13 @@ if MAPPING_PROXY_TRICK:
         pickler.save_reduce(DictProxyType, (mapping,), obj=obj)
         logger.trace(pickler, "# Mp")
         return
-elif not IS_PYPY:
-    if not OLD33:
-        @register(DictProxyType)
-        def save_dictproxy(pickler, obj):
-            logger.trace(pickler, "Mp: %s", obj)
-            pickler.save_reduce(DictProxyType, (obj.copy(),), obj=obj)
-            logger.trace(pickler, "# Mp")
-            return
-    else:
-        # The following function is based on 'saveDictProxy' from spickle
-        # Copyright (c) 2011 by science+computing ag
-        # License: http://www.apache.org/licenses/LICENSE-2.0
-        @register(DictProxyType)
-        def save_dictproxy(pickler, obj):
-            logger.trace(pickler, "Dp: %s", obj)
-            attr = obj.get('__dict__')
-           #pickler.save_reduce(_create_dictproxy, (attr,'nested'), obj=obj)
-            if type(attr) == GetSetDescriptorType and attr.__name__ == "__dict__" \
-            and getattr(attr.__objclass__, "__dict__", None) == obj:
-                pickler.save_reduce(getattr, (attr.__objclass__,"__dict__"),obj=obj)
-                logger.trace(pickler, "# Dp")
-                return
-            # all bad below... so throw ReferenceError or TypeError
-            raise ReferenceError("%s does not reference a class __dict__" % obj)
+else:
+    @register(DictProxyType)
+    def save_dictproxy(pickler, obj):
+        logger.trace(pickler, "Mp: %s" % obj)
+        pickler.save_reduce(DictProxyType, (obj.copy(),), obj=obj)
+        logger.trace(pickler, "# Mp")
+        return
 
 @register(SliceType)
 def save_slice(pickler, obj):
@@ -1773,7 +2019,9 @@ def save_module(pickler, obj):
 @register(TypeType)
 def save_type(pickler, obj, postproc_list=None):
     if obj in _typemap:
-        logger.trace(pickler, "T1: %s", obj)
+        logger.trace(pickler, "T1: %s" % obj)
+        # if obj in _incedental_types:
+        #     warnings.warn('Type %r may only exist on this implementation of Python and cannot be unpickled in other implementations.' % (obj,), PicklingWarning)
         pickler.save_reduce(_load_type, (_typemap[obj],), obj=obj)
         logger.trace(pickler, "# T1")
     elif obj.__bases__ == (tuple,) and all([hasattr(obj, attr) for attr in ('_fields','_asdict','_make','_replace')]):
@@ -1782,7 +2030,7 @@ def save_type(pickler, obj, postproc_list=None):
         if OLD37 or (not obj._field_defaults):
             pickler.save_reduce(_create_namedtuple, (obj.__name__, obj._fields, obj.__module__), obj=obj)
         else:
-            defaults = [obj._field_defaults[field] for field in obj._fields]
+            defaults = [obj._field_defaults[field] for field in obj._fields if field in obj._field_defaults]
             pickler.save_reduce(_create_namedtuple, (obj.__name__, obj._fields, obj.__module__, defaults), obj=obj)
         logger.trace(pickler, "# T6")
         return
@@ -1888,9 +2136,29 @@ def save_classmethod(pickler, obj):
 @register(FunctionType)
 def save_function(pickler, obj):
     if not _locate_function(obj, pickler):
-        logger.trace(pickler, "F1: %s", obj)
+        if type(obj.__code__) is not CodeType:
+            # Some PyPy builtin functions have no module name, and thus are not
+            # able to be located
+            module_name = getattr(obj, '__module__', None)
+            if module_name is None:
+                module_name = __builtin__.__name__
+            module = _import_module(module_name, safe=True)
+            _pypy_builtin = False
+            try:
+                found, _ = _getattribute(module, obj.__qualname__)
+                if getattr(found, '__func__', None) is obj:
+                    _pypy_builtin = True
+            except:
+                pass
+
+            if _pypy_builtin:
+                logger.trace(pickler, "F3: %s" % obj)
+                pickler.save_reduce(getattr, (found, '__func__'), obj=obj)
+                logger.trace(pickler, "# F3")
+                return
+
+        logger.trace(pickler, "F1: %s" % obj)
         _recurse = getattr(pickler, '_recurse', None)
-        _byref = getattr(pickler, '_byref', None)
         _postproc = getattr(pickler, '_postproc', None)
         _main_modified = getattr(pickler, '_main_modified', None)
         _original_main = getattr(pickler, '_original_main', __builtin__)#'None'
@@ -1998,6 +2266,55 @@ def save_function(pickler, obj):
         StockPickler.save_global(pickler, obj, name=name)
         logger.trace(pickler, "# F2")
     return
+
+if HAS_CTYPES and hasattr(ctypes, 'pythonapi'):
+    _PyCapsule_New = ctypes.pythonapi.PyCapsule_New
+    _PyCapsule_New.argtypes = (ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p)
+    _PyCapsule_New.restype = ctypes.py_object
+    _PyCapsule_GetPointer = ctypes.pythonapi.PyCapsule_GetPointer
+    _PyCapsule_GetPointer.argtypes = (ctypes.py_object, ctypes.c_char_p)
+    _PyCapsule_GetPointer.restype = ctypes.c_void_p
+    _PyCapsule_GetDestructor = ctypes.pythonapi.PyCapsule_GetDestructor
+    _PyCapsule_GetDestructor.argtypes = (ctypes.py_object,)
+    _PyCapsule_GetDestructor.restype = ctypes.c_void_p
+    _PyCapsule_GetContext = ctypes.pythonapi.PyCapsule_GetContext
+    _PyCapsule_GetContext.argtypes = (ctypes.py_object,)
+    _PyCapsule_GetContext.restype = ctypes.c_void_p
+    _PyCapsule_GetName = ctypes.pythonapi.PyCapsule_GetName
+    _PyCapsule_GetName.argtypes = (ctypes.py_object,)
+    _PyCapsule_GetName.restype = ctypes.c_char_p
+    _PyCapsule_IsValid = ctypes.pythonapi.PyCapsule_IsValid
+    _PyCapsule_IsValid.argtypes = (ctypes.py_object, ctypes.c_char_p)
+    _PyCapsule_IsValid.restype = ctypes.c_bool
+    _PyCapsule_SetContext = ctypes.pythonapi.PyCapsule_SetContext
+    _PyCapsule_SetContext.argtypes = (ctypes.py_object, ctypes.c_void_p)
+    _PyCapsule_SetDestructor = ctypes.pythonapi.PyCapsule_SetDestructor
+    _PyCapsule_SetDestructor.argtypes = (ctypes.py_object, ctypes.c_void_p)
+    _PyCapsule_SetName = ctypes.pythonapi.PyCapsule_SetName
+    _PyCapsule_SetName.argtypes = (ctypes.py_object, ctypes.c_char_p)
+    _PyCapsule_SetPointer = ctypes.pythonapi.PyCapsule_SetPointer
+    _PyCapsule_SetPointer.argtypes = (ctypes.py_object, ctypes.c_void_p)
+    _testcapsule = _PyCapsule_New(
+        ctypes.cast(_PyCapsule_New, ctypes.c_void_p),
+        ctypes.create_string_buffer(b'dill._dill._testcapsule'),
+        None
+    )
+    PyCapsuleType = type(_testcapsule)
+    @register(PyCapsuleType)
+    def save_capsule(pickler, obj):
+        logger.trace(pickler, "Cap: %s", obj)
+        name = _PyCapsule_GetName(obj)
+        warnings.warn('Pickling a PyCapsule (%s) does not pickle any C data structures and could cause segmentation faults or other memory errors when unpickling.' % (name,), PicklingWarning)
+        pointer = _PyCapsule_GetPointer(obj, name)
+        context = _PyCapsule_GetContext(obj)
+        destructor = _PyCapsule_GetDestructor(obj)
+        pickler.save_reduce(_create_capsule, (pointer, name, context, destructor), obj=obj)
+        logger.trace(pickler, "# Cap")
+    _incedental_reverse_typemap['PyCapsuleType'] = PyCapsuleType
+    _reverse_typemap['PyCapsuleType'] = PyCapsuleType
+    _incedental_types.add(PyCapsuleType)
+else:
+    _testcapsule = None
 
 # quick sanity checking
 def pickles(obj,exact=False,safe=False,**kwds):

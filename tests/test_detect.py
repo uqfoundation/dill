@@ -13,6 +13,7 @@ from pickle import PicklingError
 
 import inspect
 import sys
+import os
 
 def test_bad_things():
     f = inspect.currentframe()
@@ -27,7 +28,7 @@ def test_bad_things():
     assert list(errors(f, 1).keys()) == list(d.keys())
     s = set([(err.__class__.__name__,err.args[0]) for err in list(errors(f, 1).values())])
     a = dict(s)
-    if 0x30700f0 <= sys.hexversion > 0x30709f0: #XXX: travis-ci
+    if not os.environ.get('COVERAGE'): #XXX: travis-ci
         assert len(s) is len(a) # TypeError (and possibly PicklingError)
     n = 1 if IS_PYPY2 else 2
     assert len(a) is n if 'PicklingError' in a.keys() else n-1
