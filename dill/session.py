@@ -12,7 +12,8 @@ Pickle and restore the intepreter session.
 
 __all__ = ['dump_session', 'load_session', 'ipython_filter', 'ExcludeRules', 'EXCLUDE', 'INCLUDE']
 
-import logging, re, sys
+import re
+import sys
 from copy import copy
 
 from dill import _dill, Pickler, Unpickler
@@ -29,8 +30,6 @@ EXCLUDE, INCLUDE = RuleType.EXCLUDE, RuleType.INCLUDE
 
 SESSION_IMPORTED_AS_TYPES = tuple([Exception] + [getattr(_dill, name) for name in
         ('ModuleType', 'TypeType', 'FunctionType', 'MethodType', 'BuiltinMethodType')])
-
-log = logging.getLogger('dill')
 
 def _module_map():
     """get map of imported modules"""
