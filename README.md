@@ -28,26 +28,27 @@ a trustworthy source.
 
 ``dill`` is part of ``pathos``, a python framework for heterogeneous computing.
 ``dill`` is in active development, so any user feedback, bug reports, comments,
-or suggestions are highly appreciated.  A list of issues is located at https://github.com/uqfoundation/dill/issues, with a legacy list maintained at https://uqfoundation.github.io/project/pathos/query.
+or suggestions are highly appreciated.  A list of issues is located at
+https://github.com/uqfoundation/dill/issues, with a legacy list maintained at
+https://uqfoundation.github.io/project/pathos/query.
 
 
 Major Features
 --------------
 ``dill`` can pickle the following standard types:
 
-* none, type, bool, int, long, float, complex, str, unicode,
+* none, type, bool, int, float, complex, bytes, str,
 * tuple, list, dict, file, buffer, builtin,
-* both old and new style classes,
-* instances of old and new style classes,
+* python classes, namedtuples, dataclasses, metaclasses,
+* instances of classes,
 * set, frozenset, array, functions, exceptions
 
 ``dill`` can also pickle more 'exotic' standard types:
 
-* functions with yields, nested functions, lambdas
+* functions with yields, nested functions, lambdas,
 * cell, method, unboundmethod, module, code, methodwrapper,
-* dictproxy, methoddescriptor, getsetdescriptor, memberdescriptor,
-* wrapperdescriptor, xrange, slice,
-* notimplemented, ellipsis, quit
+* methoddescriptor, getsetdescriptor, memberdescriptor, wrapperdescriptor,
+* dictproxy, slice, notimplemented, ellipsis, quit
 
 ``dill`` cannot yet pickle these standard types:
 
@@ -133,7 +134,7 @@ There are a number of options to control serialization which are provided
 as keyword arguments to several ``dill`` functions:
 
 * with *protocol*, the pickle protocol level can be set. This uses the
-  same value as the ``pickle`` module, *HIGHEST_PROTOCOL* or *DEFAULT_PROTOCOL*.
+  same value as the ``pickle`` module, *DEFAULT_PROTOCOL*.
 * with *byref=True*, ``dill`` to behave a lot more like pickle with
   certain objects (like modules) pickled by reference as opposed to
   attempting to pickle the object itself.
