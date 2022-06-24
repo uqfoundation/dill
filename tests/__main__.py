@@ -7,23 +7,25 @@
 
 import glob
 import os
+import shutil
 import subprocess as sp
+
+from sys import platform
+shell = (platform[:3] == 'win')
+
+default_python = 'python3' if shutil.which('python3') else 'python'
 try:
     import pox
-    python = pox.which_python(version=True, fullpath=False) or 'python3'
+    python = pox.which_python(version=True, fullpath=False) or default_python
 except ImportError:
-    python = 'python3'
-from sys import platform
-shell = platform[:3] == 'win'
+    python = default_python
 
 suite = os.path.dirname(__file__) or os.path.curdir
 tests = glob.glob(suite + os.path.sep + 'test_*.py')
 
-
 if __name__ == '__main__':
-
     for test in tests:
         p = sp.Popen([python, test], shell=shell).wait()
         if not p:
             print('.', end='', flush=True)
-    print('')
+    print()
