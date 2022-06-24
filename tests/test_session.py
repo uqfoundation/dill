@@ -183,7 +183,7 @@ def test_session_other():
     dict_objects = [obj for obj in module.__dict__.keys() if not obj.startswith('__')]
 
     session_buffer = io.BytesIO()
-    dill.dump_session(test_file, main=module)
+    dill.dump_session(session_buffer, main=module)
 
     for obj in dict_objects:
         del module.__dict__[obj]
@@ -195,33 +195,43 @@ def test_session_other():
     assert module.selfref is module
 
 
-def test_byref_without_byref_objects():
-    # This is for code coverage, tests the use case of dump_session(byref=True)
-    # without imported objects in the namespace. It's a contrived example because
-    # even dill can't be in it.
+def test_runtime_module():
     from types import ModuleType
-    modname = '__test_main__'
-    main = ModuleType(modname)
-    main.x = 42
+    modname = '__runtime__'
+    runtime = ModuleType(modname)
+    runtime.x = 42
 
-    _main = dill._dill._stash_modules(main)
-    if _main is not main:
+    mod = dill._dill._stash_modules(runtime)
+    if mod is not runtime:
         print("There are objects to save by referenece that shouldn't be:",
-              _main.__dill_imported, _main.__dill_imported_as, _main.__dill_imported_top_level,
+              mod.__dill_imported, mod.__dill_imported_as, mod.__dill_imported_top_level,
               file=sys.stderr)
 
+    # This is also for code coverage, tests the use case of dump_session(byref=True)
+    # without imported objects in the namespace. It's a contrived example because
+    # even dill can't be in it.  This should work after fixing #462.
     session_buffer = io.BytesIO()
-    dill.dump_session(session_buffer, main=main, byref=True)
-    main = ModuleType(modname)  # empty
-    session_buffer.seek(0)
-    # This should work after fixing https://github.com/uqfoundation/dill/issues/462
-    dill.load_session(test_file, main=main)
+    dill.dump_session(session_buffer, main=runtime, byref=True)
+    session_dump = session_buffer.getvalue()
 
-    assert main.x == 42
+    # Pass a new runtime created module with the same name.
+    runtime = ModuleType(modname)  # empty
+    returned_mod = dill.load_session(io.BytesIO(session_dump), main=runtime)
+    assert returned_mod is runtime
+    assert runtime.__name__ == modname
+    assert runtime.x == 42
+    assert runtime not in sys.modules.values()
+
+    # Pass nothing as main.  load_session() must create it.
+    session_buffer.seek(0)
+    runtime = dill.load_session(io.BytesIO(session_dump))
+    assert runtime.__name__ == modname
+    assert runtime.x == 42
+    assert runtime not in sys.modules.values()
 
 
 if __name__ == '__main__':
     test_session_main(byref=False)
     test_session_main(byref=True)
     test_session_other()
-    test_byref_without_byref_objects()
+    test_runtime_module()
