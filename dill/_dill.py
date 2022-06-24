@@ -23,8 +23,9 @@ __all__ = ['dump','dumps','load','loads','dump_session','load_session',
 
 __module__ = 'dill'
 
-from .logger import adapter as logger
 import warnings
+from .logger import adapter as logger
+from .logger import trace as _trace
 
 import os
 import sys
