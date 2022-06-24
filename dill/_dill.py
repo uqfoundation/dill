@@ -373,7 +373,7 @@ def _stash_modules(main_module):
     imported_as = []
     imported_top_level = []  # keep separeted for backwards compatibility
     original = {}
-    for name, obj in vars(main_module).items():
+    for name, obj in main_module.__dict__.items():
         if obj is main_module:
             original[name] = newmod  # self-reference
             continue
@@ -880,7 +880,7 @@ def _create_code(*args):
             return CodeType(*args)
         elif len(args) == 15: return CodeType(args[0], 0, *args[1:]) # from 3.7
         return CodeType(args[0], 0, 0, *args[1:]) # from 2.7
-    elif hasattr(CodeType, 'co_kwonlyargcount'): # python 3.7
+    else: # python 3.7
         # obj.co_argcount, obj.co_kwonlyargcount, obj.co_nlocals,
         # obj.co_stacksize, obj.co_flags, obj.co_code, obj.co_consts,
         # obj.co_names, obj.co_varnames, obj.co_filename,
@@ -1595,7 +1595,7 @@ else:
 def save_cell(pickler, obj):
     try:
         f = obj.cell_contents
-    except ValueError:
+    except ValueError: # cell is empty
         log.info("Ce3: %s" % obj)
         # _shims._CELL_EMPTY is defined in _shims.py to support PyPy 2.7.
         # It unpickles to a sentinel object _dill._CELL_EMPTY, also created in
@@ -1868,13 +1868,7 @@ def save_property(pickler, obj):
 @register(classmethod)
 def save_classmethod(pickler, obj):
     log.info("Cm: %s" % obj)
-    im_func = '__func__'
-    try:
-        orig_func = getattr(obj, im_func)
-    except AttributeError:  # Python 2.6
-        orig_func = obj.__get__(None, object)
-        if isinstance(obj, classmethod):
-            orig_func = getattr(orig_func, im_func) # Unbind
+    orig_func = obj.__func__
 
     # if type(obj.__dict__) is dict:
     #     if obj.__dict__:

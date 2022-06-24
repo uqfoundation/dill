@@ -129,7 +129,7 @@ def freevars(func):
         for name, c in zip(func, closures):
             try:
                 cell_contents = c.cell_contents
-            except ValueError:
+            except ValueError: # cell is empty
                 continue
             yield name, c.cell_contents
 
@@ -174,7 +174,7 @@ def globalvars(func, recurse=True, builtin=False):
         for obj in orig_func.__closure__ or {}:
             try:
                 cell_contents = obj.cell_contents
-            except ValueError:
+            except ValueError: # cell is empty
                 pass
             else:
                 _vars = globalvars(cell_contents, recurse, builtin) or {}
