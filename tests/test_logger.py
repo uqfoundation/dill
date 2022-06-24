@@ -5,36 +5,62 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
-import dill, logging, re
-from dill.logger import handler, adapter as logger
+import logging
+import re
+import tempfile
+
+import dill
+from dill import detect
+from dill.logger import stderr_handler, adapter as logger
 
 try:
     from StringIO import StringIO
 except ImportError:
     from io import StringIO
 
-def test_logging(regex=None):
+test_obj = {'a': (1, 2), 'b': object(), 'f': lambda x: x**2, 'big': list(range(10000))}
+
+def test_logging(should_trace):
     buffer = StringIO()
     handler = logging.StreamHandler(buffer)
     logger.addHandler(handler)
     try:
-        dill.dumps({'a': (1, 2), 'b': object(), 'big': list(range(10000))})
-        if regex is None:
-            assert buffer.getvalue() == ""
-        else:
-            regex = re.compile(regex)
+        dill.dumps(test_obj)
+        if should_trace:
+            regex = re.compile(r'(\S*┬ \w.*[^)]'              # begin pickling object
+                               r'|│*└ # \w.* \[\d+ (\wi)?B])' # object written (with size)
+                               )
             for line in buffer.getvalue().splitlines():
                 assert regex.fullmatch(line)
+            return buffer.getvalue()
+        else:
+            assert buffer.getvalue() == ""
     finally:
         logger.removeHandler(handler)
         buffer.close()
 
+def test_trace_to_file(stream_trace):
+    file = tempfile.NamedTemporaryFile(mode='r')
+    with detect.trace(file.name, mode='w'):
+        dill.dumps(test_obj)
+    file_trace = file.read()
+    file.close()
+    # Apparently, objects can change location in memory...
+    reghex = re.compile(r'0x[0-9A-Za-z]+')
+    assert reghex.sub('', file_trace) == reghex.sub('', stream_trace)
+
 if __name__ == '__main__':
-    logger.removeHandler(handler)
-    test_logging()
-    dill.detect.trace(True)
-    test_logging(r'(\S*┬ \w.*[^)]'              # begin pickling object
-                 r'|│*└ # \w.* \[\d+ (\wi)?B])' # object written (with size)
-                 )
-    dill.detect.trace(False)
-    test_logging()
+    logger.removeHandler(stderr_handler)
+    test_logging(should_trace=False)
+    detect.trace(True)
+    test_logging(should_trace=True)
+    detect.trace(False)
+    test_logging(should_trace=False)
+
+    loglevel = logging.ERROR
+    logger.setLevel(loglevel)
+    with detect.trace():
+        stream_trace = test_logging(should_trace=True)
+    test_logging(should_trace=False)
+    assert logger.getEffectiveLevel() == loglevel
+    test_trace_to_file(stream_trace)

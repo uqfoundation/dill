@@ -23,6 +23,7 @@ the size in bytes that the object contributed to the pickle stream (including
 its child objects).  Sample trace output:
 
     >>> import dill, dill.tests
+    >>> dill.detect.trace(True)
     >>> dill.dump_session(main=dill.tests)
     ┬ M1: <module 'dill.tests' from '.../dill/tests/__init__.py'>
     ├┬ F2: <function _import_module at 0x7f0d2dce1b80>
@@ -46,6 +47,10 @@ import codecs
 import locale
 import logging
 import math
+import os
+from contextlib import contextmanager
+from functools import partial
+from typing import NoReturn, Union
 
 import dill
 
@@ -200,9 +205,67 @@ class TraceFormatter(logging.Formatter):
 
 logger = logging.getLogger('dill')
 adapter = TraceAdapter(logger)
-handler = logging.StreamHandler()
-adapter.addHandler(handler)
+stderr_handler = logging.StreamHandler()
+adapter.addHandler(stderr_handler)
 
-def trace(boolean):
-    """print a trace through the stack when pickling; useful for debugging"""
-    logger.setLevel(logging.INFO if boolean else logging.WARNING)
+def trace(arg: Union[bool, str, os.PathLike] = None, *, mode: str = 'a') -> NoReturn:
+    """print a trace through the stack when pickling; useful for debugging
+    
+    With a single boolean argument, enable or disable the tracing.
+    
+    Example usage:
+
+        >>> import dill
+        >>> dill.detect.trace(True)
+        >>> dill.dump_session()
+
+    Alternatively, ``trace()`` can be used as a context manager. With no
+    arguments, it just takes care of restoring the tracing state on exit.
+    A file name and a file mode may be specitfied to redirect the tracing
+    output in the ``with`` block context. A log function is yielded by the
+    manager so the user can write extra information to the file.
+
+    Example usage:
+
+        >>> from dill import detect
+        >>> D = {'a': 42, 'b': {'x': None}}
+        >>> with detect.trace():
+        >>>     dumps(D)
+        ┬ D2: <dict object at 0x7f2721804800>
+        ├┬ D2: <dict object at 0x7f27217f5c40>
+        │└ # D2 [8 B]
+        └ # D2 [22 B]
+        >>> squared = lambda x: x**2
+        >>> with detect.trace('output.txt', mode='w') as log:
+        >>>     log("> D = %r", D)
+        >>>     dumps(D)
+        >>>     log("> squared = %r", squared)
+        >>>     dumps(squared)
+
+    Arguments:
+        arg: a boolean value or an optional ``PathLike`` object for the context manager
+        mode: mode string for ``open()`` if a file name is passed as the first argument
+    """
+    if not isinstance(arg, bool):
+        return _trace(filename=arg, mode=mode)
+    logger.setLevel(logging.INFO if arg else logging.WARNING)
+
+@contextmanager
+def _trace(filename, mode):
+    """context manager version of trace(); can redirect the trace to a file"""
+    previous_level = adapter.getEffectiveLevel()
+    adapter.setLevel(logging.INFO)
+    redirect = filename is not None
+    if redirect:
+        handler = logging.FileHandler(filename, mode)
+    try:
+        if redirect:
+            adapter.removeHandler(stderr_handler)
+            adapter.addHandler(handler)
+        yield adapter.info
+    finally:
+        adapter.setLevel(previous_level)
+        if redirect:
+            handler.close()
+            adapter.removeHandler(handler)
+            adapter.addHandler(stderr_handler)

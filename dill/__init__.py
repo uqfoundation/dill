@@ -185,8 +185,8 @@ To aid in debugging pickling issues, use *dill.detect* which provides
 tools like pickle tracing::
 
     >>> import dill.detect
-    >>> dill.detect.trace(True)
-    >>> f = dumps(squared)
+    >>> with dill.detect.trace():
+    >>>     dumps(squared)
     ┬ F1: <function <lambda> at 0x7fe074f8c280>
     ├┬ F2: <function _create_function at 0x7fe074c49c10>
     │└ # F2 [34 B]
@@ -203,12 +203,12 @@ tools like pickle tracing::
     ││└ # D2 [2 B]
     │└ # D2 [23 B]
     └ # F1 [180 B]
-    >>> dill.detect.trace(False)
 
 With trace, we see how ``dill`` stored the lambda (``F1``) by first storing
 ``_create_function``, the underlying code object (``Co``) and ``_create_code``
 (which is used to handle code objects), then we handle the reference to
-the global dict (``D2``).  A ``#`` marks when the object is actually stored.
+the global dict (``D2``) plus other dictionaries (``D1`` and ``D2``) that
+save the lambda object's state. A ``#`` marks when the object is actually stored.
 
 
 More Information
