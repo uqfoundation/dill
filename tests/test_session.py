@@ -230,8 +230,33 @@ def test_runtime_module():
     assert runtime not in sys.modules.values()
 
 
+def test_session_copy():
+    with TestNamespace():
+        session_buffer = io.BytesIO()
+        dill.dump_session(session_buffer)
+
+        global x, y, empty
+        x = y = 0  # change x and create y
+        del empty
+        globals_state = globals().copy()
+
+        session_buffer.seek(0)
+        main_copy = dill.load_session_copy(session_buffer)
+
+        assert main_copy is not __main__
+        assert main_copy not in sys.modules.values()
+        assert vars(main_copy) is not globals()
+        assert globals() == globals_state
+
+        assert main_copy.__name__ == '__main__'
+        assert x != main_copy.x
+        assert 'y' not in vars(main_copy)
+        assert 'empty' in vars(main_copy)
+
+
 if __name__ == '__main__':
     test_session_main(byref=False)
     test_session_main(byref=True)
     test_session_other()
     test_runtime_module()
+    test_session_copy()

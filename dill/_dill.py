@@ -633,7 +633,7 @@ def load_session_copy(filename='/tmp/session.pkl', **kwds):
             vars(main).update(main_globals)
         except NameError:
             pass
-    module.pop('__path__', None)
+    vars(module).pop('__path__', None)  # "don't treat this as a package"
     module.__loader__ = module.__spec__ = None
     module.__session__ = filename if isinstance(filename, str) else repr(filename)
     return module
