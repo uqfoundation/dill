@@ -10,7 +10,10 @@
 Module to show if an object has changed since it was memorised
 """
 
-import builtins, os, sys, types
+import builtins
+import os
+import sys
+import types
 try:
     import numpy
     HAS_NUMPY = True

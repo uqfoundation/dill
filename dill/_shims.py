@@ -49,7 +49,8 @@ See this PR for the discussion that lead to this system:
 https://github.com/uqfoundation/dill/pull/443
 """
 
-import inspect, sys
+import inspect
+import sys
 
 _dill = sys.modules['dill._dill']
 
