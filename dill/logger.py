@@ -42,6 +42,7 @@ its child objects).  Sample trace output:
 
 __all__ = ['adapter', 'logger', 'trace']
 
+import codecs
 import locale
 import logging
 import math
@@ -171,7 +172,12 @@ class TraceFormatter(logging.Formatter):
                 raise AttributeError
         except AttributeError:
             encoding = locale.getpreferredencoding()
-        self.is_utf8 = (encoding == 'UTF-8')
+        try:
+            encoding = codecs.lookup(encoding).name
+        except LookupError:
+            self.is_utf8 = False
+        else:
+            self.is_utf8 = (encoding == codecs.lookup('utf-8').name)
     def format(self, record):
         fields = {'prefix': "", 'suffix': ""}
         if getattr(record, 'depth', 0) > 0:
