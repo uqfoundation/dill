@@ -5,7 +5,9 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
-import glob, os, subprocess as sp
+import glob
+import os
+import subprocess as sp
 try:
     import pox
     python = pox.which_python(version=True, fullpath=False) or 'python3'
