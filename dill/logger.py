@@ -8,7 +8,7 @@
 """
 Logging utilities for dill.
 
-The 'logger' object is the dill's top-level logger.
+The 'logger' object is dill's top-level logger.
 
 The 'adapter' object wraps the logger and implements a 'trace()' method that
 generates a detailed tree-style trace for the pickling call at log level INFO.
@@ -20,7 +20,7 @@ The trace shows a tree structure depicting the depth of each object serialized
 *with dill save functions*, but not the ones that use save functions from
 'pickle._Pickler.dispatch'. If the information is available, it also displays
 the size in bytes that the object contributed to the pickle stream (including
-its child objects).  Example trace output:
+its child objects).  Sample trace output:
 
     >>> import dill, dill.tests
     >>> dill.dump_session(main=dill.tests)
@@ -42,7 +42,11 @@ its child objects).  Example trace output:
 
 __all__ = ['adapter', 'logger', 'trace']
 
-import dill, locale, logging, math
+import locale
+import logging
+import math
+
+import dill
 
 # Tree drawing characters: Unicode to ASCII map.
 ASCII_MAP = str.maketrans({"│": "|", "├": "|", "┬": "+", "└": "`"})
