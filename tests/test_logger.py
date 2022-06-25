@@ -18,7 +18,7 @@ try:
 except ImportError:
     from io import StringIO
 
-test_obj = {'a': (1, 2), 'b': object(), 'f': lambda x: x**2, 'big': list(range(10000))}
+test_obj = {'a': (1, 2), 'b': object(), 'f': lambda x: x**2, 'big': list(range(10))}
 
 def test_logging(should_trace):
     buffer = StringIO()
@@ -47,7 +47,11 @@ def test_trace_to_file(stream_trace):
     file.close()
     # Apparently, objects can change location in memory...
     reghex = re.compile(r'0x[0-9A-Za-z]+')
-    assert reghex.sub('', file_trace) == reghex.sub('', stream_trace)
+    file_trace, stream_trace = reghex.sub('0x', file_trace), reghex.sub('0x', stream_trace)
+    # PyPy prints dictionary contents with repr(dict)...
+    regdict = re.compile(r'(dict\.__repr__ of ).*')
+    file_trace, stream_trace = regdict.sub(r'\1{}>', file_trace), regdict.sub(r'\1{}>', stream_trace)
+    assert file_trace == stream_trace
 
 if __name__ == '__main__':
     logger.removeHandler(stderr_handler)

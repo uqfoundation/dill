@@ -145,8 +145,13 @@ class TraceAdapter(logging.LoggerAdapter):
         try:
             # Streams are not required to be tellable.
             size = pickler._file.tell()
-            size += pickler.framer.current_frame.tell()
-        except AttributeError:
+            frame = pickler.framer.current_frame
+            try:
+                size += frame.tell()
+            except AttributeError:
+                # PyPy may use a BytesBuilder as frame
+                size += len(frame)
+        except (AttributeError, TypeError):
             pass
         if size is not None:
             if not pushed_obj:
