@@ -54,6 +54,21 @@ def function_with_unassigned_variable():
     return (lambda: value)
 
 
+def test_issue_510():
+    # A very bizzare use of functions and methods that pickle doesn't get
+    # correctly for odd reasons.
+    class Foo:
+        def __init__(self):
+                def f2(self):
+                        return self
+                self.f2 = f2.__get__(self)
+
+    import dill, pickletools
+    f = Foo()
+    f1 = dill.copy(f)
+    assert f1.f2() is f1
+
+
 def test_functions():
     dumped_func_a = dill.dumps(function_a)
     assert dill.loads(dumped_func_a)(0) == 0
@@ -122,4 +137,5 @@ def test_code_object():
 
 if __name__ == '__main__':
     test_functions()
+    test_issue_510()
     test_code_object()

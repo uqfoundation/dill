@@ -214,7 +214,7 @@ if HAS_CTYPES:
     a['CFloatType'] = ctypes.c_float()
     a['CDoubleType'] = ctypes.c_double()
     a['CSizeTType'] = ctypes.c_size_t()
-    a['CLibraryLoaderType'] = ctypes.cdll
+    x['CLibraryLoaderType'] = ctypes.cdll
     a['StructureType'] = _Struct
     # if not IS_PYPY:
     #     a['BigEndianStructureType'] = ctypes.BigEndianStructure()
@@ -275,16 +275,16 @@ a['ModuleType'] = datetime
 a['NotImplementedType'] = NotImplemented
 a['SliceType'] = slice(1)
 a['UnboundMethodType'] = _class._method #XXX: works when not imported!
-a['TextWrapperType'] = open(os.devnull, 'r') # same as mode='w','w+','r+'
-a['BufferedRandomType'] = open(os.devnull, 'r+b') # same as mode='w+b'
-a['BufferedReaderType'] = open(os.devnull, 'rb') # (default: buffering=-1)
-a['BufferedWriterType'] = open(os.devnull, 'wb')
+d['TextWrapperType'] = open(os.devnull, 'r') # same as mode='w','w+','r+'
+d['BufferedRandomType'] = open(os.devnull, 'r+b') # same as mode='w+b'
+d['BufferedReaderType'] = open(os.devnull, 'rb') # (default: buffering=-1)
+d['BufferedWriterType'] = open(os.devnull, 'wb')
 try: # oddities: deprecated
     from _pyio import open as _open
-    a['PyTextWrapperType'] = _open(os.devnull, 'r', buffering=-1)
-    a['PyBufferedRandomType'] = _open(os.devnull, 'r+b', buffering=-1)
-    a['PyBufferedReaderType'] = _open(os.devnull, 'rb', buffering=-1)
-    a['PyBufferedWriterType'] = _open(os.devnull, 'wb', buffering=-1)
+    d['PyTextWrapperType'] = _open(os.devnull, 'r', buffering=-1)
+    d['PyBufferedRandomType'] = _open(os.devnull, 'r+b', buffering=-1)
+    d['PyBufferedReaderType'] = _open(os.devnull, 'rb', buffering=-1)
+    d['PyBufferedWriterType'] = _open(os.devnull, 'wb', buffering=-1)
 except ImportError:
     pass
 # other (concrete) object types
@@ -294,17 +294,16 @@ if PY3:
 else:
     d['CellType'] = (_lambda)(0).func_closure[0]
     a['XRangeType'] = _xrange = xrange(1)
-if not IS_PYPY:
-    d['MethodDescriptorType'] = type.__dict__['mro']
-    d['WrapperDescriptorType'] = type.__repr__
-    a['WrapperDescriptorType2'] = type.__dict__['__module__']
-    d['ClassMethodDescriptorType'] = type.__dict__['__prepare__' if PY3 else 'mro']
+a['MethodDescriptorType'] = type.__dict__['mro']
+a['WrapperDescriptorType'] = type.__repr__
+#a['WrapperDescriptorType2'] = type.__dict__['__module__']#XXX: GetSetDescriptor
+a['ClassMethodDescriptorType'] = type.__dict__['__prepare__' if PY3 else 'mro']
 # built-in functions (CH 2)
 if PY3 or IS_PYPY: 
     _methodwrap = (1).__lt__
 else: 
     _methodwrap = (1).__cmp__
-d['MethodWrapperType'] = _methodwrap
+a['MethodWrapperType'] = _methodwrap
 a['StaticMethodType'] = staticmethod(_method)
 a['ClassMethodType'] = classmethod(_method)
 a['PropertyType'] = property()
@@ -340,35 +339,35 @@ if PY3: _fileW = _cstrO
 else: _fileW = _tmpf
 # data persistence (CH 11)
 if HAS_ALL:
-    a['ConnectionType'] = _conn = sqlite3.connect(':memory:')
-    a['CursorType'] = _conn.cursor()
+    x['ConnectionType'] = _conn = sqlite3.connect(':memory:')
+    x['CursorType'] = _conn.cursor()
 a['ShelveType'] = shelve.Shelf({})
 # data compression and archiving (CH 12)
 if HAS_ALL:
     if (hex(sys.hexversion) < '0x2070ef0') or PY3:
-        a['BZ2FileType'] = bz2.BZ2File(os.devnull) #FIXME: fail >= 3.3, 2.7.14
-    a['BZ2CompressorType'] = bz2.BZ2Compressor()
-    a['BZ2DecompressorType'] = bz2.BZ2Decompressor()
-#a['ZipFileType'] = _zip = zipfile.ZipFile(os.devnull,'w') #FIXME: fail >= 3.2
+        x['BZ2FileType'] = bz2.BZ2File(os.devnull)
+    x['BZ2CompressorType'] = bz2.BZ2Compressor()
+    x['BZ2DecompressorType'] = bz2.BZ2Decompressor()
+#x['ZipFileType'] = _zip = zipfile.ZipFile(os.devnull,'w')
 #_zip.write(_tempfile,'x') [causes annoying warning/error printed on import]
 #a['ZipInfoType'] = _zip.getinfo('x')
 a['TarFileType'] = tarfile.open(fileobj=_fileW,mode='w')
 # file formats (CH 13)
-a['DialectType'] = csv.get_dialect('excel')
+x['DialectType'] = csv.get_dialect('excel')
 a['PackerType'] = xdrlib.Packer()
 # optional operating system services (CH 16)
 a['LockType'] = threading.Lock()
 a['RLockType'] = threading.RLock()
 # generic operating system services (CH 15) # also closed/open and r/w/etc...
-a['NamedLoggerType'] = _logger = logging.getLogger(__name__) #FIXME: fail >= 3.2 and <= 2.6
+a['NamedLoggerType'] = _logger = logging.getLogger(__name__)
 #a['FrozenModuleType'] = __hello__ #FIXME: prints "Hello world..."
 # interprocess communication (CH 17)
 if PY3:
-    a['SocketType'] = _socket = socket.socket() #FIXME: fail >= 3.3
-    a['SocketPairType'] = socket.socketpair()[0] #FIXME: fail >= 3.3
+    x['SocketType'] = _socket = socket.socket()
+    x['SocketPairType'] = socket.socketpair()[0]
 else:
-    a['SocketType'] = _socket = socket.socket()
-    a['SocketPairType'] = _socket._sock
+    x['SocketType'] = _socket = socket.socket()
+    x['SocketPairType'] = _socket._sock
 # python runtime services (CH 27)
 if PY3:
     a['GeneratorContextManagerType'] = contextlib.contextmanager(max)([1])
@@ -394,7 +393,7 @@ try: # python 2.6
     # numeric and mathematical types (CH 9)
     a['ProductType'] = itertools.product('0','1')
     # generic operating system services (CH 15)
-    a['FileHandlerType'] = logging.FileHandler(os.devnull) #FIXME: fail >= 3.2 and <= 2.6
+    a['FileHandlerType'] = logging.FileHandler(os.devnull)
     a['RotatingFileHandlerType'] = logging.handlers.RotatingFileHandler(os.devnull)
     a['SocketHandlerType'] = logging.handlers.SocketHandler('localhost',514)
     a['MemoryHandlerType'] = logging.handlers.MemoryHandler(1)
@@ -414,32 +413,71 @@ except AttributeError:
 
 # -- dill fails in some versions below here ---------------------------------
 # types module (part of CH 8)
-a['FileType'] = open(os.devnull, 'rb', buffering=0) # same 'wb','wb+','rb+'
-# FIXME: FileType fails >= 3.1
+d['FileType'] = open(os.devnull, 'rb', buffering=0) # same 'wb','wb+','rb+'
 # built-in functions (CH 2)
-a['ListIteratorType'] = iter(_list) # empty vs non-empty FIXME: fail < 3.2
-a['TupleIteratorType']= iter(_tuple) # empty vs non-empty FIXME: fail < 3.2
-a['XRangeIteratorType'] = iter(_xrange) # empty vs non-empty FIXME: fail < 3.2
+# Iterators:
+a['ListIteratorType'] = iter(_list) # empty vs non-empty
+a['SetIteratorType'] = iter(_set) #XXX: empty vs non-empty #FIXME: list_iterator
+a['TupleIteratorType']= iter(_tuple) # empty vs non-empty
+a['XRangeIteratorType'] = iter(_xrange) # empty vs non-empty
+a["BytesIteratorType"] = iter(b'')
+a["BytearrayIteratorType"] = iter(bytearray(b''))
+a["CallableIteratorType"] = iter(iter, None)
+x["MemoryIteratorType"] = iter(memoryview(b''))
+a["ListReverseiteratorType"] = reversed([])
+X = a['OrderedDictType']
+d["OdictKeysType"] = X.keys()
+d["OdictValuesType"] = X.values()
+d["OdictItemsType"] = X.items()
+a["OdictIteratorType"] = iter(X.keys()) #FIXME: list_iterator
+del X
+if PY3: #FIXME: list_iterator
+    a['DictionaryItemIteratorType'] = iter(type.__dict__.items())
+    a['DictionaryKeyIteratorType'] = iter(type.__dict__.keys())
+    a['DictionaryValueIteratorType'] = iter(type.__dict__.values())
+else:
+    a['DictionaryItemIteratorType'] = type.__dict__.iteritems()
+    a['DictionaryKeyIteratorType'] = type.__dict__.iterkeys()
+    a['DictionaryValueIteratorType'] = type.__dict__.itervalues()
+if sys.hexversion >= 0x30800a0:
+    a["DictReversekeyiteratorType"] = reversed({}.keys())
+    a["DictReversevalueiteratorType"] = reversed({}.values())
+    a["DictReverseitemiteratorType"] = reversed({}.items())
+
+try:
+    import symtable
+    x["SymtableEntryType"] = symtable.symtable("", "string", "exec")._table
+except: #FIXME: fails to pickle
+    pass
+
+if sys.hexversion >= 0x30a00a0:
+    a['LineIteratorType'] = compile('3', '', 'eval').co_lines()
+
+if sys.hexversion >= 0x30b00b0:
+    from types import GenericAlias
+    a["GenericAliasIteratorType"] = iter(GenericAlias(list, (int,)))
+    a['PositionsIteratorType'] = compile('3', '', 'eval').co_positions()
+
 # data types (CH 8)
-a['PrettyPrinterType'] = pprint.PrettyPrinter() #FIXME: fail >= 3.2 and == 2.5
+a['PrettyPrinterType'] = pprint.PrettyPrinter()
 # numeric and mathematical types (CH 9)
-a['CycleType'] = itertools.cycle('0') #FIXME: fail < 3.2
+a['CycleType'] = itertools.cycle('0')
 # file and directory access (CH 10)
-a['TemporaryFileType'] = _tmpf #FIXME: fail >= 3.2 and == 2.5
+a['TemporaryFileType'] = _tmpf
 # data compression and archiving (CH 12)
-a['GzipFileType'] = gzip.GzipFile(fileobj=_fileW) #FIXME: fail > 3.2 and <= 2.6
+x['GzipFileType'] = gzip.GzipFile(fileobj=_fileW)
 # generic operating system services (CH 15)
-a['StreamHandlerType'] = logging.StreamHandler() #FIXME: fail >= 3.2 and == 2.5
+a['StreamHandlerType'] = logging.StreamHandler()
 try: # python 2.6
     # numeric and mathematical types (CH 9)
-    a['PermutationsType'] = itertools.permutations('0') #FIXME: fail < 3.2
-    a['CombinationsType'] = itertools.combinations('0',1) #FIXME: fail < 3.2
+    a['PermutationsType'] = itertools.permutations('0')
+    a['CombinationsType'] = itertools.combinations('0',1)
 except AttributeError:
     pass
 try: # python 2.7
     # numeric and mathematical types (CH 9)
-    a['RepeatType'] = itertools.repeat(0) #FIXME: fail < 3.2
-    a['CompressType'] = itertools.compress('0',[1]) #FIXME: fail < 3.2
+    a['RepeatType'] = itertools.repeat(0)
+    a['CompressType'] = itertools.compress('0',[1])
     #XXX: ...and etc
 except AttributeError:
     pass
@@ -452,16 +490,7 @@ x['TracebackType'] = _function2()[1] #(see: inspect.getouterframes,getframeinfo)
 # other (concrete) object types
 # (also: Capsule / CObject ?)
 # built-in functions (CH 2)
-x['SetIteratorType'] = iter(_set) #XXX: empty vs non-empty
 # built-in types (CH 5)
-if PY3:
-    x['DictionaryItemIteratorType'] = iter(type.__dict__.items())
-    x['DictionaryKeyIteratorType'] = iter(type.__dict__.keys())
-    x['DictionaryValueIteratorType'] = iter(type.__dict__.values())
-else:
-    x['DictionaryItemIteratorType'] = type.__dict__.iteritems()
-    x['DictionaryKeyIteratorType'] = type.__dict__.iterkeys()
-    x['DictionaryValueIteratorType'] = type.__dict__.itervalues()
 # string services (CH 7)
 x['StructType'] = struct.Struct('c')
 x['CallableIteratorType'] = _srepattern.finditer('')
@@ -517,7 +546,7 @@ if HAS_CTYPES:
     x['CFunctionType'] = _cfunc(str)
 try: # python 2.6
     # numeric and mathematical types (CH 9)
-    x['MethodCallerType'] = operator.methodcaller('mro') # 2.6
+    a['MethodCallerType'] = operator.methodcaller('mro') # 2.6
 except AttributeError:
     pass
 try: # python 2.7
@@ -525,17 +554,17 @@ try: # python 2.7
     x['MemoryType'] = memoryview(_in) # 2.7
     x['MemoryType2'] = memoryview(bytearray(_in)) # 2.7
     if PY3:
-        x['DictItemsType'] = _dict.items() # 2.7
-        x['DictKeysType'] = _dict.keys() # 2.7
-        x['DictValuesType'] = _dict.values() # 2.7
+        d['DictItemsType'] = _dict.items() # 2.7
+        d['DictKeysType'] = _dict.keys() # 2.7
+        d['DictValuesType'] = _dict.values() # 2.7
     else:
-        x['DictItemsType'] = _dict.viewitems() # 2.7
-        x['DictKeysType'] = _dict.viewkeys() # 2.7
-        x['DictValuesType'] = _dict.viewvalues() # 2.7
+        d['DictItemsType'] = _dict.viewitems() # 2.7
+        d['DictKeysType'] = _dict.viewkeys() # 2.7
+        d['DictValuesType'] = _dict.viewvalues() # 2.7
     # generic operating system services (CH 15)
-    x['RawTextHelpFormatterType'] = argparse.RawTextHelpFormatter('PROG')
-    x['RawDescriptionHelpFormatterType'] = argparse.RawDescriptionHelpFormatter('PROG')
-    x['ArgDefaultsHelpFormatterType'] = argparse.ArgumentDefaultsHelpFormatter('PROG')
+    a['RawTextHelpFormatterType'] = argparse.RawTextHelpFormatter('PROG')
+    a['RawDescriptionHelpFormatterType'] = argparse.RawDescriptionHelpFormatter('PROG')
+    a['ArgDefaultsHelpFormatterType'] = argparse.ArgumentDefaultsHelpFormatter('PROG')
 except NameError:
     pass
 try: # python 2.7 (and not 3.1)
@@ -547,6 +576,11 @@ if PY3: # oddities: removed, etc
     x['BufferType'] = x['MemoryType']
 else:
     x['BufferType'] = buffer('')
+
+from dill._dill import _testcapsule
+if _testcapsule is not None:
+    d['PyCapsuleType'] = _testcapsule
+del _testcapsule
 
 # -- cleanup ----------------------------------------------------------------
 a.update(d) # registered also succeed
