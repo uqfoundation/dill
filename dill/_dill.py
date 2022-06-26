@@ -747,11 +747,13 @@ if InputType:
     _incedental_reverse_typemap['InputType'] = InputType
     _incedental_reverse_typemap['OutputType'] = OutputType
 
+'''
 try:
     import symtable
     _incedental_reverse_typemap["SymtableEntryType"] = type(symtable.symtable("", "string", "exec")._table)
-except:
+except: #FIXME: fails to pickle
     pass
+'''
 
 if sys.hexversion >= 0x30a00a0:
     _incedental_reverse_typemap['LineIteratorType'] = type(compile('3', '', 'eval').co_lines())

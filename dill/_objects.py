@@ -446,8 +446,8 @@ if sys.hexversion >= 0x30800a0:
 
 try:
     import symtable
-    d["SymtableEntryType"] = symtable.symtable("", "string", "exec")._table
-except: #FIXME: fails; should not be registered (in _reverse__typemap)?
+    x["SymtableEntryType"] = symtable.symtable("", "string", "exec")._table
+except: #FIXME: fails to pickle
     pass
 
 if sys.hexversion >= 0x30a00a0:
