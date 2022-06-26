@@ -813,7 +813,7 @@ class match:
     def vars(self):
         return dict(zip(self.args, self.value))
 
-CODE_PARAMS = [
+ALL_CODE_PARAMS = [
     # Version     New attribute         CodeType parameters
     ((3,11,'a'), 'co_endlinetable',    'argcount posonlyargcount kwonlyargcount nlocals stacksize flags code consts names varnames filename name qualname firstlineno linetable endlinetable columntable exceptiontable freevars cellvars'),
     ((3,11),     'co_exceptiontable',  'argcount posonlyargcount kwonlyargcount nlocals stacksize flags code consts names varnames filename name qualname firstlineno linetable                          exceptiontable freevars cellvars'),
@@ -821,7 +821,7 @@ CODE_PARAMS = [
     ((3,8),      'co_posonlyargcount', 'argcount posonlyargcount kwonlyargcount nlocals stacksize flags code consts names varnames filename name          firstlineno lnotab                                            freevars cellvars'),
     ((3,7),      'co_kwonlyargcount',  'argcount                 kwonlyargcount nlocals stacksize flags code consts names varnames filename name          firstlineno lnotab                                            freevars cellvars'),
     ]
-for version, new_attr, params in CODE_PARAMS:
+for version, new_attr, params in ALL_CODE_PARAMS:
     if hasattr(CodeType, new_attr):
         CODE_VERSION = version
         CODE_PARAMS = params.split()

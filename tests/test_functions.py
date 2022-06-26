@@ -102,5 +102,24 @@ assert dill.loads(dumped_func_e)(1, 2, e2=3, e3=4) == 10
 assert dill.loads(dumped_func_e)(1, 2, 3, e2=4) == 12
 assert dill.loads(dumped_func_e)(1, 2, 3, e2=4, e3=5) == 15''')
 
+def test_code_object():
+    from dill._dill import ALL_CODE_PARAMS, CODE_PARAMS, _create_code
+    code = function_c.__code__
+    fields = {f: getattr(code, 'co_'+f) for f in CODE_PARAMS}
+    fields.setdefault('posonlyargcount', 0)         # python >= 3.8
+    fields.setdefault('lnotab', getattr(code, 'co_lnotab', b'')) # python <= 3.9
+    fields.setdefault('linetable', b'')             # python >= 3.10
+    fields.setdefault('qualname', fields['name'])   # python >= 3.10
+    fields.setdefault('exceptiontable', b'')        # python >= 3.10
+    fields.setdefault('endlinetable', None)         # python == 3.11a
+    fields.setdefault('columntable', None)          # python == 3.11a
+
+    for version, _, params in ALL_CODE_PARAMS:
+        args = tuple(fields[p] for p in params.split())
+        _create_code(*args)
+        if version >= (3,10):
+            _create_code(fields['lnotab'], *args)
+
 if __name__ == '__main__':
     test_functions()
+    test_code_object()
