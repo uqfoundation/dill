@@ -275,16 +275,16 @@ a['ModuleType'] = datetime
 a['NotImplementedType'] = NotImplemented
 a['SliceType'] = slice(1)
 a['UnboundMethodType'] = _class._method #XXX: works when not imported!
-a['TextWrapperType'] = open(os.devnull, 'r') # same as mode='w','w+','r+'
-a['BufferedRandomType'] = open(os.devnull, 'r+b') # same as mode='w+b'
-a['BufferedReaderType'] = open(os.devnull, 'rb') # (default: buffering=-1)
-a['BufferedWriterType'] = open(os.devnull, 'wb')
+d['TextWrapperType'] = open(os.devnull, 'r') # same as mode='w','w+','r+'
+d['BufferedRandomType'] = open(os.devnull, 'r+b') # same as mode='w+b'
+d['BufferedReaderType'] = open(os.devnull, 'rb') # (default: buffering=-1)
+d['BufferedWriterType'] = open(os.devnull, 'wb')
 try: # oddities: deprecated
     from _pyio import open as _open
-    a['PyTextWrapperType'] = _open(os.devnull, 'r', buffering=-1)
-    a['PyBufferedRandomType'] = _open(os.devnull, 'r+b', buffering=-1)
-    a['PyBufferedReaderType'] = _open(os.devnull, 'rb', buffering=-1)
-    a['PyBufferedWriterType'] = _open(os.devnull, 'wb', buffering=-1)
+    d['PyTextWrapperType'] = _open(os.devnull, 'r', buffering=-1)
+    d['PyBufferedRandomType'] = _open(os.devnull, 'r+b', buffering=-1)
+    d['PyBufferedReaderType'] = _open(os.devnull, 'rb', buffering=-1)
+    d['PyBufferedWriterType'] = _open(os.devnull, 'wb', buffering=-1)
 except ImportError:
     pass
 # other (concrete) object types
@@ -294,17 +294,16 @@ if PY3:
 else:
     d['CellType'] = (_lambda)(0).func_closure[0]
     a['XRangeType'] = _xrange = xrange(1)
-if not IS_PYPY:
-    d['MethodDescriptorType'] = type.__dict__['mro']
-    d['WrapperDescriptorType'] = type.__repr__
-    a['WrapperDescriptorType2'] = type.__dict__['__module__']
-    d['ClassMethodDescriptorType'] = type.__dict__['__prepare__' if PY3 else 'mro']
+a['MethodDescriptorType'] = type.__dict__['mro']
+a['WrapperDescriptorType'] = type.__repr__
+#a['WrapperDescriptorType2'] = type.__dict__['__module__']#XXX: GetSetDescriptor
+a['ClassMethodDescriptorType'] = type.__dict__['__prepare__' if PY3 else 'mro']
 # built-in functions (CH 2)
 if PY3 or IS_PYPY: 
     _methodwrap = (1).__lt__
 else: 
     _methodwrap = (1).__cmp__
-d['MethodWrapperType'] = _methodwrap
+a['MethodWrapperType'] = _methodwrap
 a['StaticMethodType'] = staticmethod(_method)
 a['ClassMethodType'] = classmethod(_method)
 a['PropertyType'] = property()
@@ -414,7 +413,7 @@ except AttributeError:
 
 # -- dill fails in some versions below here ---------------------------------
 # types module (part of CH 8)
-a['FileType'] = open(os.devnull, 'rb', buffering=0) # same 'wb','wb+','rb+'
+d['FileType'] = open(os.devnull, 'rb', buffering=0) # same 'wb','wb+','rb+'
 # built-in functions (CH 2)
 # Iterators:
 a['ListIteratorType'] = iter(_list) # empty vs non-empty
@@ -427,9 +426,9 @@ a["CallableIteratorType"] = iter(iter, None)
 x["MemoryIteratorType"] = iter(memoryview(b''))
 a["ListReverseiteratorType"] = reversed([])
 X = a['OrderedDictType']
-a["OdictKeysType"] = X.keys()
-a["OdictValuesType"] = X.values()
-a["OdictItemsType"] = X.items()
+d["OdictKeysType"] = X.keys()
+d["OdictValuesType"] = X.values()
+d["OdictItemsType"] = X.items()
 a["OdictIteratorType"] = iter(X.keys())
 del X
 if PY3:
@@ -447,8 +446,8 @@ if sys.hexversion >= 0x30800a0:
 
 try:
     import symtable
-    x["SymtableEntryType"] = symtable.symtable("", "string", "exec")._table
-except:
+    d["SymtableEntryType"] = symtable.symtable("", "string", "exec")._table
+except: #FIXME: fails; should not be registered (in _reverse__typemap)?
     pass
 
 if sys.hexversion >= 0x30a00a0:
@@ -555,13 +554,13 @@ try: # python 2.7
     x['MemoryType'] = memoryview(_in) # 2.7
     x['MemoryType2'] = memoryview(bytearray(_in)) # 2.7
     if PY3:
-        a['DictItemsType'] = _dict.items() # 2.7
-        a['DictKeysType'] = _dict.keys() # 2.7
-        a['DictValuesType'] = _dict.values() # 2.7
+        d['DictItemsType'] = _dict.items() # 2.7
+        d['DictKeysType'] = _dict.keys() # 2.7
+        d['DictValuesType'] = _dict.values() # 2.7
     else:
-        a['DictItemsType'] = _dict.viewitems() # 2.7
-        a['DictKeysType'] = _dict.viewkeys() # 2.7
-        a['DictValuesType'] = _dict.viewvalues() # 2.7
+        d['DictItemsType'] = _dict.viewitems() # 2.7
+        d['DictKeysType'] = _dict.viewkeys() # 2.7
+        d['DictValuesType'] = _dict.viewvalues() # 2.7
     # generic operating system services (CH 15)
     a['RawTextHelpFormatterType'] = argparse.RawTextHelpFormatter('PROG')
     a['RawDescriptionHelpFormatterType'] = argparse.RawDescriptionHelpFormatter('PROG')
@@ -580,7 +579,7 @@ else:
 
 from dill._dill import _testcapsule
 if _testcapsule is not None:
-    a['PyCapsuleType'] = _testcapsule
+    d['PyCapsuleType'] = _testcapsule
 del _testcapsule
 
 # -- cleanup ----------------------------------------------------------------
