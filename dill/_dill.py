@@ -194,33 +194,16 @@ else:
     def numpyufunc(obj): return False
     def numpydtype(obj): return False
 
+from types import GetSetDescriptorType, ClassMethodDescriptorType, \
+     WrapperDescriptorType,  MethodDescriptorType, MemberDescriptorType, \
+     MethodWrapperType #XXX: unused
+
 # make sure to add these 'hand-built' types to _typemap
 if PY3:
     CellType = type((lambda x: lambda y: x)(0).__closure__[0])
 else:
     CellType = type((lambda x: lambda y: x)(0).func_closure[0])
-# new in python2.5
-if sys.hexversion >= 0x20500f0:
-    from types import GetSetDescriptorType
-    if not IS_PYPY:
-        from types import MemberDescriptorType
-    else:
-        # oddly, MemberDescriptorType is GetSetDescriptorType
-        # while, member_descriptor does exist otherwise... is this a pypy bug?
-        class _member(object):
-            __slots__ = ['descriptor']
-        MemberDescriptorType = type(_member.descriptor)
-if IS_PYPY:
-    WrapperDescriptorType = MethodType
-    MethodDescriptorType = FunctionType
-    ClassMethodDescriptorType = FunctionType
-else:
-    WrapperDescriptorType = type(type.__repr__)
-    MethodDescriptorType = type(type.__dict__['mro'])
-    ClassMethodDescriptorType = type(type.__dict__['__prepare__' if PY3 else 'mro'])
-
-MethodWrapperType = type([].__repr__)
-PartialType = type(partial(int,base=2))
+PartialType = type(partial(int, base=2))
 SuperType = type(super(Exception, TypeError()))
 ItemGetterType = type(itemgetter(0))
 AttrGetterType = type(attrgetter('__repr__'))
@@ -717,7 +700,6 @@ def _create_typemap():
 _reverse_typemap = dict(_create_typemap())
 _reverse_typemap.update({
     'CellType': CellType,
-    'MethodWrapperType': MethodWrapperType,
     'PartialType': PartialType,
     'SuperType': SuperType,
     'ItemGetterType': ItemGetterType,
@@ -725,7 +707,7 @@ _reverse_typemap.update({
 })
 
 # "Incidental" implementation specific types. Unpickling these types in another
-# implementation of Python (PyPy -> CPython) is not gauranteed to work
+# implementation of Python (PyPy -> CPython) is not guaranteed to work
 
 # This dictionary should contain all types that appear in Python implementations
 # but are not defined in https://docs.python.org/3/library/types.html#standard-interpreter-types
@@ -764,18 +746,14 @@ if ExitType:
 if InputType:
     _incedental_reverse_typemap['InputType'] = InputType
     _incedental_reverse_typemap['OutputType'] = OutputType
-if not IS_PYPY:
-    _incedental_reverse_typemap['WrapperDescriptorType'] = WrapperDescriptorType
-    _incedental_reverse_typemap['MethodDescriptorType'] = MethodDescriptorType
-    _incedental_reverse_typemap['ClassMethodDescriptorType'] = ClassMethodDescriptorType
-else:
-    _incedental_reverse_typemap['MemberDescriptorType'] = MemberDescriptorType
 
+'''
 try:
     import symtable
-    _incedental_reverse_typemap["SymtableStentryType"] = type(symtable.symtable("", "string", "exec")._table)
-except:
+    _incedental_reverse_typemap["SymtableEntryType"] = type(symtable.symtable("", "string", "exec")._table)
+except: #FIXME: fails to pickle
     pass
+'''
 
 if sys.hexversion >= 0x30a00a0:
     _incedental_reverse_typemap['LineIteratorType'] = type(compile('3', '', 'eval').co_lines())
