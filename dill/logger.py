@@ -44,13 +44,13 @@ its child objects).  Sample trace output:
 __all__ = ['adapter', 'logger', 'trace']
 
 import codecs
+import contextlib
 import locale
 import logging
 import math
 import os
-from contextlib import contextmanager
 from functools import partial
-from typing import NoReturn, Union
+from typing import NoReturn, TextIO, Union
 
 import dill
 
@@ -213,7 +213,7 @@ adapter = TraceAdapter(logger)
 stderr_handler = logging.StreamHandler()
 adapter.addHandler(stderr_handler)
 
-def trace(arg: Union[bool, str, os.PathLike] = None, *, mode: str = 'a') -> NoReturn:
+def trace(arg: Union[bool, TextIO, str, os.PathLike] = None, *, mode: str = 'a') -> NoReturn:
     """print a trace through the stack when pickling; useful for debugging
     
     With a single boolean argument, enable or disable the tracing.
@@ -226,9 +226,10 @@ def trace(arg: Union[bool, str, os.PathLike] = None, *, mode: str = 'a') -> NoRe
 
     Alternatively, ``trace()`` can be used as a context manager. With no
     arguments, it just takes care of restoring the tracing state on exit.
-    A file name and a file mode may be specitfied to redirect the tracing
-    output in the ``with`` block context. A log function is yielded by the
-    manager so the user can write extra information to the file.
+    Either a file handle, or a file name and (optionally) a file mode may be
+    specitfied to redirect the tracing output in the ``with`` block context. A
+    log function is yielded by the manager so the user can write extra
+    information to the file.
 
     Example usage:
 
@@ -248,29 +249,36 @@ def trace(arg: Union[bool, str, os.PathLike] = None, *, mode: str = 'a') -> NoRe
         >>>     dumps(squared)
 
     Arguments:
-        arg: a boolean value or an optional ``PathLike`` object for the context manager
+        arg: a boolean value, or an optional file-like or path-like object for the context manager
         mode: mode string for ``open()`` if a file name is passed as the first argument
     """
     if not isinstance(arg, bool):
-        return _trace(filename=arg, mode=mode)
+        return TraceManager(file=arg, mode=mode)
     logger.setLevel(logging.INFO if arg else logging.WARNING)
 
-@contextmanager
-def _trace(filename, mode):
+class TraceManager(contextlib.AbstractContextManager):
     """context manager version of trace(); can redirect the trace to a file"""
-    previous_level = adapter.getEffectiveLevel()
-    adapter.setLevel(logging.INFO)
-    redirect = filename is not None
-    if redirect:
-        handler = logging.FileHandler(filename, mode)
-    try:
-        if redirect:
+    def __init__(self, file, mode):
+        self.file = file
+        self.mode = mode
+        self.redirect = file is not None
+        self.file_is_stream = hasattr(file, 'write')
+    def __enter__(self):
+        if self.redirect:
+            stderr_handler.flush()
+            if self.file_is_stream:
+                self.handler = logging.StreamHandler(self.file)
+            else:
+                self.handler = logging.FileHandler(self.file, self.mode)
             adapter.removeHandler(stderr_handler)
-            adapter.addHandler(handler)
-        yield adapter.info
-    finally:
-        adapter.setLevel(previous_level)
-        if redirect:
-            handler.close()
-            adapter.removeHandler(handler)
+            adapter.addHandler(self.handler)
+        self.old_level = adapter.getEffectiveLevel()
+        adapter.setLevel(logging.INFO)
+        return adapter.info
+    def __exit__(self, *exc_info):
+        adapter.setLevel(self.old_level)
+        if self.redirect:
+            adapter.removeHandler(self.handler)
             adapter.addHandler(stderr_handler)
+            if not self.file_is_stream:
+                self.handler.close()
