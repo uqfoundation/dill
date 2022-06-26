@@ -417,7 +417,7 @@ d['FileType'] = open(os.devnull, 'rb', buffering=0) # same 'wb','wb+','rb+'
 # built-in functions (CH 2)
 # Iterators:
 a['ListIteratorType'] = iter(_list) # empty vs non-empty
-a['SetIteratorType'] = iter(_set) #XXX: empty vs non-empty
+a['SetIteratorType'] = iter(_set) #XXX: empty vs non-empty #FIXME: list_iterator
 a['TupleIteratorType']= iter(_tuple) # empty vs non-empty
 a['XRangeIteratorType'] = iter(_xrange) # empty vs non-empty
 a["BytesIteratorType"] = iter(b'')
@@ -429,9 +429,9 @@ X = a['OrderedDictType']
 d["OdictKeysType"] = X.keys()
 d["OdictValuesType"] = X.values()
 d["OdictItemsType"] = X.items()
-a["OdictIteratorType"] = iter(X.keys())
+a["OdictIteratorType"] = iter(X.keys()) #FIXME: list_iterator
 del X
-if PY3:
+if PY3: #FIXME: list_iterator
     a['DictionaryItemIteratorType'] = iter(type.__dict__.items())
     a['DictionaryKeyIteratorType'] = iter(type.__dict__.keys())
     a['DictionaryValueIteratorType'] = iter(type.__dict__.values())

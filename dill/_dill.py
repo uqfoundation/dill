@@ -2373,7 +2373,10 @@ def check(obj, *args, **kwds):
     #    unpickle = "dill.loads(%s, ignore=%s)"%(repr(_obj), repr(ignore))
     #    cmd = [python, "-c", "import dill; print(%s)"%unpickle]
     #    msg = "SUCCESS" if not subprocess.call(cmd) else "LOAD FAILED"
-    msg = "%s -c import dill; print(dill.loads(%s))" % (python, repr(_obj))
+    if verbose is None:
+        msg = "%s -c import dill; dill.loads(%s)" % (python, repr(_obj))
+    else:
+        msg = "%s -c import dill; print(dill.loads(%s))" % (python, repr(_obj))
     msg = "SUCCESS" if not subprocess.call(msg.split(None,2)) else "LOAD FAILED"
     if verbose:
         print(msg)
