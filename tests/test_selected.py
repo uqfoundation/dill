@@ -42,6 +42,13 @@ from dill import objects
 from dill import load_types
 load_types(pickleable=True,unpickleable=False)
 _newclass = objects['ClassObjectType']
+# some clean-up #FIXME: should happen internal to dill
+objects['TemporaryFileType'].close()
+objects['TextWrapperType'].close()
+objects['BufferedRandomType'].close()
+objects['BufferedReaderType'].close()
+objects['BufferedWriterType'].close()
+objects['FileType'].close()
 del objects
 
 # getset_descriptor for new-style classes (fails on '_method', if not __main__)
