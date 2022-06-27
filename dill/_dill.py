@@ -1472,18 +1472,22 @@ def save_code(pickler, obj):
     logger.trace(pickler, "# Co")
     return
 
+def _repr_dict(obj):
+    """make a short string representation of a dictionary"""
+    return "<%s object at %#012x>" % (type(obj).__name__, id(obj))
+
 @register(dict)
 def save_module_dict(pickler, obj):
     if is_dill(pickler, child=False) and obj == pickler._main.__dict__ and \
             not (pickler._session and pickler._first_pass):
-        logger.trace(pickler, "D1: <dict%s", str(obj.__repr__).split('dict')[-1]) # obj
+        logger.trace(pickler, "D1: %s", _repr_dict(obj)) # obj
         if PY3:
             pickler.write(bytes('c__builtin__\n__main__\n', 'UTF-8'))
         else:
             pickler.write('c__builtin__\n__main__\n')
         logger.trace(pickler, "# D1")
     elif (not is_dill(pickler, child=False)) and (obj == _main_module.__dict__):
-        logger.trace(pickler, "D3: <dict%s", str(obj.__repr__).split('dict')[-1]) # obj
+        logger.trace(pickler, "D3: %s", _repr_dict(obj)) # obj
         if PY3:
             pickler.write(bytes('c__main__\n__dict__\n', 'UTF-8'))
         else:
@@ -1492,14 +1496,14 @@ def save_module_dict(pickler, obj):
     elif '__name__' in obj and obj != _main_module.__dict__ \
     and type(obj['__name__']) is str \
     and obj is getattr(_import_module(obj['__name__'],True), '__dict__', None):
-        logger.trace(pickler, "D4: <dict%s", str(obj.__repr__).split('dict')[-1]) # obj
+        logger.trace(pickler, "D4: %s", _repr_dict(obj)) # obj
         if PY3:
             pickler.write(bytes('c%s\n__dict__\n' % obj['__name__'], 'UTF-8'))
         else:
             pickler.write('c%s\n__dict__\n' % obj['__name__'])
         logger.trace(pickler, "# D4")
     else:
-        logger.trace(pickler, "D2: <dict%s", str(obj.__repr__).split('dict')[-1]) # obj
+        logger.trace(pickler, "D2: %s", _repr_dict(obj)) # obj
         if is_dill(pickler, child=False) and pickler._session:
             # we only care about session the first pass thru
             pickler._first_pass = False
@@ -1871,7 +1875,7 @@ def save_cell(pickler, obj):
 if MAPPING_PROXY_TRICK:
     @register(DictProxyType)
     def save_dictproxy(pickler, obj):
-        logger.trace(pickler, "Mp: %s", obj)
+        logger.trace(pickler, "Mp: %s", _repr_dict(obj)) # obj
         mapping = obj | _dictproxy_helper_instance
         pickler.save_reduce(DictProxyType, (mapping,), obj=obj)
         logger.trace(pickler, "# Mp")
@@ -1879,7 +1883,7 @@ if MAPPING_PROXY_TRICK:
 else:
     @register(DictProxyType)
     def save_dictproxy(pickler, obj):
-        logger.trace(pickler, "Mp: %s" % obj)
+        logger.trace(pickler, "Mp: %s", _repr_dict(obj)) # obj
         pickler.save_reduce(DictProxyType, (obj.copy(),), obj=obj)
         logger.trace(pickler, "# Mp")
         return
