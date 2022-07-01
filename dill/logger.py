@@ -215,9 +215,9 @@ adapter.addHandler(stderr_handler)
 
 def trace(arg: Union[bool, TextIO, str, os.PathLike] = None, *, mode: str = 'a') -> NoReturn:
     """print a trace through the stack when pickling; useful for debugging
-    
+
     With a single boolean argument, enable or disable the tracing.
-    
+
     Example usage:
 
         >>> import dill

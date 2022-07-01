@@ -7,10 +7,7 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 import dill as pickle
-try:
-    from StringIO import StringIO
-except ImportError:
-    from io import BytesIO as StringIO
+from io import BytesIO as StringIO
 
 
 def my_fn(x):
@@ -47,7 +44,7 @@ def test_isdill():
         pickler = mp.reduction.ForkingPickler(obj_io)
         assert pickle._dill.is_dill(pickler, child=True) is True
         assert pickle._dill.is_dill(pickler, child=False) is False
-    except:
+    except Exception:
         pass
 
 

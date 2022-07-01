@@ -6,7 +6,6 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 import dill
-from dill._dill import PY3
 from functools import partial
 import warnings
 
@@ -15,7 +14,7 @@ def copy(obj, byref=False, recurse=False):
     if byref:
         try:
             return dill.copy(obj, byref=byref, recurse=recurse)
-        except:
+        except Exception:
             pass
         else:
             raise AssertionError('Copy of %s with byref=True should have given a warning!' % (obj,))
@@ -113,9 +112,8 @@ class obj4(object):
 def test_circular_reference():
     assert copy(obj4())
     obj4_copy = dill.loads(dill.dumps(obj4()))
-    if PY3:
-        assert type(obj4_copy) is type(obj4_copy).__init__.__closure__[0].cell_contents
-        assert type(obj4_copy.b) is type(obj4_copy.b).__init__.__closure__[0].cell_contents
+    assert type(obj4_copy) is type(obj4_copy).__init__.__closure__[0].cell_contents
+    assert type(obj4_copy.b) is type(obj4_copy.b).__init__.__closure__[0].cell_contents
 
 
 def f():
@@ -146,7 +144,7 @@ def test_recursive_function():
     for _fib in (fib3, fib4):
         try:
             _fib(5)
-        except:
+        except Exception:
             # This is expected to fail because fib no longer exists
             pass
         else:

@@ -26,7 +26,7 @@ of which is converting a byte stream back to a python object hierarchy.
 ``dill`` provides the user the same interface as the ``pickle`` module, and
 also includes some additional features. In addition to pickling python
 objects, ``dill`` provides the ability to save the state of an interpreter
-session in a single command.  Hence, it would be feasable to save an
+session in a single command.  Hence, it would be feasible to save an
 interpreter session, close the interpreter, ship the pickled file to
 another computer, open a new interpreter, unpickle the session and
 thus continue from the 'saved' state of the original interpreter
@@ -42,7 +42,9 @@ a trustworthy source.
 
 ``dill`` is part of ``pathos``, a python framework for heterogeneous computing.
 ``dill`` is in active development, so any user feedback, bug reports, comments,
-or suggestions are highly appreciated.  A list of issues is located at https://github.com/uqfoundation/dill/issues, with a legacy list maintained at https://uqfoundation.github.io/project/pathos/query.
+or suggestions are highly appreciated.  A list of issues is located at
+https://github.com/uqfoundation/dill/issues, with a legacy list maintained at
+https://uqfoundation.github.io/project/pathos/query.
 
 
 Major Features
@@ -50,19 +52,18 @@ Major Features
 
 ``dill`` can pickle the following standard types:
 
-    - none, type, bool, int, long, float, complex, str, unicode,
+    - none, type, bool, int, float, complex, bytes, str,
     - tuple, list, dict, file, buffer, builtin,
-    - both old and new style classes,
-    - instances of old and new style classes,
+    - python classes, namedtuples, dataclasses, metaclasses,
+    - instances of classes,
     - set, frozenset, array, functions, exceptions
 
 ``dill`` can also pickle more 'exotic' standard types:
 
     - functions with yields, nested functions, lambdas,
     - cell, method, unboundmethod, module, code, methodwrapper,
-    - dictproxy, methoddescriptor, getsetdescriptor, memberdescriptor,
-    - wrapperdescriptor, xrange, slice,
-    - notimplemented, ellipsis, quit
+    - methoddescriptor, getsetdescriptor, memberdescriptor, wrapperdescriptor,
+    - dictproxy, slice, notimplemented, ellipsis, quit
 
 ``dill`` cannot yet pickle these standard types:
 
@@ -148,7 +149,7 @@ There are a number of options to control serialization which are provided
 as keyword arguments to several ``dill`` functions:
 
 * with *protocol*, the pickle protocol level can be set. This uses the
-  same value as the ``pickle`` module, *HIGHEST_PROTOCOL* or *DEFAULT_PROTOCOL*.
+  same value as the ``pickle`` module, *DEFAULT_PROTOCOL*.
 * with *byref=True*, ``dill`` to behave a lot more like pickle with
   certain objects (like modules) pickled by reference as opposed to
   attempting to pickle the object itself.
@@ -300,23 +301,9 @@ from .settings import settings
 # make sure "trace" is turned off
 detect.trace(False)
 
-try:
-    from importlib import reload
-except ImportError:
-    try:
-        from imp import reload
-    except ImportError:
-        pass
+from importlib import reload
 
-# put the objects in order, if possible
-try:
-    from collections import OrderedDict as odict
-except ImportError:
-    try:
-        from ordereddict import OrderedDict as odict
-    except ImportError:
-        odict = dict
-objects = odict()
+objects = {}
 # local import of dill._objects
 #from . import _objects
 #objects.update(_objects.succeeds)
@@ -377,7 +364,6 @@ def extend(use_dill=True):
     return
 
 extend()
-del odict
 
 
 def license():
