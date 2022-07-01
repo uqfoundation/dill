@@ -11,10 +11,6 @@ import sys
 dill.settings['recurse'] = True
 
 
-def is_py3():
-    return hex(sys.hexversion) >= '0x30000f0'
-
-
 def function_a(a):
     return a
 
@@ -34,18 +30,17 @@ def function_d(d, d1, d2=1):
 function_d.__module__ = 'a module'
 
 
-if is_py3():
-    exec('''
+exec('''
 def function_e(e, *e1, e2=1, e3=2):
     return e + sum(e1) + e2 + e3''')
 
-    globalvar = 0
+globalvar = 0
 
-    @functools.lru_cache(None)
-    def function_with_cache(x):
-        global globalvar
-        globalvar += x
-        return globalvar
+@functools.lru_cache(None)
+def function_with_cache(x):
+    global globalvar
+    globalvar += x
+    return globalvar
 
 
 def function_with_unassigned_variable():
@@ -87,28 +82,26 @@ def test_functions():
     assert dill.loads(dumped_func_d)(1, 2, 3) == 6
     assert dill.loads(dumped_func_d)(1, 2, d2=3) == 6
 
-    if is_py3():
-        function_with_cache(1)
-        globalvar = 0
-        dumped_func_cache = dill.dumps(function_with_cache)
-        assert function_with_cache(2) == 3
-        assert function_with_cache(1) == 1
-        assert function_with_cache(3) == 6
-        assert function_with_cache(2) == 3
+    function_with_cache(1)
+    globalvar = 0
+    dumped_func_cache = dill.dumps(function_with_cache)
+    assert function_with_cache(2) == 3
+    assert function_with_cache(1) == 1
+    assert function_with_cache(3) == 6
+    assert function_with_cache(2) == 3
 
     empty_cell = function_with_unassigned_variable()
     cell_copy = dill.loads(dill.dumps(empty_cell))
     assert 'empty' in str(cell_copy.__closure__[0])
     try:
         cell_copy()
-    except:
+    except Exception:
         # this is good
         pass
     else:
         raise AssertionError('cell_copy() did not read an empty cell')
 
-    if is_py3():
-        exec('''
+    exec('''
 dumped_func_e = dill.dumps(function_e)
 assert dill.loads(dumped_func_e)(1, 2) == 6
 assert dill.loads(dumped_func_e)(1, 2, 3) == 9
@@ -120,9 +113,10 @@ assert dill.loads(dumped_func_e)(1, 2, 3, e2=4, e3=5) == 15''')
 def test_code_object():
     from dill._dill import ALL_CODE_PARAMS, CODE_PARAMS, _create_code
     code = function_c.__code__
+    LNOTAB = getattr(code, 'co_lnotab', b'')
     fields = {f: getattr(code, 'co_'+f) for f in CODE_PARAMS}
     fields.setdefault('posonlyargcount', 0)         # python >= 3.8
-    fields.setdefault('lnotab', getattr(code, 'co_lnotab', b'')) # python <= 3.9
+    fields.setdefault('lnotab', LNOTAB)             # python <= 3.9
     fields.setdefault('linetable', b'')             # python >= 3.10
     fields.setdefault('qualname', fields['name'])   # python >= 3.10
     fields.setdefault('exceptiontable', b'')        # python >= 3.10

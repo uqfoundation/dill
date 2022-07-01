@@ -5,8 +5,12 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
-from __future__ import print_function
-import atexit, dill, os, sys, __main__
+import atexit
+import os
+import sys
+import __main__
+
+import dill
 
 session_file = os.path.join(os.path.dirname(__file__), 'session-byref-%s.pkl')
 
@@ -114,9 +118,8 @@ def test_objects(main, copy_dict, byref):
         for obj in ('x', 'empty', 'names'):
             assert main_dict[obj] == copy_dict[obj]
 
-        globs = '__globals__' if dill._dill.PY3 else 'func_globals'
         for obj in ['squared', 'cubed']:
-            assert getattr(main_dict[obj], globs) is main_dict
+            assert main_dict[obj].__globals__ is main_dict
             assert main_dict[obj](3) == copy_dict[obj](3)
 
         assert main.Person.__module__ == main.__name__

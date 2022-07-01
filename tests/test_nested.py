@@ -110,7 +110,7 @@ def test_pickled_inner():
 def test_moduledict_where_not_main():
     try:
         from . import test_moduledict
-    except:
+    except ImportError:
         import test_moduledict
     name = 'test_moduledict.py'
     if os.path.exists(name) and os.path.exists(name+'c'):
