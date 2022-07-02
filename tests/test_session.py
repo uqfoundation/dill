@@ -85,7 +85,6 @@ class CalendarSubclass(Calendar):
 cal = CalendarSubclass()
 selfref = __main__
 
-
 # Setup global namespace for session saving tests.
 class TestNamespace:
     test_globals = globals().copy()
@@ -101,7 +100,6 @@ class TestNamespace:
         globals().clear()
         globals().update(self.backup)
 
-
 def _clean_up_cache(module):
     cached = module.__file__.split('.', 1)[0] + '.pyc'
     cached = module.__cached__ if hasattr(module, '__cached__') else cached
@@ -113,7 +111,6 @@ def _clean_up_cache(module):
             pass
 
 atexit.register(_clean_up_cache, local_mod)
-
 
 def _test_objects(main, globals_copy, byref):
     try:
@@ -145,7 +142,6 @@ def _test_objects(main, globals_copy, byref):
         error.args = (_error_line(error, obj, byref),)
         raise
 
-
 def test_session_main(byref):
     """test dump/load_session() for __main__, both in this process and in a subprocess"""
     extra_objects = {}
@@ -174,7 +170,6 @@ def test_session_main(byref):
         dill.load_session(session_buffer)
         ns.backup['_test_objects'](__main__, ns.backup, byref)
 
-
 def test_session_other():
     """test dump/load_session() for a module other than __main__"""
     import test_classdef as module
@@ -193,7 +188,6 @@ def test_session_other():
 
     assert all(obj in module.__dict__ for obj in dict_objects)
     assert module.selfref is module
-
 
 def test_runtime_module():
     from types import ModuleType
@@ -229,34 +223,32 @@ def test_runtime_module():
     assert runtime.x == 42
     assert runtime not in sys.modules.values()
 
-
-def test_session_copy():
+def test_load_vars():
     with TestNamespace():
         session_buffer = io.BytesIO()
         dill.dump_session(session_buffer)
 
-        global x, y, empty
+        global empty, names, x, y
         x = y = 0  # change x and create y
         del empty
         globals_state = globals().copy()
 
         session_buffer.seek(0)
-        main_copy = dill.load_session_copy(session_buffer)
+        main_vars = dill.load_vars(session_buffer)
 
-        assert main_copy is not __main__
-        assert main_copy not in sys.modules.values()
-        assert vars(main_copy) is not globals()
+        assert main_vars is not globals()
         assert globals() == globals_state
 
-        assert main_copy.__name__ == '__main__'
-        assert x != main_copy.x
-        assert 'y' not in vars(main_copy)
-        assert 'empty' in vars(main_copy)
-
+        assert main_vars['__name__'] == '__main__'
+        assert main_vars['names'] == names
+        assert main_vars['names'] is not names
+        assert main_vars['x'] != x
+        assert 'y' not in main_vars
+        assert 'empty' in main_vars
 
 if __name__ == '__main__':
     test_session_main(byref=False)
     test_session_main(byref=True)
     test_session_other()
     test_runtime_module()
-    test_session_copy()
+    test_load_vars()

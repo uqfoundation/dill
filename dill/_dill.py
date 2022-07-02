@@ -16,7 +16,7 @@ Test against "all" python types (Std. Lib. CH 1-15 @ 2.7) by mmckerns.
 Test against CH16+ Std. Lib. ... TBD.
 """
 __all__ = ['dump', 'dumps', 'load', 'loads', 'dump_session', 'load_session',
-           'load_session_copy', 'Pickler', 'Unpickler', 'register', 'copy',
+           'load_vars', 'Pickler', 'Unpickler', 'register', 'copy',
            'pickle', 'pickles', 'check', 'HIGHEST_PROTOCOL', 'DEFAULT_PROTOCOL',
            'PicklingError', 'UnpicklingError', 'HANDLE_FMODE', 'CONTENTS_FMODE',
            'FILE_FMODE', 'PickleError', 'PickleWarning', 'PicklingWarning',
@@ -78,6 +78,7 @@ else:
          GeneratorType, DictProxyType, XRangeType, SliceType, TracebackType, \
          NotImplementedType, EllipsisType, FrameType, ModuleType, \
          BufferType, BuiltinMethodType, TypeType
+from typing import Optional, Union
 from pickle import HIGHEST_PROTOCOL, PickleError, PicklingError, UnpicklingError
 try:
     from pickle import DEFAULT_PROTOCOL
@@ -400,8 +401,12 @@ def loads(str, ignore=None, **kwds):
 ### End: Shorthands ###
 
 ### Pickle the Interpreter Session
+import pathlib
+import tempfile
+
 SESSION_IMPORTED_AS_TYPES = (ModuleType, ClassType, TypeType, Exception,
                              FunctionType, MethodType, BuiltinMethodType)
+TEMPDIR = pathlib.PurePath(tempfile.gettempdir())
 
 def _module_map():
     """get map of imported modules"""
@@ -483,8 +488,53 @@ def _restore_modules(unpickler, main_module):
         pass
 
 #NOTE: 06/03/15 renamed main_module to main
-def dump_session(filename='/tmp/session.pkl', main=None, byref=False, **kwds):
-    """pickle the current state of __main__ to a file"""
+def dump_session(
+    filename = str(TEMPDIR/'session.pkl'),
+    main: Optional[Union[ModuleType, str]] = None,
+    byref: bool = False,
+    **kwds
+) -> None:
+    """Pickle the current state of :py:mod:`__main__` to a file.
+
+    Save the interpreter session (the contents of the built-in module
+    :py:mod:`__main__`) or the state of another module to a pickle file.  This
+    can then be restored by calling the function :py:func:`load_session`.
+
+    Runtime-created modules, like the ones constructed by
+    :py:class:`~types.ModuleType`, can also be saved and restored thereafter.
+
+    Parameters:
+        filename: a path-like object or a writable stream
+        main: a module object or an importable module name
+        byref: if `True`, imported objects in the module's namespace are saved
+            by reference. *Note:* this is different from the ``byref`` option
+            of other "dump" functions and is not affected by
+            ``settings['byref']``.
+        **kwds: extra keyword arguments passed to :py:class:`Pickler()`
+
+    Raises:
+       :py:exc:`PicklingError`: if pickling fails
+
+    Examples:
+        - Save current session state:
+
+          >>> import dill
+          >>> dill.dump_session()  # save state of __main__ to /tmp/session.pkl
+
+        - Save the state of an imported/importable module:
+
+          >>> import my_mod as m
+          >>> m.var = 'new value'
+          >>> dill.dump_session('my_mod_session.pkl', main='my_mod')
+
+        - Save the state of an non-importable, runtime-created module:
+
+          >>> from types import ModuleType
+          >>> runtime = ModuleType('runtime')
+          >>> runtime.food = ['bacon', 'eggs', 'spam']
+          >>> runtime.process_food = m.process_food
+          >>> dill.dump_session('runtime_session.pkl', main=runtime, byref=True)
+    """
     from .settings import settings
     protocol = settings['protocol']
     if main is None: main = _main_module
@@ -509,20 +559,42 @@ def dump_session(filename='/tmp/session.pkl', main=None, byref=False, **kwds):
             file.close()
     return
 
-def _open_peekable(filename):
-    if hasattr(filename, 'read'):
-        file = filename
-    else:
-        file = open(filename, 'rb')
-    if not hasattr(file, 'peek'):
+class _PeekableReader:
+    """lightweight stream wrapper that implements peek()"""
+    def __init__(self, stream):
+        self.stream = stream
+    def read(self, n):
+        return self.stream.read(n)
+    def tell(self):
+        return self.stream.tell()
+    def close(self):
+        return self.stream.close()
+    def peek(self, n):
+        stream = self.stream
         try:
-            import io
-            file = io.BufferedReader(file)
-        except Exception:
-            pass  # ...and hope for the best
-    return file
+            if hasttr(stream, 'flush'): stream.flush()
+            position = stream.tell()
+            stream.seek(position)  # assert seek() works before reading
+            chunk = stream.read(n)
+            stream.seek(position)
+            return chunk
+        except (AttributeError, OSError):
+            raise NotImplementedError("stream is not peekable: %r", stream) from None
 
-def _inspect_pickle(file, main_is_none):
+def _make_peekable(stream):
+    """return stream as an object with a peek() method"""
+    import io
+    if hasattr(stream, 'peek'):
+        return stream
+    if not (hasattr(stream, 'tell') and hasattr(stream, 'seek')):
+        try:
+            return io.BufferedReader(stream)
+        except Exception:
+            pass
+    return _PeekableReader(stream)
+
+def _identify_session_module(file, main_is_none):
+    """identify the session file's module name"""
     from pickletools import genops
     UNICODE = {'UNICODE', 'BINUNICODE', 'SHORT_BINUNICODE'}
     found_import = False
@@ -534,25 +606,81 @@ def _inspect_pickle(file, main_is_none):
                     found_import = True
             else:
                 if opcode.name in UNICODE:
-                    if not all(name.isidentifier() for name in arg.split('.')):
-                        raise UnpicklingError("invalid module name: %r" % arg)
                     return arg
         else:
             raise UnpicklingError("reached STOP without finding main module")
-    except (AttributeError, ValueError) as error:
-        if isinstance(error, AttributeError) and not main_is_none:
-            # File is not peekable, but we have main.
+    except (NotImplementedError, ValueError) as error:
+        # ValueError occours when the end of the chunk is reached (without a STOP).
+        if isinstance(error, NotImplementedError) and not main_is_none:
+            # file is not peekable, but we have main.
             return None
         raise UnpicklingError("unable to identify main module") from error
 
-def load_session(filename='/tmp/session.pkl', main=None, **kwds):
-    """update the __main__ module with the state from the session file"""
-    file = _open_peekable(filename)
+def load_session(
+    filename = str(TEMPDIR/'session.pkl'),
+    main: Union[ModuleType, str] = None,
+    **kwds
+) -> Optional[ModuleType]:
+    """Update the module :py:mod:`__main__` with the state from the session file.
+
+    Restore the interpreter session (the built-in module :py:mod:`__main__`) or
+    the state of another module from a pickle file created by the function
+    :py:func:`dump_session`.
+
+    If loading the state of a (non-importable) runtime-created module, a version
+    of this module may be passed as the argument ``main``.  Otherwise, a new
+    module object is created with :py:class:`~types.ModuleType` and returned
+    after it's updated.
+
+    Parameters:
+        filename: a path-like object or a readable stream
+        main: an importable module name or a module object (optional)
+        **kwds: extra keyword arguments passed to :py:class:`Unpickler()`
+
+    Raises:
+        :py:exc:`UnpicklingError`: if unpickling fails
+
+    Returns:
+        the restored module if different from :py:mod:`__main__`
+
+    Examples:
+        - Load a saved session state:
+
+          >>> import dill, sys
+          >>> dill.load_session()  # updates __main__ from /tmp/session.pkl
+          >>> restored_var
+          'this variable was created/updated by load_session()'
+
+        - Load the saved state of an importable module:
+
+          >>> my_mod = dill.load_session('my_mod_session.pkl')
+          >>> my_mod.var
+          'new value'
+          >>> my_mod in sys.modules.values()
+          True
+
+        - Load the saved state of a non-importable, runtime-created module:
+
+          >>> runtime = dill.load_session('runtime_session.pkl')
+          >>> runtime.process_food is my_mod.process_food  # was saved by reference
+          True
+          >>> runtime in sys.modules.values()
+          False
+
+    See also:
+        :py:func:`load_vars` to load the contents of a saved session (from
+        :py:mod:`__main__` or any importable module) into a dictionary.
+    """
+    if hasattr(filename, 'read'):
+        file = filename
+    else:
+        file = open(filename, 'rb')
     try:
+        file = _make_peekable(file)
         #FIXME: dill.settings are disabled
         unpickler = Unpickler(file, **kwds)
         unpickler._session = True
-        pickle_main = _inspect_pickle(file, main is None)
+        pickle_main = _identify_session_module(file, main is None)
 
         # Resolve unpickler._main
         if main is None and pickle_main is not None:
@@ -603,40 +731,74 @@ def load_session(filename='/tmp/session.pkl', main=None, **kwds):
     if module is not _main_module:
         return module
 
-def load_session_copy(filename='/tmp/session.pkl', **kwds):
+def load_vars(
+    filename = str(TEMPDIR/'session.pkl'),
+    update: bool = False,
+    **kwds
+) -> dict:
     """
-    Load the state of a module saved to a session file into a runtime created module.
+    Load the contents of a module from a session file into a dictionary.
 
-    The loaded module's origin is stored in the '__session__' attribute.
-    Warning: this function is completely thread-unsafe.
+    The loaded module's origin is stored in the ``__session__`` attribute.
+
+    Parameters:
+        filename: a path-like object or a readable stream
+        update: if `True`, the dictionary is updated with the current state of
+            module before loading variables from the session file
+        **kwds: extra keyword arguments passed to :py:class:`Unpickler()`
+
+    Raises:
+        :py:exc:`UnpicklingError`: if unpickling fails
+
+    Example:
+        >>> import dill
+        >>> alist = [1, 2, 3]
+        >>> anum = 42
+        >>> dill.dump_session()
+        >>> anum = 0
+        >>> new_var = 'spam'
+        >>> main_vars = dill.load_vars()
+        >>> main_vars['__name__'], main_vars['__session__']
+        ('__main__', '/tmp/session.pkl')
+        >>> main_vars is globals()  # loaded objects don't reference current global variables
+        False
+        >>> main_vars['alist'] == alist
+        True
+        >>> main_vars['alist'] is alist  # was saved by value
+        False
+        >>> main_vars['anum'] == anum  # changed after the session was saved
+        False
+        >>> new_var in main_vars  # would be True if the option 'update' was set
+        False
     """
     if 'main' in kwds:
-        raise TypeError("'main' is an invalid keyword argument for load_session_copy()")
-    file = _open_peekable(filename)
+        raise TypeError("'main' is an invalid keyword argument for load_vars()")
+    if hasattr(filename, 'read'):
+        file = filename
+    else:
+        file = open(filename, 'rb')
     try:
-        pickle_main = _inspect_pickle(file, main_is_none=True)
-        main = _import_module(pickle_main)
-        main_globals = vars(main).copy()
-        vars(main).clear()
-        for attr in ('__builtins__', '__loader__', '__name__'):
-            # Required by load_session().
-            if attr in main_globals:
-                setattr(main, attr, main_globals[attr])
+        file = _make_peekable(file)
+        main_name = _identify_session_module(file, main_is_none=True)
+        old_main = sys.modules.get(main_name)
+        main = ModuleType(main_name)
+        if update:
+            vars(main).update(vars(old_main))
+        main.__builtins__ = __builtin__
+        sys.modules[main_name] = main
         load_session(file, **kwds)
-        module = ModuleType(main.__name__)
-        vars(module).update(vars(main))
+        main.__session__ = filename if isinstance(filename, str) else repr(filename)
     finally:
         if not hasattr(filename, 'read'):  # if newly opened file
             file.close()
         try:
-            vars(main).clear()
-            vars(main).update(main_globals)
-        except NameError:
+            if old_main is None:
+                del sys.modules[main_name]
+            else:
+                sys.modules[main_name] = old_main
+        except NameError:  # failed before setting old_main
             pass
-    vars(module).pop('__path__', None)  # "don't treat this as a package"
-    module.__loader__ = module.__spec__ = None
-    module.__session__ = filename if isinstance(filename, str) else repr(filename)
-    return module
+    return vars(main)
 
 ### End: Pickle the Interpreter
 

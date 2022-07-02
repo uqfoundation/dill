@@ -65,12 +65,13 @@ author = u'Mike McKerns'
 
 # extension config
 github_project_url = "https://github.com/uqfoundation/dill"
-autoclass_content= 'both'
+autoclass_content = 'both'
+autodoc_typehints = 'description'
 napoleon_include_init_with_doc = True
 napoleon_include_private_with_doc = False
 napoleon_include_special_with_doc = True
-napoleon_use_param = False
 napoleon_use_ivar = True
+napoleon_use_param = True
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
