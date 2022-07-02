@@ -97,7 +97,7 @@ setup_kwds = dict(
         'Topic :: Software Development',
     ],
     packages = ['dill','dill.tests'],
-    package_dir = {'dill':'dill', 'dill.tests':'tests'},
+    package_dir = {'dill':'dill', 'dill.tests':'dill/tests'},
     scripts=['scripts/undill','scripts/get_objgraph'],
 )
 
