@@ -725,41 +725,46 @@ class match:
     """
     Make avaialable a limited structural pattern matching-like syntax for Python < 3.10
 
-    Patterns can be only (tuples of) types currently.
+    Patterns can be only tuples (without types) currently.
     Inspired by the package pattern-matching-PEP634.
 
     Usage:
     >>> with match(args) as m:
-    >>>     if   m.case('x', y=list):
+    >>>     if   m.case(('x', 'y')):
     >>>         # use m.x and m.y
-    >>>     elif m.case('x', y=list, z=(int, float)):
+    >>>     elif m.case(('x', 'y', 'z')):
     >>>         # use m.x, m.y and m.z
 
     Equivalent native code for Python >= 3.10:
     >>> match args:
-    >>>     case (x, list(y)):
+    >>>     case (x, y):
     >>>         # use x and y
-    >>>     case (x, list(y), int()|float() as z):
+    >>>     case (x, y, z):
     >>>         # use x, y and z
     """
     def __init__(self, value):
         self.value = value
+        self._fields = None
     def __enter__(self):
         return self
     def __exit__(self, *exc_info):
         return False
-    def __getattr__(self, item):
-        return self.vars[item]
-    def case(self, *args, **kwargs):
+    def case(self, args): # *args, **kwargs):
         """just handles tuple patterns"""
-        if len(args) + len(kwargs) != len(self.value):
+        if len(self.value) != len(args): # + len(kwargs):
             return False
-        if not all(isinstance(arg, pat) for arg, pat in zip(self.value[len(args):], kwargs.values())):
-            return False
-        self.args = (*args, *kwargs)
+        #if not all(isinstance(arg, pat) for arg, pat in zip(self.value[len(args):], kwargs.values())):
+        #    return False
+        self.args = args # (*args, *kwargs)
         return True
-    def vars(self):
-        return dict(zip(self.args, self.value))
+    @property
+    def fields(self):
+        # Only bind names to values if necessary.
+        if self._fields is None:
+            self._fields = dict(zip(self.args, self.value))
+        return self._fields
+    def __getattr__(self, item):
+        return self.fields[item]
 
 ALL_CODE_PARAMS = [
     # Version     New attribute         CodeType parameters
@@ -775,70 +780,95 @@ for version, new_attr, params in ALL_CODE_PARAMS:
         CODE_PARAMS = params.split()
         break
 ENCODE_PARAMS = set(CODE_PARAMS).intersection(
-        ['lnotab', 'linetable', 'endlinetable', 'columntable', 'exceptiontable']) # 'code'
-BYTES = (bytes, str)
-BYTES_NONE = (bytes, str, type(None))
+        ['code', 'lnotab', 'linetable', 'endlinetable', 'columntable', 'exceptiontable'])
 
 def _create_code(*args):
     if not isinstance(args[0], int): # co_lnotab stored from >= 3.10
         LNOTAB, *args = args
     else: # from < 3.10 (or pre-LNOTAB storage)
         LNOTAB = b''
-    if not isinstance(args[5], int): # from 3.7
-        args = args[0], 0, *args[1:] # add posonlyargcount
-    if hasattr(args[6], 'encode'):
-        args[6:7] = (args[6].encode(),) # code
 
     with match(args) as m:
-        # Python 3.9/3.8/3.7 or 3.10
-        if   m.case('argcount', 'posonlyargcount', 'kwonlyargcount', 'nlocals', 'stacksize',
-                    'flags', 'code', 'consts', 'names', 'varnames', 'filename', 'name',
-                    firstlineno=int, LNOTAB_OR_LINETABLE=BYTES, freevars=tuple, cellvars=tuple):
-            if CODE_VERSION <= (3,10):
-                args = (*args[:13],
-                        args[13].encode() if hasattr(args[13], 'encode') else args[13], # lnotab/linetable
-                        args[14], args[15])
-                if CODE_VERSION == (3,7):
-                    args = args[0], *args[2:] # drop posonlyargcount
-                return CodeType(*args)
-            fields = m.vars()
-            key = 'linetable' if CODE_VERSION >= (3,10) else 'lnotab'
-            fields[key] = fields.pop('LNOTAB_OR_LINETABLE')
-        # Python 3.11
-        elif m.case('argcount', 'posonlyargcount', 'kwonlyargcount', 'nlocals', 'stacksize',
-                    'flags', 'code', 'consts', 'names', 'varnames', 'filename', 'name',
-                    qualname=str, firstlineno=int, linetable=BYTES, exceptiontable=BYTES,
-                    freevars=tuple, cellvars=tuple):
+        # Python 3.11/3.12a (18 members)
+        if m.case((
+            'argcount', 'posonlyargcount', 'kwonlyargcount', 'nlocals', 'stacksize', 'flags',     # args[0:6]
+            'code', 'consts', 'names', 'varnames', 'filename', 'name', 'qualname', 'firstlineno', # args[6:14]
+            'linetable', 'exceptiontable', 'freevars', 'cellvars'                                 # args[14:]
+        )):
             if CODE_VERSION == (3,11):
-                return CodeType(*args[:14],
-                                args[14].encode() if hasattr(args[14], 'encode') else args[14], # linetable
-                                args[15].encode() if hasattr(args[15], 'encode') else args[15], # exceptiontable
-                                args[16], args[17])
-            fields = m.vars()
-        # Python 3.11a
-        elif m.case('argcount', 'posonlyargcount', 'kwonlyargcount', 'nlocals', 'stacksize',
-                    'flags', 'code', 'consts', 'names', 'varnames', 'filename', 'name',
-                    qualname=str, firstlineno=int, linetable=BYTES, endlinetable=BYTES_NONE,
-                    columntable=BYTES_NONE, exceptiontable=BYTES, freevars=tuple, cellvars=tuple):
+                return CodeType(
+                    *args[:6],
+                    args[6].encode() if hasattr(args[6], 'encode') else args[6], # code
+                    *args[7:14],
+                    args[14].encode() if hasattr(args[14], 'encode') else args[14], # linetable
+                    args[15].encode() if hasattr(args[15], 'encode') else args[15], # exceptiontable
+                    args[16],
+                    args[17],
+                )
+            fields = m.fields
+        # Python 3.10 or 3.8/3.9 (16 members)
+        elif m.case((
+            'argcount', 'posonlyargcount', 'kwonlyargcount', 'nlocals', 'stacksize', 'flags', # args[0:6]
+            'code', 'consts', 'names', 'varnames', 'filename', 'name', 'firstlineno',         # args[6:13]
+            'LNOTAB_OR_LINETABLE', 'freevars', 'cellvars'                                     # args[13:]
+        )):
+            if CODE_VERSION == (3,10) or CODE_VERSION == (3,8):
+                return CodeType(
+                    *args[:6],
+                    args[6].encode() if hasattr(args[6], 'encode') else args[6], # code
+                    *args[7:13],
+                    args[13].encode() if hasattr(args[13], 'encode') else args[13], # lnotab/linetable
+                    args[14],
+                    args[15],
+                )
+            fields = m.fields
+            if CODE_VERSION >= (3,10):
+                fields['linetable'] = m.LNOTAB_OR_LINETABLE
+            else:
+                fields['lnotab'] = LNOTAB if LNOTAB else m.LNOTAB_OR_LINETABLE
+        # Python 3.7 (15 args)
+        elif m.case((
+            'argcount', 'kwonlyargcount', 'nlocals', 'stacksize', 'flags',            # args[0:5]
+            'code', 'consts', 'names', 'varnames', 'filename', 'name', 'firstlineno', # args[5:12]
+            'lnotab', 'freevars', 'cellvars'                                          # args[12:]
+        )):
+            if CODE_VERSION == (3,7):
+                return CodeType(
+                    *args[:5],
+                    args[5].encode() if hasattr(args[5], 'encode') else args[5], # code
+                    *args[6:12],
+                    args[12].encode() if hasattr(args[12], 'encode') else args[12], # lnotab
+                    args[13],
+                    args[14],
+                )
+            fields = m.fields
+        # Python 3.11a (20 members)
+        elif m.case((
+            'argcount', 'posonlyargcount', 'kwonlyargcount', 'nlocals', 'stacksize', 'flags',     # args[0:6]
+            'code', 'consts', 'names', 'varnames', 'filename', 'name', 'qualname', 'firstlineno', # args[6:14]
+            'linetable', 'endlinetable', 'columntable', 'exceptiontable', 'freevars', 'cellvars'  # args[14:]
+        )):
             if CODE_VERSION == (3,11,'a'):
-                return CodeType(*args[:14],
-                                *(a.encode() if hasattr(a, 'encode') else a for a in args[14:18]),
-                                args[18], args[19])
-            fields = m.vars()
+                return CodeType(
+                    *args[:6],
+                    args[6].encode() if hasattr(args[6], 'encode') else args[6], # code
+                    *args[7:14],
+                    *(a.encode() if hasattr(a, 'encode') else a for a in args[14:18]), # linetable-exceptiontable
+                    args[18],
+                    args[19],
+                )
+            fields = m.fields
         else:
             raise UnpicklingError("pattern match for code object failed")
 
-    # args format doesn't match this version.
+    # The args format doesn't match this version.
+    fields.setdefault('posonlyargcount', 0)         # from python <= 3.7
+    fields.setdefault('lnotab', LNOTAB)             # from python >= 3.10
+    fields.setdefault('linetable', b'')             # from python <= 3.9
     fields.setdefault('qualname', fields['name'])   # from python <= 3.10
     fields.setdefault('exceptiontable', b'')        # from python <= 3.10
     fields.setdefault('endlinetable', None)         # from python != 3.11a
     fields.setdefault('columntable', None)          # from python != 3.11a
-
-    # Special case: co_lnotab and co_linetable
-    if CODE_VERSION >= (3,10):
-        fields.setdefault('linetable', b'')
-    else:
-        fields.setdefault('lnotab', LNOTAB)
 
     args = (fields[k].encode() if k in ENCODE_PARAMS and hasattr(fields[k], 'encode') else fields[k]
             for k in CODE_PARAMS)
