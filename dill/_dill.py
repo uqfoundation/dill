@@ -480,6 +480,8 @@ class _PeekableReader:
         self.stream = stream
     def read(self, n):
         return self.stream.read(n)
+    def readline(self):
+        return self.stream.readline()
     def tell(self):
         return self.stream.tell()
     def close(self):
@@ -487,7 +489,7 @@ class _PeekableReader:
     def peek(self, n):
         stream = self.stream
         try:
-            if hasttr(stream, 'flush'): stream.flush()
+            if hasattr(stream, 'flush'): stream.flush()
             position = stream.tell()
             stream.seek(position)  # assert seek() works before reading
             chunk = stream.read(n)
