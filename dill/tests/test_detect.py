@@ -8,7 +8,7 @@
 
 from dill.detect import baditems, badobjects, badtypes, errors, parent, at, globalvars
 from dill import settings
-from dill._dill import IS_PYPY, IS_PYPY2
+from dill._dill import IS_PYPY
 from pickle import PicklingError
 
 import inspect
@@ -21,7 +21,7 @@ def test_bad_things():
     #assert baditems(globals()) == [f] #XXX
     assert badobjects(f) is f
     assert badtypes(f) == type(f)
-    assert type(errors(f)) is PicklingError if IS_PYPY2 else TypeError
+    assert type(errors(f)) is TypeError
     d = badtypes(f, 1)
     assert isinstance(d, dict)
     assert list(badobjects(f, 1).keys()) == list(d.keys())
@@ -30,7 +30,7 @@ def test_bad_things():
     a = dict(s)
     if not os.environ.get('COVERAGE'): #XXX: travis-ci
         assert len(s) is len(a) # TypeError (and possibly PicklingError)
-    n = 1 if IS_PYPY2 else 2
+    n = 2
     assert len(a) is n if 'PicklingError' in a.keys() else n-1
 
 def test_parent():

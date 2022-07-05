@@ -5,8 +5,13 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
-from __future__ import print_function
-import atexit, dill, io, os, sys, __main__
+import atexit
+import os
+import sys
+import __main__
+from io import BytesIO
+
+import dill
 
 session_file = os.path.join(os.path.dirname(__file__), 'session-byref-%s.pkl')
 
@@ -123,9 +128,8 @@ def _test_objects(main, globals_copy, byref):
         for obj in ('x', 'empty', 'names'):
             assert main_dict[obj] == globals_copy[obj]
 
-        globs = '__globals__' if dill._dill.PY3 else 'func_globals'
         for obj in ['squared', 'cubed']:
-            assert getattr(main_dict[obj], globs) is main_dict
+            assert main_dict[obj].__globals__ is main_dict
             assert main_dict[obj](3) == globals_copy[obj](3)
 
         assert Person.__module__ == __main__.__name__
@@ -164,7 +168,7 @@ def test_session_main(byref):
                 pass
 
         # Test session loading in the same session.
-        session_buffer = io.BytesIO()
+        session_buffer = BytesIO()
         dill.dump_session(session_buffer, byref=byref)
         session_buffer.seek(0)
         dill.load_session(session_buffer)
@@ -177,7 +181,7 @@ def test_session_other():
     module.selfref = module
     dict_objects = [obj for obj in module.__dict__.keys() if not obj.startswith('__')]
 
-    session_buffer = io.BytesIO()
+    session_buffer = BytesIO()
     dill.dump_session(session_buffer, main=module)
 
     for obj in dict_objects:
@@ -204,13 +208,13 @@ def test_runtime_module():
     # This is also for code coverage, tests the use case of dump_session(byref=True)
     # without imported objects in the namespace. It's a contrived example because
     # even dill can't be in it.  This should work after fixing #462.
-    session_buffer = io.BytesIO()
+    session_buffer = BytesIO()
     dill.dump_session(session_buffer, main=runtime, byref=True)
     session_dump = session_buffer.getvalue()
 
     # Pass a new runtime created module with the same name.
     runtime = ModuleType(modname)  # empty
-    returned_mod = dill.load_session(io.BytesIO(session_dump), main=runtime)
+    returned_mod = dill.load_session(BytesIO(session_dump), main=runtime)
     assert returned_mod is runtime
     assert runtime.__name__ == modname
     assert runtime.x == 42
@@ -218,14 +222,14 @@ def test_runtime_module():
 
     # Pass nothing as main.  load_session() must create it.
     session_buffer.seek(0)
-    runtime = dill.load_session(io.BytesIO(session_dump))
+    runtime = dill.load_session(BytesIO(session_dump))
     assert runtime.__name__ == modname
     assert runtime.x == 42
     assert runtime not in sys.modules.values()
 
 def test_load_vars():
     with TestNamespace():
-        session_buffer = io.BytesIO()
+        session_buffer = BytesIO()
         dill.dump_session(session_buffer)
 
         global empty, names, x, y
