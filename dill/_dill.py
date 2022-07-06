@@ -700,7 +700,7 @@ def load_vars(
         old_main = sys.modules.get(main_name)
         main = ModuleType(main_name)
         if update:
-            vars(main).update(vars(old_main))
+            main.__dict__.update(old_main.__dict__)
         main.__builtins__ = __builtin__
         sys.modules[main_name] = main
         load_session(file, **kwds)
@@ -715,7 +715,7 @@ def load_vars(
                 sys.modules[main_name] = old_main
         except NameError:  # failed before setting old_main
             pass
-    return vars(main)
+    return main.__dict__
 
 ### End: Pickle the Interpreter
 

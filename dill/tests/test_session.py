@@ -34,7 +34,7 @@ if __name__ == '__main__' and len(sys.argv) >= 3 and sys.argv[1] == '--child':
         # independent of the value of byref. Tried to run garbage collection just before loading the
         # session with no luck. It fails even when preceding them with 'import calendar'. Needed to
         # run these kinds of tests in a supbrocess. Failing test sample:
-        #   assert globals()['day_name'] is vars(sys.modules['calendar'])['day_name']
+        #   assert globals()['day_name'] is sys.modules['calendar'].__dict__['day_name']
         try:
             for obj in ('json', 'url', 'local_mod', 'sax', 'dom'):
                 assert globals()[obj].__name__ in sys.modules
@@ -119,7 +119,7 @@ atexit.register(_clean_up_cache, local_mod)
 
 def _test_objects(main, globals_copy, byref):
     try:
-        main_dict = vars(__main__)
+        main_dict = __main__.__dict__
         global Person, person, Calendar, CalendarSubclass, cal, selfref
 
         for obj in ('json', 'url', 'local_mod', 'sax', 'dom'):
