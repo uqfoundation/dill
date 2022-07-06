@@ -34,6 +34,8 @@ def get_readme_as_rst(filepath):
                 continue
             elif skip and line.startswith('    http'):
                 README += '\n' + line
+            elif line.startswith('* with'): #XXX: don't indent
+                README += line
             elif line.startswith('* '):
                 README += line.replace('* ','    - ',1)
             elif line.startswith('-'):
