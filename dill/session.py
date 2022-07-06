@@ -194,7 +194,15 @@ COLLECTION_TYPES = (
     collections.abc.Set,
 )
 
-def _estimate_size(obj, memo):
+def _estimate_size(obj, recursive=True):
+    if recursive:
+        return _estimate_size_recursively(obj, memo=set())
+    try:
+        return getsizeof(obj)
+    except Exception:
+        return 0
+
+def _estimate_size_recursively(obj, memo):
     obj_id = id(obj)
     if obj_id in memo:
         return 0
@@ -231,7 +239,7 @@ def _estimate_size(obj, memo):
         pass
     return size
 
-def size_filter(limit):
+def size_filter(limit, recursive=True):
     match = re.fullmatch(r'(\d+)\s*(B|[KMGT]i?B?)', limit, re.IGNORECASE)
     if not match:
         raise ValueError("invalid 'limit' value: %r" % limit)
@@ -244,7 +252,7 @@ def size_filter(limit):
         exponent = 'kmgt'.index(unit[0]) + 1
         limit = coeff * base**exponent
     def exclude_large(obj):
-        return _estimate_size(obj.value, memo=set()) < limit
+        return _estimate_size(obj.value, recursive) < limit
     return exclude_large
 
 
