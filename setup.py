@@ -15,41 +15,16 @@ if sys.version_info < (3, 7):
 
 # get distribution meta info
 here = os.path.abspath(os.path.dirname(__file__))
-meta_fh = open(os.path.join(here, 'dill/__init__.py'))
-try:
-    meta = {}
-    for line in meta_fh:
-        if line.startswith('__version__'):
-            VERSION = line.split()[-1].strip("'").strip('"')
-            break
-    meta['VERSION'] = VERSION
-    for line in meta_fh:
-        if line.startswith('__author__'):
-            AUTHOR = line.split(' = ')[-1].strip().strip("'").strip('"')
-            break
-    meta['AUTHOR'] = AUTHOR
-    LONG_DOC = ""
-    DOC_STOP = "FAKE_STOP_12345"
-    for line in meta_fh:
-        if LONG_DOC:
-            if line.startswith(DOC_STOP):
-                LONG_DOC = LONG_DOC.strip().strip("'").strip('"').lstrip()
-                break
-            else:
-                LONG_DOC += line
-        elif line.startswith('__doc__'):
-            DOC_STOP = line.split(' = ')[-1]
-            LONG_DOC = "\n"
-    meta['LONG_DOC'] = LONG_DOC
-finally:
-    meta_fh.close()
-
-# get version numbers, long_description, etc
-AUTHOR = meta['AUTHOR']
-VERSION = meta['VERSION']
-LONG_DOC = meta['LONG_DOC'] #FIXME: near-duplicate of README.md
-#LICENSE = meta['LICENSE'] #FIXME: duplicate of LICENSE
-AUTHOR_EMAIL = 'mmckerns@uqfoundation.org'
+sys.path.append(here)
+from version import (__version__, __author__, __contact__ as AUTHOR_EMAIL,
+                     get_license_text, get_readme_as_rst, write_info_file)
+LICENSE = get_license_text(os.path.join(here, 'LICENSE'))
+README = get_readme_as_rst(os.path.join(here, 'README.md'))
+    
+# write meta info file
+write_info_file(here, 'dill', doc=README, license=LICENSE,
+                version=__version__, author=__author__)
+del here, get_license_text, get_readme_as_rst, write_info_file
 
 # check if setuptools is available
 try:
@@ -64,12 +39,12 @@ except ImportError:
 # build the 'setup' call
 setup_kwds = dict(
     name='dill',
-    version=VERSION,
+    version=__version__,
     description='serialize all of python',
-    long_description = LONG_DOC,
-    author = AUTHOR,
+    long_description = README.strip(),
+    author = __author__,
     author_email = AUTHOR_EMAIL,
-    maintainer = AUTHOR,
+    maintainer = __author__,
     maintainer_email = AUTHOR_EMAIL,
     license = '3-clause BSD',
     platforms = ['Linux', 'Windows', 'Mac'],
