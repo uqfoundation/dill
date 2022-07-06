@@ -65,7 +65,7 @@ def _stash_modules(main_module):
     imported_as = []
     imported_top_level = []  # keep separeted for backwards compatibility
     original = {}
-    for name, obj in vars(main_module).items():
+    for name, obj in main_module.__dict__.items():
         if obj is main_module:
             original[name] = newmod  # self-reference
             continue
@@ -115,12 +115,12 @@ def _filter_objects(main, exclude_extra, include_extra, obj=None):
     if include_extra is not None:
         filters.update([(INCLUDE, include_extra)])
 
-    namespace = filters.filter_namespace(vars(main), obj=obj)
-    if namespace is vars(main):
+    namespace = filters.filter_namespace(main.__dict__, obj=obj)
+    if namespace is main.__dict__:
         return main
 
     main = ModuleType(main.__name__)
-    vars(main).update(namespace)
+    main.__dict__.update(namespace)
     return main
 
 def dump_session(filename: Union[PathLike, BytesIO] = '/tmp/session.pkl',
