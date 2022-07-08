@@ -19,21 +19,22 @@ session_file = os.path.join(os.path.dirname(__file__), 'session-byref-%s.pkl')
 #  Child process  #
 ###################
 
-def _error_line(error, obj, byref):
+def _error_line(error, obj, imported_byref):
     import traceback
     line = traceback.format_exc().splitlines()[-2].replace('[obj]', '['+repr(obj)+']')
-    return "while testing (with byref=%s):  %s" % (byref, line.lstrip())
+    return "while testing (with imported_byref=%s):  %s" % (imported_byref, line.lstrip())
 
 if __name__ == '__main__' and len(sys.argv) >= 3 and sys.argv[1] == '--child':
     # Test session loading in a fresh interpreter session.
-    byref = (sys.argv[2] == 'True')
-    dill.load_session(session_file % byref)
+    imported_byref = (sys.argv[2] == 'True')
+    dill.load_module(session_file % imported_byref)
 
-    def test_modules(byref):
-        # FIXME: In this test setting with CPython 3.7, 'calendar' is not included in sys.modules,
-        # independent of the value of byref. Tried to run garbage collection just before loading the
-        # session with no luck. It fails even when preceding them with 'import calendar'. Needed to
-        # run these kinds of tests in a supbrocess. Failing test sample:
+    def test_modules(imported_byref):
+        # FIXME: In this test setting with CPython 3.7, 'calendar' is not included
+        # in sys.modules, independent of the value of imported_byref.  Tried to
+        # run garbage collection just before loading the session with no luck. It
+        # fails even when preceding them with 'import calendar'.  Needed to run
+        # these kinds of tests in a supbrocess. Failing test sample:
         #   assert globals()['day_name'] is sys.modules['calendar'].__dict__['day_name']
         try:
             for obj in ('json', 'url', 'local_mod', 'sax', 'dom'):
@@ -44,16 +45,16 @@ if __name__ == '__main__' and len(sys.argv) >= 3 and sys.argv[1] == '--child':
             for obj in ('Calendar', 'isleap'):
                 assert globals()[obj] is sys.modules['calendar'].__dict__[obj]
             assert __main__.day_name.__module__ == 'calendar'
-            if byref:
+            if imported_byref:
                 assert __main__.day_name is calendar.day_name
 
             assert __main__.complex_log is cmath.log
 
         except AssertionError as error:
-            error.args = (_error_line(error, obj, byref),)
+            error.args = (_error_line(error, obj, imported_byref),)
             raise
 
-    test_modules(byref)
+    test_modules(imported_byref)
     sys.exit()
 
 ####################
@@ -117,7 +118,7 @@ def _clean_up_cache(module):
 
 atexit.register(_clean_up_cache, local_mod)
 
-def _test_objects(main, globals_copy, byref):
+def _test_objects(main, globals_copy, imported_byref):
     try:
         main_dict = __main__.__dict__
         global Person, person, Calendar, CalendarSubclass, cal, selfref
@@ -143,13 +144,13 @@ def _test_objects(main, globals_copy, byref):
         assert selfref is __main__
 
     except AssertionError as error:
-        error.args = (_error_line(error, obj, byref),)
+        error.args = (_error_line(error, obj, imported_byref),)
         raise
 
-def test_session_main(byref):
-    """test dump/load_session() for __main__, both in this process and in a subprocess"""
+def test_session_main(imported_byref):
+    """test dump/load_module() for __main__, both in this process and in a subprocess"""
     extra_objects = {}
-    if byref:
+    if imported_byref:
         # Test unpickleable imported object in main.
         from sys import flags
         extra_objects['flags'] = flags
@@ -157,38 +158,38 @@ def test_session_main(byref):
     with TestNamespace(**extra_objects) as ns:
         try:
             # Test session loading in a new session.
-            dill.dump_session(session_file % byref, byref=byref)
+            dill.dump_module(session_file % imported_byref, imported_byref=imported_byref)
             from dill.tests.__main__ import python, shell, sp
-            error = sp.call([python, __file__, '--child', str(byref)], shell=shell)
+            error = sp.call([python, __file__, '--child', str(imported_byref)], shell=shell)
             if error: sys.exit(error)
         finally:
             try:
-                os.remove(session_file % byref)
+                os.remove(session_file % imported_byref)
             except OSError:
                 pass
 
         # Test session loading in the same session.
         session_buffer = BytesIO()
-        dill.dump_session(session_buffer, byref=byref)
+        dill.dump_module(session_buffer, imported_byref=imported_byref)
         session_buffer.seek(0)
-        dill.load_session(session_buffer)
-        ns.backup['_test_objects'](__main__, ns.backup, byref)
+        dill.load_module(session_buffer)
+        ns.backup['_test_objects'](__main__, ns.backup, imported_byref)
 
 def test_session_other():
-    """test dump/load_session() for a module other than __main__"""
+    """test dump/load_module() for a module other than __main__"""
     import test_classdef as module
     atexit.register(_clean_up_cache, module)
     module.selfref = module
     dict_objects = [obj for obj in module.__dict__.keys() if not obj.startswith('__')]
 
     session_buffer = BytesIO()
-    dill.dump_session(session_buffer, main=module)
+    dill.dump_module(session_buffer, main=module)
 
     for obj in dict_objects:
         del module.__dict__[obj]
 
     session_buffer.seek(0)
-    dill.load_session(session_buffer) #, main=module)
+    dill.load_module(session_buffer) #, main=module)
 
     assert all(obj in module.__dict__ for obj in dict_objects)
     assert module.selfref is module
@@ -205,32 +206,32 @@ def test_runtime_module():
               mod.__dill_imported, mod.__dill_imported_as, mod.__dill_imported_top_level,
               file=sys.stderr)
 
-    # This is also for code coverage, tests the use case of dump_session(byref=True)
+    # This is also for code coverage, tests the use case of dump_module(imported_byref=True)
     # without imported objects in the namespace. It's a contrived example because
     # even dill can't be in it.  This should work after fixing #462.
     session_buffer = BytesIO()
-    dill.dump_session(session_buffer, main=runtime, byref=True)
+    dill.dump_module(session_buffer, main=runtime, imported_byref=True)
     session_dump = session_buffer.getvalue()
 
     # Pass a new runtime created module with the same name.
     runtime = ModuleType(modname)  # empty
-    returned_mod = dill.load_session(BytesIO(session_dump), main=runtime)
+    returned_mod = dill.load_module(BytesIO(session_dump), main=runtime)
     assert returned_mod is runtime
     assert runtime.__name__ == modname
     assert runtime.x == 42
     assert runtime not in sys.modules.values()
 
-    # Pass nothing as main.  load_session() must create it.
+    # Pass nothing as main.  load_module() must create it.
     session_buffer.seek(0)
-    runtime = dill.load_session(BytesIO(session_dump))
+    runtime = dill.load_module(BytesIO(session_dump))
     assert runtime.__name__ == modname
     assert runtime.x == 42
     assert runtime not in sys.modules.values()
 
-def test_load_vars():
+def test_load_module_vars():
     with TestNamespace():
         session_buffer = BytesIO()
-        dill.dump_session(session_buffer)
+        dill.dump_module(session_buffer)
 
         global empty, names, x, y
         x = y = 0  # change x and create y
@@ -238,7 +239,7 @@ def test_load_vars():
         globals_state = globals().copy()
 
         session_buffer.seek(0)
-        main_vars = dill.load_vars(session_buffer)
+        main_vars = dill.load_module_vars(session_buffer)
 
         assert main_vars is not globals()
         assert globals() == globals_state
@@ -251,8 +252,8 @@ def test_load_vars():
         assert 'empty' in main_vars
 
 if __name__ == '__main__':
-    test_session_main(byref=False)
-    test_session_main(byref=True)
+    test_session_main(imported_byref=False)
+    test_session_main(imported_byref=True)
     test_session_other()
     test_runtime_module()
-    test_load_vars()
+    test_load_module_vars()
