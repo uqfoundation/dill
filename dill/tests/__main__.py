@@ -23,8 +23,13 @@ tests = glob.glob(suite + os.path.sep + 'test_*.py')
 
 if __name__ == '__main__':
 
+    failed = 0
     for test in tests:
         p = sp.Popen([python, test], shell=shell).wait()
-        if not p:
+        if p:
+            print('F', end='', flush=True)
+            failed = 1
+        else:
             print('.', end='', flush=True)
-    print()
+    print('')
+    exit(failed)
