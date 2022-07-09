@@ -293,7 +293,7 @@ from .session import dump_session, load_session
 from . import detect, session, source, temp
 
 # get global settings
-from .settings import Settings, settings
+from .settings import settings
 
 # make sure "trace" is turned off
 detect.trace(False)

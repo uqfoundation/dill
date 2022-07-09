@@ -10,16 +10,20 @@
 Pickle and restore the intepreter session.
 """
 
-__all__ = ['dump_session', 'load_session', 'ipython_filter', 'ExcludeRules', 'EXCLUDE', 'INCLUDE']
+__all__ = [
+    'dump_session', 'load_session', 'ipython_filter', 'size_filter',
+    'FilterRules', 'EXCLUDE', 'INCLUDE',
+]
 
 import random
 import re
 import sys
 from statistics import mean
+from types import SimpleNamespace
 
 from dill import _dill, Pickler, Unpickler
 from ._dill import ModuleType, _import_module, _is_builtin_module, _main_module
-from ._utils import AttrDict, ExcludeRules, Filter, RuleType
+from ._utils import FilterRules, Filter, RuleType
 from .settings import settings
 
 # Classes and abstract classes for type hints.
@@ -35,7 +39,7 @@ SESSION_IMPORTED_AS_TYPES = tuple([Exception] + [getattr(_dill, name) for name i
 def _module_map():
     """get map of imported modules"""
     from collections import defaultdict
-    modmap = AttrDict(by_name=defaultdict(list), by_id=defaultdict(list), top_level={})
+    modmap = SimpleNamespace(by_name=defaultdict(list), by_id=defaultdict(list), top_level={})
     for modname, module in sys.modules.items():
         if not isinstance(module, ModuleType):
             continue
@@ -108,14 +112,14 @@ def _restore_modules(unpickler, main_module):
     except KeyError:
         pass
 
-def _filter_objects(main, exclude_extra, include_extra, obj=None):
-    filters = ExcludeRules(getattr(settings, 'session_exclude', None))
-    if exclude_extra is not None:
-        filters.update([(EXCLUDE, exclude_extra)])
-    if include_extra is not None:
-        filters.update([(INCLUDE, include_extra)])
+def _filter_objects(main, exclude, include, obj=None):
+    rules = FilterRules(getattr(settings, 'dump_module', None))
+    if exclude is not None:
+        rules.update([(EXCLUDE, exclude)])
+    if include is not None:
+        rules.update([(INCLUDE, include)])
 
-    namespace = filters.filter_namespace(main.__dict__, obj=obj)
+    namespace = rules.filter_namespace(main.__dict__, obj=obj)
     if namespace is main.__dict__:
         return main
 
@@ -125,7 +129,7 @@ def _filter_objects(main, exclude_extra, include_extra, obj=None):
 
 def dump_session(filename: Union[PathLike, BytesIO] = '/tmp/session.pkl',
                  main: Union[str, ModuleType] = '__main__',
-                 byref: bool = False,
+                 refimported: bool = False,
                  exclude: Union[Filter, Iterable[Filter]] = None,
                  include: Union[Filter, Iterable[Filter]] = None,
                  **kwds) -> NoReturn:
@@ -134,7 +138,7 @@ def dump_session(filename: Union[PathLike, BytesIO] = '/tmp/session.pkl',
     if isinstance(main, str):
         main = _import_module(main)
     original_main = main
-    if byref:
+    if refimported:
         #NOTE: *must* run before _filter_objects()
         main = _stash_modules(main)
     main = _filter_objects(main, exclude, include, obj=original_main)

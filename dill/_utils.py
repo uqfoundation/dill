@@ -51,11 +51,16 @@ NamedObj = namedtuple('NamedObj', 'name value', module=__name__)
 Filter = Union[str, Pattern[str], int, type, Callable]
 Rule = Tuple[RuleType, Union[Filter, Iterable[Filter]]]
 
-def isiterable(arg):
-    return isinstance(arg, abc.Iterable) and not isinstance(arg, (str, bytes))
+def _iter(filters):
+    if isinstance(filters, str):
+        return None
+    try:
+        return iter(filters)
+    except TypeError:
+        return None
 
 @dataclass
-class ExcludeFilters:
+class FilterSet:
     ids: Set[int] = field(default_factory=set)
     names: Set[str] = field(default_factory=set)
     regex: Set[Pattern[str]] = field(default_factory=set)
@@ -112,8 +117,8 @@ class ExcludeFilters:
 
 @dataclass
 class ExcludeRules:
-    exclude: ExcludeFilters = field(init=False, default_factory=ExcludeFilters)
-    include: ExcludeFilters = field(init=False, default_factory=ExcludeFilters)
+    exclude: FilterSet = field(init=False, default_factory=FilterSet)
+    include: FilterSet = field(init=False, default_factory=FilterSet)
     rules: InitVar[Iterable[Rule]] = None
 
     def __post_init__(self, rules):
@@ -138,13 +143,14 @@ class ExcludeRules:
                 getattr(self.exclude, filter_set).update(getattr(rules.exclude, filter_set))
                 getattr(self.include, filter_set).update(getattr(rules.include, filter_set))
         else:
-            # Validate rules.
             for rule in rules:
+                # Validate rules.
                 if not isinstance(rule, tuple) or len(rule) != 2:
                     raise ValueError("invalid rule format: %r" % rule)
             for rule_type, filter in rules:
-                if isiterable(filter):
-                    for f in filter:
+                filters = _iter(filter)
+                if filters is not None:
+                    for f in filters:
                         self.add(f, rule_type=rule_type)
                 else:
                     self.add(filter, rule_type=rule_type)
@@ -158,7 +164,7 @@ class ExcludeRules:
             return namespace
 
         # Protect agains dict changes during the call.
-        namespace_copy = namespace.copy() if obj is None or namespace is vars(obj) else namespace
+        namespace_copy = namespace.copy() if obj is None or namespace is obj.__dict__ else namespace
         objects = all_objects = [NamedObj._make(item) for item in namespace_copy.items()]
 
         for filters in (self.exclude, self.include):
