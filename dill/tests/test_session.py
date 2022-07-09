@@ -13,25 +13,25 @@ from io import BytesIO
 
 import dill
 
-session_file = os.path.join(os.path.dirname(__file__), 'session-byref-%s.pkl')
+session_file = os.path.join(os.path.dirname(__file__), 'session-refimported-%s.pkl')
 
 ###################
 #  Child process  #
 ###################
 
-def _error_line(error, obj, imported_byref):
+def _error_line(error, obj, refimported):
     import traceback
     line = traceback.format_exc().splitlines()[-2].replace('[obj]', '['+repr(obj)+']')
-    return "while testing (with imported_byref=%s):  %s" % (imported_byref, line.lstrip())
+    return "while testing (with refimported=%s):  %s" % (refimported, line.lstrip())
 
 if __name__ == '__main__' and len(sys.argv) >= 3 and sys.argv[1] == '--child':
     # Test session loading in a fresh interpreter session.
-    imported_byref = (sys.argv[2] == 'True')
-    dill.load_module(session_file % imported_byref)
+    refimported = (sys.argv[2] == 'True')
+    dill.load_module(session_file % refimported)
 
-    def test_modules(imported_byref):
+    def test_modules(refimported):
         # FIXME: In this test setting with CPython 3.7, 'calendar' is not included
-        # in sys.modules, independent of the value of imported_byref.  Tried to
+        # in sys.modules, independent of the value of refimported.  Tried to
         # run garbage collection just before loading the session with no luck. It
         # fails even when preceding them with 'import calendar'.  Needed to run
         # these kinds of tests in a supbrocess. Failing test sample:
@@ -45,16 +45,16 @@ if __name__ == '__main__' and len(sys.argv) >= 3 and sys.argv[1] == '--child':
             for obj in ('Calendar', 'isleap'):
                 assert globals()[obj] is sys.modules['calendar'].__dict__[obj]
             assert __main__.day_name.__module__ == 'calendar'
-            if imported_byref:
+            if refimported:
                 assert __main__.day_name is calendar.day_name
 
             assert __main__.complex_log is cmath.log
 
         except AssertionError as error:
-            error.args = (_error_line(error, obj, imported_byref),)
+            error.args = (_error_line(error, obj, refimported),)
             raise
 
-    test_modules(imported_byref)
+    test_modules(refimported)
     sys.exit()
 
 ####################
@@ -118,7 +118,7 @@ def _clean_up_cache(module):
 
 atexit.register(_clean_up_cache, local_mod)
 
-def _test_objects(main, globals_copy, imported_byref):
+def _test_objects(main, globals_copy, refimported):
     try:
         main_dict = __main__.__dict__
         global Person, person, Calendar, CalendarSubclass, cal, selfref
@@ -144,13 +144,13 @@ def _test_objects(main, globals_copy, imported_byref):
         assert selfref is __main__
 
     except AssertionError as error:
-        error.args = (_error_line(error, obj, imported_byref),)
+        error.args = (_error_line(error, obj, refimported),)
         raise
 
-def test_session_main(imported_byref):
+def test_session_main(refimported):
     """test dump/load_module() for __main__, both in this process and in a subprocess"""
     extra_objects = {}
-    if imported_byref:
+    if refimported:
         # Test unpickleable imported object in main.
         from sys import flags
         extra_objects['flags'] = flags
@@ -158,22 +158,22 @@ def test_session_main(imported_byref):
     with TestNamespace(**extra_objects) as ns:
         try:
             # Test session loading in a new session.
-            dill.dump_module(session_file % imported_byref, imported_byref=imported_byref)
+            dill.dump_module(session_file % refimported, refimported=refimported)
             from dill.tests.__main__ import python, shell, sp
-            error = sp.call([python, __file__, '--child', str(imported_byref)], shell=shell)
+            error = sp.call([python, __file__, '--child', str(refimported)], shell=shell)
             if error: sys.exit(error)
         finally:
             try:
-                os.remove(session_file % imported_byref)
+                os.remove(session_file % refimported)
             except OSError:
                 pass
 
         # Test session loading in the same session.
         session_buffer = BytesIO()
-        dill.dump_module(session_buffer, imported_byref=imported_byref)
+        dill.dump_module(session_buffer, refimported=refimported)
         session_buffer.seek(0)
         dill.load_module(session_buffer)
-        ns.backup['_test_objects'](__main__, ns.backup, imported_byref)
+        ns.backup['_test_objects'](__main__, ns.backup, refimported)
 
 def test_session_other():
     """test dump/load_module() for a module other than __main__"""
@@ -206,17 +206,17 @@ def test_runtime_module():
               mod.__dill_imported, mod.__dill_imported_as, mod.__dill_imported_top_level,
               file=sys.stderr)
 
-    # This is also for code coverage, tests the use case of dump_module(imported_byref=True)
+    # This is also for code coverage, tests the use case of dump_module(refimported=True)
     # without imported objects in the namespace. It's a contrived example because
     # even dill can't be in it.  This should work after fixing #462.
     session_buffer = BytesIO()
-    dill.dump_module(session_buffer, main=runtime, imported_byref=True)
+    dill.dump_module(session_buffer, main=runtime, refimported=True)
     session_dump = session_buffer.getvalue()
 
     # Pass a new runtime created module with the same name.
     runtime = ModuleType(modname)  # empty
-    returned_mod = dill.load_module(BytesIO(session_dump), main=runtime)
-    assert returned_mod is runtime
+    return_val = dill.load_module(BytesIO(session_dump), main=runtime)
+    assert return_val is None
     assert runtime.__name__ == modname
     assert runtime.x == 42
     assert runtime not in sys.modules.values()
@@ -228,7 +228,7 @@ def test_runtime_module():
     assert runtime.x == 42
     assert runtime not in sys.modules.values()
 
-def test_load_module_vars():
+def test_load_module_asdict():
     with TestNamespace():
         session_buffer = BytesIO()
         dill.dump_module(session_buffer)
@@ -239,7 +239,7 @@ def test_load_module_vars():
         globals_state = globals().copy()
 
         session_buffer.seek(0)
-        main_vars = dill.load_module_vars(session_buffer)
+        main_vars = dill.load_module_asdict(session_buffer)
 
         assert main_vars is not globals()
         assert globals() == globals_state
@@ -252,8 +252,8 @@ def test_load_module_vars():
         assert 'empty' in main_vars
 
 if __name__ == '__main__':
-    test_session_main(imported_byref=False)
-    test_session_main(imported_byref=True)
+    test_session_main(refimported=False)
+    test_session_main(refimported=True)
     test_session_other()
     test_runtime_module()
-    test_load_module_vars()
+    test_load_module_asdict()

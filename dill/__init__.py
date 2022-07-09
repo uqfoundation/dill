@@ -289,7 +289,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
 from ._dill import (
-    dump, dumps, load, loads, dump_module, load_module, load_module_vars,
+    dump, dumps, load, loads, dump_module, load_module, load_module_asdict,
     dump_session, load_session, Pickler, Unpickler, register, copy, pickle,
     pickles, check, HIGHEST_PROTOCOL, DEFAULT_PROTOCOL, PicklingError,
     UnpicklingError, HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE, PickleError,

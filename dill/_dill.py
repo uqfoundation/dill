@@ -17,7 +17,7 @@ Test against CH16+ Std. Lib. ... TBD.
 """
 __all__ = [
     'dump', 'dumps', 'load', 'loads', 'dump_module', 'load_module',
-    'load_module_vars', 'dump_session', 'load_session', 'Pickler', 'Unpickler',
+    'load_module_asdict', 'dump_session', 'load_session', 'Pickler', 'Unpickler',
     'register', 'copy', 'pickle', 'pickles', 'check', 'HIGHEST_PROTOCOL',
     'DEFAULT_PROTOCOL', 'PicklingError', 'UnpicklingError', 'HANDLE_FMODE',
     'CONTENTS_FMODE', 'FILE_FMODE', 'PickleError', 'PickleWarning',
@@ -408,7 +408,7 @@ def _restore_modules(unpickler, main_module):
 def dump_module(
     filename = str(TEMPDIR/'session.pkl'),
     main: Optional[Union[ModuleType, str]] = None,
-    imported_byref: bool = False,
+    refimported: bool = False,
     **kwds
 ) -> None:
     """Pickle the current state of :py:mod:`__main__` or another module to a file.
@@ -421,16 +421,16 @@ def dump_module(
     :py:class:`~types.ModuleType`, can also be saved and restored thereafter.
 
     Parameters:
-        filename: a path-like object or a writable stream
-        main: a module object or an importable module name
-        imported_byref: if `True`, imported objects in the module's namespace
+        filename: a path-like object or a writable stream.
+        main: a module object or an importable module name.
+        refimported: if `True`, all imported objects in the module's namespace
             are saved by reference. *Note:* this is different from the ``byref``
             option of other "dump" functions and is not affected by
             ``settings['byref']``.
-        **kwds: extra keyword arguments passed to :py:class:`Pickler()`
+        **kwds: extra keyword arguments passed to :py:class:`Pickler()`.
 
     Raises:
-       :py:exc:`PicklingError`: if pickling fails
+       :py:exc:`PicklingError`: if pickling fails.
 
     Examples:
         - Save current session state:
@@ -444,30 +444,30 @@ def dump_module(
           >>> m.var = 'new value'
           >>> dill.dump_module('my_mod_session.pkl', main='my_mod')
 
-        - Save the state of an non-importable, runtime-created module:
+        - Save the state of a non-importable, runtime-created module:
 
           >>> from types import ModuleType
           >>> runtime = ModuleType('runtime')
           >>> runtime.food = ['bacon', 'eggs', 'spam']
           >>> runtime.process_food = m.process_food
-          >>> dill.dump_module('runtime_session.pkl', main=runtime, byref=True)
+          >>> dill.dump_module('runtime_session.pkl', main=runtime, refimported=True)
 
     *Changed in version 0.3.6:* the function ``dump_session()`` was renamed to
     ``dump_module()``.
 
     *Changed in version 0.3.6:* the parameter ``byref`` was renamed to
-    ``imported_byref``.
+    ``refimported``.
     """
     if 'byref' in kwds:
         warnings.warn(
-            "The parameter 'byref' was renamed to 'imported_byref', use this"
+            "The parameter 'byref' was renamed to 'refimported', use this"
             " instead. Note: the underlying dill.Pickler do accept a 'byref'"
             " argument, but it has no effect on session saving.",
             PendingDeprecationWarning
         )
-        if imported_byref:
-            raise ValueError("both 'imported_byref' and 'byref' arguments were used.")
-        imported_byref = kwds.pop('byref')
+        if refimported:
+            raise ValueError("both 'refimported' and 'byref' arguments were used.")
+        refimported = kwds.pop('byref')
     from .settings import settings
     protocol = settings['protocol']
     if main is None: main = _main_module
@@ -478,7 +478,7 @@ def dump_module(
     try:
         pickler = Pickler(file, protocol, **kwds)
         pickler._original_main = main
-        if imported_byref:
+        if refimported:
             main = _stash_modules(main)
         pickler._main = main     #FIXME: dill.settings are disabled
         pickler._byref = False   # disable pickling by name reference
@@ -494,8 +494,8 @@ def dump_module(
 
 # Backward compatibility.
 def dump_session(filename=str(TEMPDIR/'session.pkl'), main=None, byref=False, **kwds):
-    warnings.warn("dump_session() was renamed to dump_module().", PendingDeprecationWarning)
-    dump_module(filename, main, imported_byref=byref, **kwds)
+    warnings.warn("dump_session() was renamed to dump_module()", PendingDeprecationWarning)
+    dump_module(filename, main, refimported=byref, **kwds)
 dump_session.__doc__ = dump_module.__doc__
 
 class _PeekableReader:
@@ -562,7 +562,8 @@ def load_module(
     main: Union[ModuleType, str] = None,
     **kwds
 ) -> Optional[ModuleType]:
-    """Update :py:mod:`__main__` or another module with the state from the session file.
+    """Update :py:mod:`__main__` or another module with the state from the
+    session file.
 
     Restore the interpreter session (the built-in module :py:mod:`__main__`) or
     the state of another module from a pickle file created by the function
@@ -574,15 +575,18 @@ def load_module(
     after it's updated.
 
     Parameters:
-        filename: a path-like object or a readable stream
-        main: an importable module name or a module object (optional)
-        **kwds: extra keyword arguments passed to :py:class:`Unpickler()`
+        filename: a path-like object or a readable stream.
+        main: an importable module name or a module object.
+        **kwds: extra keyword arguments passed to :py:class:`Unpickler()`.
 
     Raises:
-        :py:exc:`UnpicklingError`: if unpickling fails
+        :py:exc:`UnpicklingError`: if unpickling fails.
+        :py:exc:`ValueError`: if the ``main`` argument and the session file's
+            module are incompatible.
 
     Returns:
-        the restored module if different from :py:mod:`__main__`
+        The restored module if it's different from :py:mod:`__main__` and
+        wasn't passed as the ``main`` argument.
 
     Examples:
         - Load a saved session state:
@@ -608,10 +612,23 @@ def load_module(
           >>> runtime in sys.modules.values()
           False
 
+        - Update the state of a non-importable, runtime-created module:
+
+          >>> from types import ModuleType
+          >>> runtime = ModuleType('runtime')
+          >>> runtime.food = ['pizza', 'burger']
+          >>> dill.load_module('runtime_session.pkl', main=runtime)
+          >>> runtime.food
+          ['bacon', 'eggs', 'spam']
+
+    *Changed in version 0.3.6:* the function ``load_session()`` was renamed to
+    ``load_module()``.
+
     See also:
-        :py:func:`load_module_vars` to load the contents of a saved session (from
-        :py:mod:`__main__` or any importable module) into a dictionary.
+        :py:func:`load_module_asdict` to load the contents of a saved session
+        (from :py:mod:`__main__` or any importable module) into a dictionary.
     """
+    main_arg = main
     if hasattr(filename, 'read'):
         file = filename
     else:
@@ -636,7 +653,8 @@ def load_module(
             if not isinstance(main, ModuleType):
                 raise ValueError("%r is not a module" % main)
             unpickler._main = main
-        main = unpickler._main
+        else:
+            main = unpickler._main
 
         # Check against the pickle's main.
         is_main_imported = _is_imported_module(main)
@@ -645,14 +663,20 @@ def load_module(
             if is_runtime_mod:
                 pickle_main = pickle_main.partition('.')[-1]
             if is_runtime_mod and is_main_imported:
-                raise UnpicklingError("can't restore non-imported module %r into an imported one" \
-                                      % pickle_main)
+                raise ValueError(
+                    "can't restore non-imported module %r into an imported one"
+                    % pickle_main
+                )
             if not is_runtime_mod and not is_main_imported:
-                raise UnpicklingError("can't restore imported module %r into a non-imported one" \
-                                      % pickle_main)
+                raise ValueError(
+                    "can't restore imported module %r into a non-imported one"
+                    % pickle_main
+                )
             if main.__name__ != pickle_main:
-                raise UnpicklingError("can't restore module %r into module %r" \
-                                      % (pickle_main, main.__name__))
+                raise ValueError(
+                    "can't restore module %r into module %r"
+                    % (pickle_main, main.__name__)
+                )
 
         # This is for find_class() to be able to locate it.
         if not is_main_imported:
@@ -669,7 +693,7 @@ def load_module(
             pass
     assert module is main
     _restore_modules(unpickler, module)
-    if module is not _main_module:
+    if not (module is _main_module or module is main_arg):
         return module
 
 # Backward compatibility.
@@ -678,13 +702,19 @@ def load_session(filename=str(TEMPDIR/'session.pkl'), main=None, **kwds):
     load_module(filename, main, **kwds)
 load_session.__doc__ = load_module.__doc__
 
-def load_module_vars(
+def load_module_asdict(
     filename = str(TEMPDIR/'session.pkl'),
     update: bool = False,
     **kwds
 ) -> dict:
     """
     Load the contents of a module from a session file into a dictionary.
+
+    ``load_module_asdict()`` does the equivalent of this function::
+
+        lambda filename: vars(load_module(filename)).copy()
+
+    but without changing the original module.
 
     The loaded module's origin is stored in the ``__session__`` attribute.
 
@@ -697,6 +727,13 @@ def load_module_vars(
     Raises:
         :py:exc:`UnpicklingError`: if unpickling fails
 
+    Returns:
+        A copy of the restored module's dictionary.
+
+    Note:
+        If the ``update`` option is used, the original module will be loaded if
+        it wasn't yet.
+
     Example:
         >>> import dill
         >>> alist = [1, 2, 3]
@@ -704,7 +741,7 @@ def load_module_vars(
         >>> dill.dump_module()
         >>> anum = 0
         >>> new_var = 'spam'
-        >>> main_vars = dill.load_module_vars()
+        >>> main_vars = dill.load_module_asdict()
         >>> main_vars['__name__'], main_vars['__session__']
         ('__main__', '/tmp/session.pkl')
         >>> main_vars is globals()  # loaded objects don't reference current global variables
@@ -719,7 +756,7 @@ def load_module_vars(
         False
     """
     if 'main' in kwds:
-        raise TypeError("'main' is an invalid keyword argument for load_module_vars()")
+        raise TypeError("'main' is an invalid keyword argument for load_module_asdict()")
     if hasattr(filename, 'read'):
         file = filename
     else:
@@ -730,11 +767,14 @@ def load_module_vars(
         old_main = sys.modules.get(main_name)
         main = ModuleType(main_name)
         if update:
+            if old_main is None:
+                old_main = _import_module(main_name)
             main.__dict__.update(old_main.__dict__)
-        main.__builtins__ = __builtin__
+        else:
+            main.__builtins__ = __builtin__
         sys.modules[main_name] = main
         load_module(file, **kwds)
-        main.__session__ = filename if isinstance(filename, str) else repr(filename)
+        main.__session__ = str(filename)
     finally:
         if not hasattr(filename, 'read'):  # if newly opened file
             file.close()
