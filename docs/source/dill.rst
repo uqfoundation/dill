@@ -11,7 +11,7 @@ dill module
     :special-members:
     :show-inheritance:
     :imported-members:
-..  :exclude-members:
+    :exclude-members: dump_session, load_session
 
 detect module
 -------------

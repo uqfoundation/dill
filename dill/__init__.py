@@ -23,11 +23,13 @@ except: # pragma: no cover
     del os, sys, parent, get_license_text, get_readme_as_rst
 
 
-from ._dill import dump, dumps, load, loads, dump_session, load_session, \
-    Pickler, Unpickler, register, copy, pickle, pickles, check, \
-    HIGHEST_PROTOCOL, DEFAULT_PROTOCOL, PicklingError, UnpicklingError, \
-    HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE, PickleError, PickleWarning, \
-    PicklingWarning, UnpicklingWarning
+from ._dill import (
+    dump, dumps, load, loads, dump_module, load_module, load_module_asdict,
+    dump_session, load_session, Pickler, Unpickler, register, copy, pickle,
+    pickles, check, HIGHEST_PROTOCOL, DEFAULT_PROTOCOL, PicklingError,
+    UnpicklingError, HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE, PickleError,
+    PickleWarning, PicklingWarning, UnpicklingWarning,
+)
 from . import source, temp, detect
 
 # get global settings
