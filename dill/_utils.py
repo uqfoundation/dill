@@ -6,50 +6,28 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 """auxiliary internal classes used in multiple submodules, set here to avoid import recursion"""
 
-__all__ = ['AttrDict', 'ExcludeRules', 'Filter', 'RuleType']
+from __future__ import annotations
+
+__all__ = ['FilterRules', 'Filter', 'RuleType']
 
 import logging
 logger = logging.getLogger('dill._utils')
 
-class AttrDict(dict):
-    """syntactic sugar for accessing dictionary items"""
-    def _check_attr(self, name):
-        try:
-            super().__getattribute__(name)
-        except AttributeError:
-            pass
-        else:
-            raise AttributeError("'AttrDict' object attribute %r is read-only" % name)
-    def __getattr__(self, key):
-        # This is called only if dict.__getattribute__(key) fails.
-        try:
-            return self[key]
-        except KeyError:
-            raise AttributeError("'AttrDict' object has no attribute %r" % key)
-    def __setattr__(self, key, value):
-        self._check_attr(key)
-        self[key] = value
-    def __delattr__(self, key):
-        self._check_attr(key)
-        del self[key]
-    def __reduce__(self):
-        return type(self), (dict(self),)
-
-
-### Namespace filtering
 import re
-from dataclasses import InitVar, dataclass, field, fields
-from collections import abc, namedtuple
+from dataclasses import dataclass, field, fields
+from collections import namedtuple
+from collections.abc import MutableSet
 from enum import Enum
 from functools import partialmethod
-from itertools import filterfalse
-from typing import Callable, Iterable, Pattern, Set, Tuple, Union
-
-RuleType = Enum('RuleType', 'EXCLUDE INCLUDE', module=__name__)
-NamedObj = namedtuple('NamedObj', 'name value', module=__name__)
+from itertools import chain, filterfalse
+from types import ModuleType
+from typing import Any, Callable, Dict, Iterable, Pattern, Set, Tuple, Union
 
 Filter = Union[str, Pattern[str], int, type, Callable]
+RuleType = Enum('RuleType', 'EXCLUDE INCLUDE', module=__name__)
 Rule = Tuple[RuleType, Union[Filter, Iterable[Filter]]]
+
+NamedObj = namedtuple('NamedObj', 'name value', module=__name__)
 
 def _iter(filters):
     if isinstance(filters, str):
@@ -60,26 +38,22 @@ def _iter(filters):
         return None
 
 @dataclass
-class FilterSet:
+class FilterSet(MutableSet):
     ids: Set[int] = field(default_factory=set)
     names: Set[str] = field(default_factory=set)
-    regex: Set[Pattern[str]] = field(default_factory=set)
+    regexes: Set[Pattern[str]] = field(default_factory=set)
     types: Set[type] = field(default_factory=set)
     funcs: Set[Callable] = field(default_factory=set)
-
-    @property
-    def filter_sets(self):
-        return tuple(field.name for field in fields(self))
-    def __bool__(self):
-        return any(getattr(self, filter_set) for filter_set in self.filter_sets)
-    def _check(self, filter):
+    _fields = None
+    _rtypemap = None
+    def _match_type(self, filter):
         if isinstance(filter, str):
             if filter.isidentifier():
                 field = 'names'
             else:
-                filter, field = re.compile(filter), 'regex'
+                filter, field = re.compile(filter), 'regexes'
         elif isinstance(filter, re.Pattern):
-            field = 'regex'
+            field = 'regexes'
         elif isinstance(filter, int):
             field = 'ids'
         elif isinstance(filter, type):
@@ -89,42 +63,105 @@ class FilterSet:
         else:
             raise ValueError("invalid filter: %r" % filter)
         return filter, getattr(self, field)
+    # Mandatory MutableSet methods.
+    @classmethod
+    def _from_iterable(cls, it):
+        obj = cls()
+        obj |= it
+        return obj
+    def __contains__(self, filter):
+        filter, filter_set = self._match_type(filter)
+        return filter in filter_set
+    def __iter__(self):
+        return chain.from_iterable(gettatr(self, field) for field in self._fields)
+    def __len__(self):
+        return sum(len(gettatr(self, field)) for field in self._fields)
     def add(self, filter):
-        filter, filter_set = self._check(filter)
+        filter, filter_set = self._match_type(filter)
         filter_set.add(filter)
     def discard(self, filter):
-        filter, filter_set = self._check(filter)
+        filter, filter_set = self._match_type(filter)
         filter_set.discard(filter)
+    # Overwrite generic methods (optimization).
     def remove(self, filter):
-        filter, filter_set = self._check(filter)
+        filter, filter_set = self._match_type(filter)
         filter_set.remove(filter)
-    def update(self, filters):
-        for filter in filters:
-            self.add(filter)
     def clear(self):
-        for filter_set in self.filter_sets:
-            getattr(self, filter_set).clear()
+        for field in self._fields:
+            getattr(self, field).clear()
+    def __or__(self, other):
+        if not isinstance(other, Iterable):
+            return NotImplemented
+        obj = self.copy()
+        obj |= other
+        return obj
+    __ror__ = __or__
+    def __ior__(self, filters):
+        if isinstance(filters, FilterSet):
+            for field in self._fields:
+                getattr(self, field) |= getattr(filters, field)
+        else:
+            for filter in filters:
+                self.add(filter)
+        return self
+    # Extra methods.
+    def update(self, filters):
+        self |= filters
+    def copy(self):
+        return FilterSet(*(getattr(self, field).copy() for field in self._fields))
+    @classmethod
+    def get_type(cls, key):
+        if cls._rtypemap is None:
+            from ._dill import _reverse_typemap
+            cls._rtypemap = {(k[:-4] if k.endswith('Type') else k).lower(): v
+                             for k, v in _reverse_typemap.items()}
+        if key.endswith('Type')
+            key = key[:-4]
+        return cls._rtypemap[key.lower()]
     def add_type(self, type_name):
-        import types
-        name_suffix = type_name + 'Type' if not type_name.endswith('Type') else type_name
-        if hasattr(types, name_suffix):
-            type_name = name_suffix
-        type_obj = getattr(types, type_name, None)
-        if not isinstance(type_obj, type):
-            named = type_name if type_name == name_suffix else "%r or %r" % (type_name, name_suffix)
-            raise NameError("could not find a type named %s in module 'types'" % named)
-        self.types.add(type_obj)
+        self.types.add(self.get_type(type_name))
+FilterSet._fields = tuple(field.name for field in fields(cls))
 
-@dataclass
-class ExcludeRules:
-    exclude: FilterSet = field(init=False, default_factory=FilterSet)
-    include: FilterSet = field(init=False, default_factory=FilterSet)
-    rules: InitVar[Iterable[Rule]] = None
+class _FilterSetDescriptor:
+    """descriptor for FilterSet members of FilterRules"""
+    def __set_name__(self, owner, name):
+        self.name = name
+        self._name = '_' + name
+    def __set__(self, obj, value):
+        # This is the important method.
+        if isinstance(value, FilterSet):
+            setattr(obj, self._name, value)
+        else:
+            setattr(obj, self._name, FilterSet(value))
+    def __get__(self, obj, objtype=None):
+        try:
+            return getattr(obj, self._name)
+        except AttributeError:
+            raise AttributeError(self.name) from None
+    def __delete__(self, obj):
+        try:
+            delattr(obj, self._name)
+        except AttributeError:
+            raise AttributeError(self.name) from None
 
-    def __post_init__(self, rules):
+class FilterRules:
+    __slots__ = '_exclude', '_include'
+    exclude = _FilterSetDescriptor()
+    include = _FilterSetDescriptor()
+    def __init__(self, rules: Union[Iterable[Rule], FilterRules] = None):
+        self._exclude = FilterSet()
+        self._include = FilterSet()
         if rules is not None:
             self.update(rules)
-
+    def __repr__(self):
+        desc = ["<FilterRules:"]
+        desc += (
+            ["{}={!r}".format(x, getattr(self, x)) for x in ('exclude', 'include') if hasattr(self, x)]
+            or ["NOT SET"]
+        )
+        sep = "\n  " if len(desc) > 2 else " "
+        return sep.join(desc).replace("set()", "{}") + ">"
+    # Proxy add(), discard(), remove() and clear() to FilterSets.
     def __proxy__(self, method, filter, *, rule_type=RuleType.EXCLUDE):
         if rule_type is RuleType.EXCLUDE:
             getattr(self.exclude, method)(filter)
@@ -132,16 +169,18 @@ class ExcludeRules:
             getattr(self.include, method)(filter)
         else:
             raise ValueError("invalid rule type: %r (must be one of %r)" % (rule_type, list(RuleType)))
-
     add = partialmethod(__proxy__, 'add')
     discard = partialmethod(__proxy__, 'discard')
     remove = partialmethod(__proxy__, 'remove')
-
-    def update(self, rules):
-        if isinstance(rules, ExcludeRules):
-           for filter_set in self.exclude.filter_sets:
-                getattr(self.exclude, filter_set).update(getattr(rules.exclude, filter_set))
-                getattr(self.include, filter_set).update(getattr(rules.include, filter_set))
+    def clear(self):
+        self.exclude.clear()
+        self.include.clear()
+    def update(self, rules: Union[Iterable[Rule], FilterRules]):
+        """Update both FilterSets from a list of (RuleType, Filter) rules."""
+        if isinstance(rules, FilterRules):
+           for field in FilterSet._fields:
+                getattr(self.exclude, field).update(getattr(rules.exclude, field))
+                getattr(self.include, field).update(getattr(rules.include, field))
         else:
             for rule in rules:
                 # Validate rules.
@@ -155,11 +194,8 @@ class ExcludeRules:
                 else:
                     self.add(filter, rule_type=rule_type)
 
-    def clear(self):
-        self.exclude.clear()
-        self.include.clear()
-
-    def filter_namespace(self, namespace, obj=None):
+    def filter_vars(self, namespace: Dict[str, Any], obj: ModuleType = None):
+        """Apply filters to dictionary with names as keys."""
         if not self.exclude and not self.include:
             return namespace
 
@@ -186,8 +222,8 @@ class ExcludeRules:
                 flist.append(lambda obj: id(obj.value) in filters.ids)
             if filters.names:
                 flist.append(lambda obj: obj.name in filters.names)
-            if filters.regex:
-                flist.append(lambda obj: any(regex.fullmatch(obj.name) for regex in filters.regex))
+            if filters.regexes:
+                flist.append(lambda obj: any(regex.fullmatch(obj.name) for regex in filters.regexes))
             flist.extend(filters.funcs)
             for f in flist:
                 objects = filterfalse(f, objects)

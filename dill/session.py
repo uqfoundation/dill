@@ -124,14 +124,14 @@ def _restore_modules(unpickler, main_module):
     except KeyError:
         pass
 
-def _filter_objects(main, exclude, include, obj=None):
+def _filter_vars(main, exclude, include, obj=None):
     rules = FilterRules(getattr(settings, 'dump_module', None))
     if exclude is not None:
         rules.update([(EXCLUDE, exclude)])
     if include is not None:
         rules.update([(INCLUDE, include)])
 
-    namespace = rules.filter_namespace(main.__dict__, obj=obj)
+    namespace = rules.filter_vars(main.__dict__, obj=obj)
     if namespace is main.__dict__:
         return main
 
@@ -141,7 +141,7 @@ def _filter_objects(main, exclude, include, obj=None):
 
 def dump_module(
     filename = str(TEMPDIR/'session.pkl'),
-    main: Union[str, ModuleType] = '__main__',
+    module: Union[str, ModuleType] = '__main__',
     refimported: bool = False,
     exclude: Union[Filter, Iterable[Filter]] = None,
     include: Union[Filter, Iterable[Filter]] = None,
@@ -158,7 +158,7 @@ def dump_module(
 
     Parameters:
         filename: a path-like object or a writable stream.
-        main: a module object or an importable module name.
+        module: a module object or an importable module name.
         refimported: if `True`, all imported objects in the module's namespace
             are saved by reference. *Note:* this is different from the ``byref``
             option of other "dump" functions and is not affected by
@@ -178,7 +178,7 @@ def dump_module(
 
           >>> import my_mod as m
           >>> m.var = 'new value'
-          >>> dill.dump_module('my_mod_session.pkl', main='my_mod')
+          >>> dill.dump_module('my_mod_session.pkl', module='my_mod')
 
         - Save the state of a non-importable, runtime-created module:
 
@@ -186,32 +186,32 @@ def dump_module(
           >>> runtime = ModuleType('runtime')
           >>> runtime.food = ['bacon', 'eggs', 'spam']
           >>> runtime.process_food = m.process_food
-          >>> dill.dump_module('runtime_session.pkl', main=runtime, refimported=True)
+          >>> dill.dump_module('runtime_session.pkl', module=runtime, refimported=True)
 
     *Changed in version 0.3.6:* the function ``dump_session()`` was renamed to
     ``dump_module()``.
 
-    *Changed in version 0.3.6:* the parameter ``byref`` was renamed to
-    ``refimported``.
+    *Changed in version 0.3.6:* the parameters ``main`` and ``byref`` were
+    renamed to ``module`` and ``refimported``, respectively.
     """
-    if 'byref' in kwds:
-        warnings.warn(
-            "The parameter 'byref' was renamed to 'refimported', use this"
-            " instead. Note: the underlying dill.Pickler do accept a 'byref'"
-            " argument, but it has no effect on session saving.",
-            PendingDeprecationWarning
-        )
-        if refimported:
-            raise ValueError("both 'refimported' and 'byref' arguments were used.")
-        refimported = kwds.pop('byref')
     from .settings import settings
     protocol = settings['protocol']
+    for old_par, par in [('main', 'module'), ('byref', 'refimported')]:
+        if old_par in kwds:
+            message = "The parameter %r was renamed to %r, use this instead." % (old_par, par)
+            if old_par == 'byref':
+                message += " Note: the underlying dill.Pickler do accept a 'byref'"
+                           " argument, but it has no effect on session saving."
+            warnings.warn(message, PendingDeprecationWarning)
+    refimported = kwds.pop('byref', refimported)
+    module = kwds.pop('main', module)
+    main = module
     if isinstance(main, str):
         main = _import_module(main)
     original_main = main
     if refimported:
         main = _stash_modules(main)
-    main = _filter_objects(main, exclude, include, obj=original_main)
+    main = _filter_vars(main, exclude, include, obj=original_main)
     if hasattr(filename, 'write'):
         file = filename
     else:
@@ -237,7 +237,7 @@ def dump_module(
 # Backward compatibility.
 def dump_session(filename=str(TEMPDIR/'session.pkl'), main=None, byref=False, **kwds):
     warnings.warn("dump_session() was renamed to dump_module()", PendingDeprecationWarning)
-    dump_module(filename, main, refimported=byref, **kwds)
+    dump_module(filename, module=main, refimported=byref, **kwds)
 dump_session.__doc__ = dump_module.__doc__
 
 class _PeekableReader:
@@ -301,7 +301,7 @@ def _identify_module(file, main=None):
 
 def load_module(
     filename = str(TEMPDIR/'session.pkl'),
-    main: Union[ModuleType, str] = None,
+    module: Union[ModuleType, str] = None,
     **kwds
 ) -> Optional[ModuleType]:
     """Update :py:mod:`__main__` or another module with the state from the
@@ -318,7 +318,7 @@ def load_module(
 
     Parameters:
         filename: a path-like object or a readable stream.
-        main: an importable module name or a module object.
+        module: an importable module name or a module object.
         **kwds: extra keyword arguments passed to :py:class:`Unpickler()`.
 
     Raises:
@@ -366,11 +366,20 @@ def load_module(
     *Changed in version 0.3.6:* the function ``load_session()`` was renamed to
     ``load_module()``.
 
+    *Changed in version 0.3.6:* the parameter ``main`` was renamed to
+    ``module``.
+
     See also:
         :py:func:`load_module_asdict` to load the contents of a saved session
         (from :py:mod:`__main__` or any importable module) into a dictionary.
     """
-    main_arg = main
+    if 'main' in kwds:
+        warnings.warn(
+                "The parameter 'main' was renamed to 'module', use this instead.",
+                PendingDeprecationWarning
+        )
+        module = kwds.pop('main')
+    main = module
     if hasattr(filename, 'read'):
         file = filename
     else:
@@ -426,7 +435,7 @@ def load_module(
             runtime_main = '__runtime__.%s' % main.__name__
             sys.modules[runtime_main] = main
 
-        module = unpickler.load()
+        loaded = unpickler.load()
     finally:
         if not hasattr(filename, 'read'):  # if newly opened file
             file.close()
@@ -434,17 +443,17 @@ def load_module(
             del sys.modules[runtime_main]
         except (KeyError, NameError):
             pass
-    assert module is main
-    _restore_modules(unpickler, module)
-    if module is _main_module or module is main_arg:
+    assert loaded is main
+    _restore_modules(unpickler, main)
+    if main is _main_module or main is module:
         return None
     else:
-        return module
+        return main
 
 # Backward compatibility.
 def load_session(filename=str(TEMPDIR/'session.pkl'), main=None, **kwds):
     warnings.warn("load_session() was renamed to load_module().", PendingDeprecationWarning)
-    load_module(filename, main, **kwds)
+    load_module(filename, module=main, **kwds)
 load_session.__doc__ = load_module.__doc__
 
 def load_module_asdict(
@@ -500,8 +509,8 @@ def load_module_asdict(
         >>> new_var in main_vars  # would be True if the option 'update' was set
         False
     """
-    if 'main' in kwds:
-        raise TypeError("'main' is an invalid keyword argument for load_module_asdict()")
+    if 'module' in kwds:
+        raise TypeError("'module' is an invalid keyword argument for load_module_asdict()")
     if hasattr(filename, 'read'):
         file = filename
     else:
