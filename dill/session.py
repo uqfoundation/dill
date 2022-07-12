@@ -149,64 +149,83 @@ def dump_module(
 ) -> None:
     """Pickle the current state of :py:mod:`__main__` or another module to a file.
 
-    Save the interpreter session (the contents of the built-in module
-    :py:mod:`__main__`) or the state of another module to a pickle file.  This
-    can then be restored by calling the function :py:func:`load_module`.
-
-    Runtime-created modules, like the ones constructed by
-    :py:class:`~types.ModuleType`, can also be saved and restored thereafter.
+    Save the contents of :py:mod:`__main__` (e.g. from an interactive
+    interpreter session), an imported module, or a module-type object (e.g.
+    built with :py:class:`~types.ModuleType`), to a file. The pickled
+    module can then be restored with the function :py:func:`load_module`.
 
     Parameters:
         filename: a path-like object or a writable stream.
-        module: a module object or an importable module name.
-        refimported: if `True`, all imported objects in the module's namespace
-            are saved by reference. *Note:* this is different from the ``byref``
-            option of other "dump" functions and is not affected by
-            ``settings['byref']``.
+        module: a module object or the name of an importable module. If `None`,
+            (the default) :py:mod:`__main__` will be saved.
+        refimported: if `True`, all objects imported into the module's
+            namespace are saved by reference. *Note:* this is similar but
+            independent from ``dill.settings[`byref`]``, as ``refimported``
+            refers to all imported objects, while ``byref`` only affects
+            select objects.
         **kwds: extra keyword arguments passed to :py:class:`Pickler()`.
 
     Raises:
        :py:exc:`PicklingError`: if pickling fails.
 
     Examples:
-        - Save current session state:
+
+        - Save current interpreter session state:
 
           >>> import dill
-          >>> dill.dump_module()  # save state of __main__ to /tmp/session.pkl
+          >>> squared = lambda x: x*x
+          >>> dill.dump_module() # save state of __main__ to /tmp/session.pkl
 
         - Save the state of an imported/importable module:
 
-          >>> import my_mod as m
-          >>> m.var = 'new value'
-          >>> dill.dump_module('my_mod_session.pkl', module='my_mod')
+          >>> import dill
+          >>> import pox
+          >>> pox.plus_one = lambda x: x+1
+          >>> dill.dump_module('pox_session.pkl', main=pox)
 
-        - Save the state of a non-importable, runtime-created module:
+        - Save the state of a non-importable, module-type object:
 
+          >>> import dill
           >>> from types import ModuleType
-          >>> runtime = ModuleType('runtime')
-          >>> runtime.food = ['bacon', 'eggs', 'spam']
-          >>> runtime.process_food = m.process_food
-          >>> dill.dump_module('runtime_session.pkl', module=runtime, refimported=True)
+          >>> foo = ModuleType('foo')
+          >>> foo.values = [1,2,3]
+          >>> import math
+          >>> foo.sin = math.sin
+          >>> dill.dump_module('foo_session.pkl', main=foo, refimported=True)
 
-    *Changed in version 0.3.6:* the function ``dump_session()`` was renamed to
-    ``dump_module()``.
+        - Restore the state of the saved modules:
 
-    *Changed in version 0.3.6:* the parameters ``main`` and ``byref`` were
-    renamed to ``module`` and ``refimported``, respectively.
+          >>> import dill
+          >>> dill.load_module()
+          >>> squared(2)
+          4
+          >>> pox = dill.load_module('pox_session.pkl')
+          >>> pox.plus_one(1)
+          2
+          >>> foo = dill.load_module('foo_session.pkl')
+          >>> [foo.sin(x) for x in foo.values]
+          [0.8414709848078965, 0.9092974268256817, 0.1411200080598672]
+
+    *Changed in version 0.3.6:* Function ``dump_session()`` was renamed to
+    ``dump_module()``.  Parameters ``main`` and ``byref`` were renamed to
+    ``module`` and ``refimported``, respectively.
     """
     from .settings import settings
     protocol = settings['protocol']
     for old_par, par in [('main', 'module'), ('byref', 'refimported')]:
         if old_par in kwds:
-            message = "The parameter %r was renamed to %r, use this instead." % (old_par, par)
+            message = "The argument %r has been renamed %r" % (old_par, par)
             if old_par == 'byref':
-                message += " Note: the underlying dill.Pickler do accept a 'byref'"
-                           " argument, but it has no effect on session saving."
-            warnings.warn(message, PendingDeprecationWarning)
+                message += " to distinguish it from dill.settings['byref']"
+            warnings.warn(message + ".", PendingDeprecationWarning)
+            if locals()[par]:  # the defaults are None and False
+                raise TypeError("both %r and %r arguments were used" % (par, old_par))
     refimported = kwds.pop('byref', refimported)
     module = kwds.pop('main', module)
     main = module
-    if isinstance(main, str):
+    if main is None:
+        main = _main_module
+    elif isinstance(main, str):
         main = _import_module(main)
     original_main = main
     if refimported:
@@ -236,7 +255,7 @@ def dump_module(
 
 # Backward compatibility.
 def dump_session(filename=str(TEMPDIR/'session.pkl'), main=None, byref=False, **kwds):
-    warnings.warn("dump_session() was renamed to dump_module()", PendingDeprecationWarning)
+    warnings.warn("dump_session() has been renamed dump_module()", PendingDeprecationWarning)
     dump_module(filename, module=main, refimported=byref, **kwds)
 dump_session.__doc__ = dump_module.__doc__
 
@@ -307,77 +326,104 @@ def load_module(
     """Update :py:mod:`__main__` or another module with the state from the
     session file.
 
-    Restore the interpreter session (the built-in module :py:mod:`__main__`) or
-    the state of another module from a pickle file created by the function
-    :py:func:`dump_module`.
+    Restore a module to the state saved with :py:func:`dump_module`. The
+    saved module can be :py:mod:`__main__` (e.g. an interpreter session),
+    an imported module, or a module-type object (e.g. created with
+    :py:class:`~types.ModuleType`).
 
-    If loading the state of a (non-importable) runtime-created module, a version
-    of this module may be passed as the argument ``main``.  Otherwise, a new
-    module object is created with :py:class:`~types.ModuleType` and returned
-    after it's updated.
+    When restoring the state of a non-importable module-type object, the
+    current instance of this module may be passed as the argument ``main``.
+    Otherwise, a new instance is created with :py:class:`~types.ModuleType`
+    and returned.
 
     Parameters:
         filename: a path-like object or a readable stream.
-        module: an importable module name or a module object.
+        module: a module object or the name of an importable module.
         **kwds: extra keyword arguments passed to :py:class:`Unpickler()`.
 
     Raises:
         :py:exc:`UnpicklingError`: if unpickling fails.
-        :py:exc:`ValueError`: if the ``main`` argument and the session file's
-            module are incompatible.
+        :py:exc:`ValueError`: if the argument ``main`` and module saved
+            at ``filename`` are incompatible.
 
     Returns:
-        The restored module if it's different from :py:mod:`__main__` and
-        wasn't passed as the ``main`` argument.
+        A module object, if the saved module is not :py:mod:`__main__` or
+        a module instance wasn't provided with the argument ``main``.
 
     Examples:
-        - Load a saved session state:
 
-          >>> import dill, sys
-          >>> dill.load_module()  # updates __main__ from /tmp/session.pkl
-          >>> restored_var
-          'this variable was created/updated by load_module()'
+        - Save the state of some modules:
+
+          >>> import dill
+          >>> squared = lambda x: x*x
+          >>> dill.dump_module() # save state of __main__ to /tmp/session.pkl
+          >>>
+          >>> import pox # an imported module
+          >>> pox.plus_one = lambda x: x+1
+          >>> dill.dump_module('pox_session.pkl', main=pox)
+          >>>
+          >>> from types import ModuleType
+          >>> foo = ModuleType('foo') # a module-type object
+          >>> foo.values = [1,2,3]
+          >>> import math
+          >>> foo.sin = math.sin
+          >>> dill.dump_module('foo_session.pkl', main=foo, refimported=True)
+
+        - Restore the state of the interpreter:
+
+          >>> import dill
+          >>> dill.load_module() # updates __main__ from /tmp/session.pkl
+          >>> squared(2)
+          4
 
         - Load the saved state of an importable module:
 
-          >>> my_mod = dill.load_module('my_mod_session.pkl')
-          >>> my_mod.var
-          'new value'
-          >>> my_mod in sys.modules.values()
+          >>> import dill
+          >>> pox = dill.load_module('pox_session.pkl')
+          >>> pox.plus_one(1)
+          2
+          >>> import sys
+          >>> pox in sys.modules.values()
           True
 
-        - Load the saved state of a non-importable, runtime-created module:
+        - Load the saved state of a non-importable module-type object:
 
-          >>> runtime = dill.load_module('runtime_session.pkl')
-          >>> runtime.process_food is my_mod.process_food  # was saved by reference
+          >>> import dill
+          >>> foo = dill.load_module('foo_session.pkl')
+          >>> [foo.sin(x) for x in foo.values]
+          [0.8414709848078965, 0.9092974268256817, 0.1411200080598672]
+          >>> import math
+          >>> foo.sin is math.sin # foo.sin was saved by reference
           True
-          >>> runtime in sys.modules.values()
+          >>> import sys
+          >>> foo in sys.modules.values()
           False
 
-        - Update the state of a non-importable, runtime-created module:
+        - Update the state of a non-importable module-type object:
 
+          >>> import dill
           >>> from types import ModuleType
-          >>> runtime = ModuleType('runtime')
-          >>> runtime.food = ['pizza', 'burger']
-          >>> dill.load_module('runtime_session.pkl', main=runtime)
-          >>> runtime.food
-          ['bacon', 'eggs', 'spam']
+          >>> foo = ModuleType('foo')
+          >>> foo.values = ['a','b']
+          >>> foo.sin = lambda x: x*x
+          >>> dill.load_module('foo_session.pkl', main=foo)
+          >>> [foo.sin(x) for x in foo.values]
+          [0.8414709848078965, 0.9092974268256817, 0.1411200080598672]
 
-    *Changed in version 0.3.6:* the function ``load_session()`` was renamed to
-    ``load_module()``.
-
-    *Changed in version 0.3.6:* the parameter ``main`` was renamed to
-    ``module``.
+    *Changed in version 0.3.6:* Function ``load_session()`` was renamed to
+    ``load_module()``. Parameter ``main`` was renamed to ``module``.
 
     See also:
-        :py:func:`load_module_asdict` to load the contents of a saved session
-        (from :py:mod:`__main__` or any importable module) into a dictionary.
+        :py:func:`load_module_asdict` to load the contents of module saved
+        with :py:func:`dump_module` into a dictionary.
     """
     if 'main' in kwds:
         warnings.warn(
-                "The parameter 'main' was renamed to 'module', use this instead.",
-                PendingDeprecationWarning
+            "The argument 'main' has been renamed 'module'.",
+            PendingDeprecationWarning
         )
+        if module is not None:
+            raise TypeError("both 'module' and 'main' arguments were used")
         module = kwds.pop('main')
     main = module
     if hasattr(filename, 'read'):
@@ -452,7 +498,7 @@ def load_module(
 
 # Backward compatibility.
 def load_session(filename=str(TEMPDIR/'session.pkl'), main=None, **kwds):
-    warnings.warn("load_session() was renamed to load_module().", PendingDeprecationWarning)
+    warnings.warn("load_session() has been renamed load_module().", PendingDeprecationWarning)
     load_module(filename, module=main, **kwds)
 load_session.__doc__ = load_module.__doc__
 
@@ -462,20 +508,19 @@ def load_module_asdict(
     **kwds
 ) -> dict:
     """
-    Load the contents of a module from a session file into a dictionary.
+    Load the contents of a saved module into a dictionary.
 
-    ``load_module_asdict()`` does the equivalent of this function::
+    ``load_module_asdict()`` is the near-equivalent of::
 
-        lambda filename: vars(load_module(filename)).copy()
+        lambda filename: vars(dill.load_module(filename)).copy()
 
-    but without changing the original module.
-
-    The loaded module's origin is stored in the ``__session__`` attribute.
+    however, does not alter the original module. Also, the path of
+    the loaded module is stored in the ``__session__`` attribute.
 
     Parameters:
         filename: a path-like object or a readable stream
-        update: if `True`, the dictionary is updated with the current state of
-            the module before loading variables from the session file
+        update: if `True`, initialize the dictionary with the current state
+            of the module prior to loading the state stored at filename.
         **kwds: extra keyword arguments passed to :py:class:`Unpickler()`
 
     Raises:
@@ -485,8 +530,8 @@ def load_module_asdict(
         A copy of the restored module's dictionary.
 
     Note:
-        If the ``update`` option is used, the original module will be loaded if
-        it wasn't yet.
+        If ``update`` is True, the saved module may be imported then updated.
+        If imported, the loaded module remains unchanged as in the general case.
 
     Example:
         >>> import dill
@@ -495,18 +540,18 @@ def load_module_asdict(
         >>> dill.dump_module()
         >>> anum = 0
         >>> new_var = 'spam'
-        >>> main_vars = dill.load_module_asdict()
-        >>> main_vars['__name__'], main_vars['__session__']
+        >>> main = dill.load_module_asdict()
+        >>> main['__name__'], main['__session__']
         ('__main__', '/tmp/session.pkl')
-        >>> main_vars is globals()  # loaded objects don't reference current global variables
+        >>> main is globals() # loaded objects don't reference globals
         False
-        >>> main_vars['alist'] == alist
+        >>> main['alist'] == alist
         True
-        >>> main_vars['alist'] is alist  # was saved by value
+        >>> main['alist'] is alist # was saved by value
         False
-        >>> main_vars['anum'] == anum  # changed after the session was saved
+        >>> main['anum'] == anum # changed after the session was saved
         False
-        >>> new_var in main_vars  # would be True if the option 'update' was set
+        >>> new_var in main # would be True if the option 'update' was set
         False
     """
     if 'module' in kwds:
