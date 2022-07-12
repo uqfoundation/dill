@@ -9,12 +9,10 @@
 global settings for Pickler
 """
 
-__all__ = ['settings', 'Settings']
+__all__ = ['settings']
 
-try:
-    from pickle import DEFAULT_PROTOCOL
-except ImportError:
-    from pickle import HIGHEST_PROTOCOL as DEFAULT_PROTOCOL
+from pickle import DEFAULT_PROTOCOL
+
 settings = {
    #'main' : None,
     'protocol' : DEFAULT_PROTOCOL,
