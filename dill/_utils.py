@@ -73,9 +73,9 @@ class FilterSet(MutableSet):
         filter, filter_set = self._match_type(filter)
         return filter in filter_set
     def __iter__(self):
-        return chain.from_iterable(gettatr(self, field) for field in self._fields)
+        return chain.from_iterable(getattr(self, field) for field in self._fields)
     def __len__(self):
-        return sum(len(gettatr(self, field)) for field in self._fields)
+        return sum(len(getattr(self, field)) for field in self._fields)
     def add(self, filter):
         filter, filter_set = self._match_type(filter)
         filter_set.add(filter)
@@ -99,7 +99,7 @@ class FilterSet(MutableSet):
     def __ior__(self, filters):
         if isinstance(filters, FilterSet):
             for field in self._fields:
-                getattr(self, field) |= getattr(filters, field)
+                getattr(self, field).update(getattr(filters, field))
         else:
             for filter in filters:
                 self.add(filter)
@@ -115,12 +115,12 @@ class FilterSet(MutableSet):
             from ._dill import _reverse_typemap
             cls._rtypemap = {(k[:-4] if k.endswith('Type') else k).lower(): v
                              for k, v in _reverse_typemap.items()}
-        if key.endswith('Type')
+        if key.endswith('Type'):
             key = key[:-4]
         return cls._rtypemap[key.lower()]
     def add_type(self, type_name):
         self.types.add(self.get_type(type_name))
-FilterSet._fields = tuple(field.name for field in fields(cls))
+FilterSet._fields = tuple(field.name for field in fields(FilterSet))
 
 class _FilterSetDescriptor:
     """descriptor for FilterSet members of FilterRules"""
