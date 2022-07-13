@@ -11,10 +11,10 @@ global settings for Pickler
 
 from __future__ import annotations
 
-__all__ = ['settings']
+__all__ = ['settings', 'ModuleRules']
 
 from pickle import DEFAULT_PROTOCOL
-from ._utils import FilterRules, FilterSet
+from ._utils import FilterRules
 
 settings = {
    #'main' : None,
@@ -52,7 +52,7 @@ class ModuleRules(FilterRules):
             if not any(hasattr(self, x) for x in FilterRules.__slots__):
                 # Initialize other. This is not a placeholder anymore.
                 other = '_include' if name == 'exclude' else '_exclude'
-                super().__setattr__(other, FilterSet())
+                super().__setattr__(other, ())
             super().__setattr__(name, value)
         else:
             # Create a child node for submodule 'name'.

@@ -1780,7 +1780,7 @@ def save_function(pickler, obj):
 
             # If the globals is the __dict__ from the module being saved as a
             # session, substitute it by the dictionary being actually saved.
-            if _original_main and globs_copy is _original_main.__dict__:
+            if _original_main is not None and globs_copy is _original_main.__dict__:
                 globs_copy = getattr(pickler, '_main', _original_main).__dict__
                 globs = globs_copy
             # If the globals is a module __dict__, do not save it in the pickle.
