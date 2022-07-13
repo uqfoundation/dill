@@ -8,11 +8,12 @@
 
 from __future__ import annotations
 
-__all__ = ['FilterRules', 'Filter', 'RuleType']
+__all__ = ['FilterRules', 'Filter', 'RuleType', '_open']
 
 import logging
 logger = logging.getLogger('dill._utils')
 
+import contextlib
 import re
 from dataclasses import dataclass, field, fields
 from collections import namedtuple
@@ -22,6 +23,16 @@ from functools import partialmethod
 from itertools import chain, filterfalse
 from types import ModuleType
 from typing import Any, Callable, Dict, Iterable, Pattern, Set, Tuple, Union
+
+def _open(filename, mode):
+    """return a context manager with an opened file"""
+    attr = 'write' if 'w' in mode else 'read'
+    if hasattr(filename, attr):
+        return contextlib.nullcontext(filename)
+    else:
+        return open(filename, mode)
+
+# Namespace filtering.
 
 Filter = Union[str, Pattern[str], int, type, Callable]
 RuleType = Enum('RuleType', 'EXCLUDE INCLUDE', module=__name__)
@@ -163,12 +174,10 @@ class FilterRules:
         return sep.join(desc).replace("set()", "{}") + ">"
     # Proxy add(), discard(), remove() and clear() to FilterSets.
     def __proxy__(self, method, filter, *, rule_type=RuleType.EXCLUDE):
-        if rule_type is RuleType.EXCLUDE:
-            getattr(self.exclude, method)(filter)
-        elif rule_type is RuleType.INCLUDE:
-            getattr(self.include, method)(filter)
-        else:
+        if not isinstance(rule_type, RuleType):
             raise ValueError("invalid rule type: %r (must be one of %r)" % (rule_type, list(RuleType)))
+        filter_set = getattr(self, rule_type.name.lower())
+        getattr(filter_set, method)(filter)
     add = partialmethod(__proxy__, 'add')
     discard = partialmethod(__proxy__, 'discard')
     remove = partialmethod(__proxy__, 'remove')
@@ -194,13 +203,13 @@ class FilterRules:
                 else:
                     self.add(filter, rule_type=rule_type)
 
-    def filter_vars(self, namespace: Dict[str, Any], obj: ModuleType = None):
+    def filter_vars(self, namespace: Dict[str, Any]):
         """Apply filters to dictionary with names as keys."""
         if not self.exclude and not self.include:
             return namespace
 
         # Protect agains dict changes during the call.
-        namespace_copy = namespace.copy() if obj is None or namespace is obj.__dict__ else namespace
+        namespace_copy = namespace.copy()
         objects = all_objects = [NamedObj._make(item) for item in namespace_copy.items()]
 
         for filters in (self.exclude, self.include):

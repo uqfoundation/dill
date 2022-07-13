@@ -22,6 +22,8 @@ import random
 import re
 import sys
 import tempfile
+import warnings
+from contextlib import suppress
 from statistics import mean
 from types import SimpleNamespace
 
@@ -35,7 +37,7 @@ from .settings import settings
 
 # Type hints.
 from typing import Iterable, Optional, Union
-from ._utils import Filter
+from ._utils import Filter, _open
 
 EXCLUDE, INCLUDE = RuleType.EXCLUDE, RuleType.INCLUDE
 
@@ -73,42 +75,44 @@ def _lookup_module(modmap, name, obj, main_module):
                 return modname, objname
     return None, None
 
-def _stash_modules(main_module):
+def _stash_modules(main_module, original_main):
     modmap = _module_map()
     newmod = ModuleType(main_module.__name__)
 
     imported = []
     imported_as = []
-    imported_top_level = []  # keep separeted for backwards compatibility
+    imported_top_level = []  # keep separeted for backward compatibility
     original = {}
     for name, obj in main_module.__dict__.items():
         if obj is main_module:
             original[name] = newmod  # self-reference
-            continue
-
+        elif obj is main_module.__dict__:
+            original[name] = newmod.__dict__
         # Avoid incorrectly matching a singleton value in another package (ex.: __doc__).
-        if any(obj is singleton for singleton in (None, False, True)) or \
-                isinstance(obj, ModuleType) and _is_builtin_module(obj):  # always saved by ref
+        elif any(obj is singleton for singleton in (None, False, True)) \
+                or isinstance(obj, ModuleType) and _is_builtin_module(obj):  # always saved by ref
             original[name] = obj
-            continue
-
-        source_module, objname = _lookup_module(modmap, name, obj, main_module)
-        if source_module:
-            if objname == name:
-                imported.append((source_module, name))
-            else:
-                imported_as.append((source_module, objname, name))
         else:
-            try:
-                imported_top_level.append((modmap.top_level[id(obj)], name))
-            except KeyError:
-                original[name] = obj
+            source_module, objname = _lookup_module(modmap, name, obj, main_module=original_main)
+            if source_module:
+                if objname == name:
+                    imported.append((source_module, name))
+                else:
+                    imported_as.append((source_module, objname, name))
+            else:
+                try:
+                    imported_top_level.append((modmap.top_level[id(obj)], name))
+                except KeyError:
+                    original[name] = obj
 
     if len(original) < len(main_module.__dict__):
         newmod.__dict__.update(original)
         newmod.__dill_imported = imported
         newmod.__dill_imported_as = imported_as
         newmod.__dill_imported_top_level = imported_top_level
+        if getattr(newmod, '__loader__', None) is None and _is_imported_module(main_module):
+            # Trick _is_imported_module() to force saving as an imported module.
+            newmod.__loader__ = True  # will be discarded by save_module()
         return newmod
     else:
         return main_module
@@ -124,24 +128,32 @@ def _restore_modules(unpickler, main_module):
     except KeyError:
         pass
 
-def _filter_vars(main, exclude, include, obj=None):
-    rules = FilterRules(getattr(settings, 'dump_module', None))
+def _filter_vars(main, default_rules, exclude, include):
+    rules = FilterRules()
+    mod_rules = default_rules.get(main.__name__, default_rules)
+    rules.exclude |= mod_rules.get_filters(EXCLUDE)
+    rules.include |= mod_rules.get_filters(INCLUDE)
     if exclude is not None:
         rules.update([(EXCLUDE, exclude)])
     if include is not None:
         rules.update([(INCLUDE, include)])
 
-    namespace = rules.filter_vars(main.__dict__, obj=obj)
+    namespace = rules.filter_vars(main.__dict__)
     if namespace is main.__dict__:
         return main
 
-    main = ModuleType(main.__name__)
-    main.__dict__.update(namespace)
-    return main
+    newmod = ModuleType(main.__name__)
+    newmod.__dict__.update(namespace)
+    for name, obj in namespace.items():
+        if obj is main:
+            setattr(newmod, name, newmod)
+        elif obj is main.__dict__:
+            setattr(newmod, name, newmod.__dict__)
+    return newmod
 
 def dump_module(
     filename = str(TEMPDIR/'session.pkl'),
-    module: Union[str, ModuleType] = '__main__',
+    module: Union[str, ModuleType] = None,
     refimported: bool = False,
     exclude: Union[Filter, Iterable[Filter]] = None,
     include: Union[Filter, Iterable[Filter]] = None,
@@ -210,8 +222,6 @@ def dump_module(
     ``dump_module()``.  Parameters ``main`` and ``byref`` were renamed to
     ``module`` and ``refimported``, respectively.
     """
-    from .settings import settings
-    protocol = settings['protocol']
     for old_par, par in [('main', 'module'), ('byref', 'refimported')]:
         if old_par in kwds:
             message = "The argument %r has been renamed %r" % (old_par, par)
@@ -222,35 +232,29 @@ def dump_module(
                 raise TypeError("both %r and %r arguments were used" % (par, old_par))
     refimported = kwds.pop('byref', refimported)
     module = kwds.pop('main', module)
+
+    from .settings import settings
+    protocol = settings['protocol']
+    default_rules = settings['dump_module']
     main = module
     if main is None:
         main = _main_module
     elif isinstance(main, str):
         main = _import_module(main)
     original_main = main
+    main = _filter_vars(main, default_rules, exclude, include)
     if refimported:
-        main = _stash_modules(main)
-    main = _filter_vars(main, exclude, include, obj=original_main)
-    if hasattr(filename, 'write'):
-        file = filename
-    else:
-        file = open(filename, 'wb')
-    try:
+        main = _stash_modules(main, original_main)
+    with _open(filename, 'wb') as file:
         pickler = Pickler(file, protocol, **kwds)
-        pickler._original_main = main
-        if refimported:
-            main = _stash_modules(main)
+        if main is not original_main:
+            pickler._original_main = original_main
         pickler._main = main     #FIXME: dill.settings are disabled
         pickler._byref = False   # disable pickling by name reference
         pickler._recurse = False # disable pickling recursion for globals
         pickler._session = True  # is best indicator of when pickling a session
         pickler._first_pass = True
-        if main is not original_main:
-            pickler._original_main = original_main
         pickler.dump(main)
-    finally:
-        if file is not filename:  # if newly opened file
-            file.close()
     return
 
 # Backward compatibility.
@@ -426,19 +430,15 @@ def load_module(
             raise TypeError("both 'module' and 'main' arguments were used")
         module = kwds.pop('main')
     main = module
-    if hasattr(filename, 'read'):
-        file = filename
-    else:
-        file = open(filename, 'rb')
-    try:
+    with _open(filename, 'rb') as file:
         file = _make_peekable(file)
         #FIXME: dill.settings are disabled
         unpickler = Unpickler(file, **kwds)
         unpickler._main = main
         unpickler._session = True
-        pickle_main = _identify_module(file, main)
 
         # Resolve unpickler._main
+        pickle_main = _identify_module(file, main)
         if main is None and pickle_main is not None:
             main = pickle_main
         if isinstance(main, str):
@@ -476,19 +476,16 @@ def load_module(
                     % (pickle_main, main.__name__)
                 )
 
-        # This is for find_class() to be able to locate it.
-        if not is_main_imported:
-            runtime_main = '__runtime__.%s' % main.__name__
-            sys.modules[runtime_main] = main
-
-        loaded = unpickler.load()
-    finally:
-        if not hasattr(filename, 'read'):  # if newly opened file
-            file.close()
         try:
-            del sys.modules[runtime_main]
-        except (KeyError, NameError):
-            pass
+            # This is for find_class() to be able to locate it.
+            if not is_main_imported:
+                runtime_main = '__runtime__.%s' % main.__name__
+                sys.modules[runtime_main] = main
+            loaded = unpickler.load()
+        finally:
+            with suppress(KeyError, NameError):
+                del sys.modules[runtime_main]
+
     assert loaded is main
     _restore_modules(unpickler, main)
     if main is _main_module or main is module:
@@ -556,11 +553,7 @@ def load_module_asdict(
     """
     if 'module' in kwds:
         raise TypeError("'module' is an invalid keyword argument for load_module_asdict()")
-    if hasattr(filename, 'read'):
-        file = filename
-    else:
-        file = open(filename, 'rb')
-    try:
+    with _open(filename, 'rb') as file:
         file = _make_peekable(file)
         main_name = _identify_module(file)
         old_main = sys.modules.get(main_name)
@@ -571,19 +564,15 @@ def load_module_asdict(
             main.__dict__.update(old_main.__dict__)
         else:
             main.__builtins__ = builtins
-        sys.modules[main_name] = main
-        load_module(file, **kwds)
-        main.__session__ = str(filename)
-    finally:
-        if not hasattr(filename, 'read'):  # if newly opened file
-            file.close()
         try:
+            sys.modules[main_name] = main
+            load_module(file, **kwds)
+        finally:
             if old_main is None:
                 del sys.modules[main_name]
             else:
                 sys.modules[main_name] = old_main
-        except NameError:  # failed before setting old_main
-            pass
+    main.__session__ = str(filename)
     return main.__dict__
 
 

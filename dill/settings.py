@@ -14,7 +14,7 @@ from __future__ import annotations
 __all__ = ['settings', 'ModuleRules']
 
 from pickle import DEFAULT_PROTOCOL
-from ._utils import FilterRules
+from ._utils import FilterRules, RuleType
 
 settings = {
    #'main' : None,
@@ -74,15 +74,20 @@ class ModuleRules(FilterRules):
             return mod_rules
         else:
             return mod_rules[submodules]
-    def get_filters(self, name):
-        if name not in self._fields:
-            raise ValueError("invalid name %r (must be one of %r)" % (name, self._fields))
+    def get(self, name: str, default: ModuleRules = None):
         try:
-            return getattr(self, name)
+            return self[name]
+        except AttributeError:
+            return default
+    def get_filters(self, rule_type: RuleType):
+        if not isinstance(rule_type, RuleType):
+            raise ValueError("invalid rule type: %r (must be one of %r)" % (rule_type, list(RuleType)))
+        try:
+            return getattr(self, rule_type.name.lower())
         except AttributeError:
             # 'self' is a placeholder, 'exclude' and 'include' are unset.
             if self._parent is None:
                 raise
-            return self._parent.get_filters(name)
+            return self._parent.get_filters(rule_type)
 
 settings['dump_module'] = ModuleRules('DEFAULT', rules=())
