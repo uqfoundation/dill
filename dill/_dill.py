@@ -429,11 +429,11 @@ def dump_module(
         filename: a path-like object or a writable stream.
         module: a module object or the name of an importable module. If `None`
             (the default), :py:mod:`__main__` is saved.
-        refimported: if `True`, all objects imported into the module's
-            namespace are saved by reference. *Note:* this is similar but
-            independent from ``dill.settings[`byref`]``, as ``refimported``
-            refers to all imported objects, while ``byref`` only affects
-            select objects.
+        refimported: if `True`, all objects identified as having been imported
+            into the module's namespace are saved by reference. *Note:* this is
+            similar but independent from ``dill.settings[`byref`]``, as
+            ``refimported`` refers to virtually all imported objects, while
+            ``byref`` only affects select objects.
         **kwds: extra keyword arguments passed to :py:class:`Pickler()`.
 
     Raises:
@@ -480,6 +480,10 @@ def dump_module(
     *Changed in version 0.3.6:* Function ``dump_session()`` was renamed to
     ``dump_module()``.  Parameters ``main`` and ``byref`` were renamed to
     ``module`` and ``refimported``, respectively.
+
+    Note:
+        Currently, ``dill.settings['byref']`` and ``dill.settings['recurse']``
+        don't apply to this function.`
     """
     for old_par, par in [('main', 'module'), ('byref', 'refimported')]:
         if old_par in kwds:
