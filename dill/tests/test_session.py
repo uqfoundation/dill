@@ -9,6 +9,7 @@ import atexit
 import os
 import sys
 import __main__
+from contextlib import suppress
 from io import BytesIO
 
 import dill
@@ -27,7 +28,7 @@ def _error_line(error, obj, refimported):
 if __name__ == '__main__' and len(sys.argv) >= 3 and sys.argv[1] == '--child':
     # Test session loading in a fresh interpreter session.
     refimported = (sys.argv[2] == 'True')
-    dill.load_module(session_file % refimported)
+    dill.load_module(session_file % refimported, module='__main__')
 
     def test_modules(refimported):
         # FIXME: In this test setting with CPython 3.7, 'calendar' is not included
@@ -111,10 +112,8 @@ def _clean_up_cache(module):
     cached = module.__cached__ if hasattr(module, '__cached__') else cached
     pycache = os.path.join(os.path.dirname(module.__file__), '__pycache__')
     for remove, file in [(os.remove, cached), (os.removedirs, pycache)]:
-        try:
+        with suppress(OSError):
             remove(file)
-        except OSError:
-            pass
 
 atexit.register(_clean_up_cache, local_mod)
 
@@ -163,16 +162,14 @@ def test_session_main(refimported):
             error = sp.call([python, __file__, '--child', str(refimported)], shell=shell)
             if error: sys.exit(error)
         finally:
-            try:
+            with suppress(OSError):
                 os.remove(session_file % refimported)
-            except OSError:
-                pass
 
         # Test session loading in the same session.
         session_buffer = BytesIO()
         dill.dump_module(session_buffer, refimported=refimported)
         session_buffer.seek(0)
-        dill.load_module(session_buffer)
+        dill.load_module(session_buffer, module='__main__')
         ns.backup['_test_objects'](__main__, ns.backup, refimported)
 
 def test_session_other():
@@ -183,13 +180,13 @@ def test_session_other():
     dict_objects = [obj for obj in module.__dict__.keys() if not obj.startswith('__')]
 
     session_buffer = BytesIO()
-    dill.dump_module(session_buffer, main=module)
+    dill.dump_module(session_buffer, module)
 
     for obj in dict_objects:
         del module.__dict__[obj]
 
     session_buffer.seek(0)
-    dill.load_module(session_buffer) #, main=module)
+    dill.load_module(session_buffer, module)
 
     assert all(obj in module.__dict__ for obj in dict_objects)
     assert module.selfref is module
@@ -210,12 +207,12 @@ def test_runtime_module():
     # without imported objects in the namespace. It's a contrived example because
     # even dill can't be in it.  This should work after fixing #462.
     session_buffer = BytesIO()
-    dill.dump_module(session_buffer, main=runtime, refimported=True)
+    dill.dump_module(session_buffer, module=runtime, refimported=True)
     session_dump = session_buffer.getvalue()
 
     # Pass a new runtime created module with the same name.
     runtime = ModuleType(modname)  # empty
-    return_val = dill.load_module(BytesIO(session_dump), main=runtime)
+    return_val = dill.load_module(BytesIO(session_dump), module=runtime)
     assert return_val is None
     assert runtime.__name__ == modname
     assert runtime.x == 42
