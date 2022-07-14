@@ -30,7 +30,8 @@ from types import SimpleNamespace
 from dill import _dill, Pickler, Unpickler
 from ._dill import (
     BuiltinMethodType, FunctionType, MethodType, ModuleType, TypeType,
-    _import_module, _is_builtin_module, _is_imported_module, _main_module
+    _import_module, _is_builtin_module, _is_imported_module, _main_module,
+    _reverse_typemap,
 )
 from ._utils import FilterRules, RuleType
 from .settings import settings
@@ -40,9 +41,6 @@ from typing import Iterable, Optional, Union
 from ._utils import Filter, _open
 
 EXCLUDE, INCLUDE = RuleType.EXCLUDE, RuleType.INCLUDE
-
-SESSION_IMPORTED_AS_TYPES = (BuiltinMethodType, FunctionType, MethodType,
-                             ModuleType, TypeType)
 
 TEMPDIR = pathlib.PurePath(tempfile.gettempdir())
 
@@ -55,7 +53,7 @@ def _module_map():
         top_level={},
     )
     for modname, module in sys.modules.items():
-        if not isinstance(module, ModuleType):
+        if modname in ('__main__', '__mp_main__') or not isinstance(module, ModuleType):
             continue
         if '.' not in modname:
             modmap.top_level[id(module)] = modname
@@ -64,12 +62,23 @@ def _module_map():
             modmap.by_id[id(modobj)].append((modobj, objname, modname))
     return modmap
 
+IMPORTED_AS_TYPES = (ModuleType, TypeType, FunctionType, MethodType, BuiltinMethodType)
+PyCapsuleType = _reverse_typemap.get('PyCapsuleType')
+if PyCapsuleType is not None: IMPORTED_AS_TYPES += (PyCapsuleType,)
+
+IMPORTED_AS_MODULES = [re.compile(x) for x in (
+    'ctypes', 'typing', 'subprocess', 'threading',
+    r'concurrent\.futures(\.\w+)?', r'multiprocessing(\.\w+)?'
+)]
+
 def _lookup_module(modmap, name, obj, main_module):
     """lookup name or id of obj if module is imported"""
     for modobj, modname in modmap.by_name[name]:
         if modobj is obj and sys.modules[modname] is not main_module:
             return modname, name
-    if isinstance(obj, SESSION_IMPORTED_AS_TYPES):
+    __module__ = getattr(obj, '__module__', None)
+    if isinstance(obj, IMPORTED_AS_TYPES) or (__module__ is not None
+            and any(regex.fullmatch(__module__) for regex in IMPORTED_AS_MODULES)):
         for modobj, objname, modname in modmap.by_id[id(obj)]:
             if sys.modules[modname] is not main_module:
                 return modname, objname
@@ -94,7 +103,7 @@ def _stash_modules(main_module, original_main):
             original[name] = obj
         else:
             source_module, objname = _lookup_module(modmap, name, obj, main_module=original_main)
-            if source_module:
+            if source_module is not None:
                 if objname == name:
                     imported.append((source_module, name))
                 else:
@@ -153,7 +162,7 @@ def _filter_vars(main, default_rules, exclude, include):
 
 def dump_module(
     filename = str(TEMPDIR/'session.pkl'),
-    module: Union[str, ModuleType] = None,
+    module: Union[ModuleType, str] = None,
     refimported: bool = False,
     exclude: Union[Filter, Iterable[Filter]] = None,
     include: Union[Filter, Iterable[Filter]] = None,
@@ -168,13 +177,13 @@ def dump_module(
 
     Parameters:
         filename: a path-like object or a writable stream.
-        module: a module object or the name of an importable module. If `None`,
-            (the default) :py:mod:`__main__` will be saved.
-        refimported: if `True`, all objects imported into the module's
-            namespace are saved by reference. *Note:* this is similar but
-            independent from ``dill.settings[`byref`]``, as ``refimported``
-            refers to all imported objects, while ``byref`` only affects
-            select objects.
+        module: a module object or the name of an importable module. If `None`
+            (the default), :py:mod:`__main__` is saved.
+        refimported: if `True`, all objects identified as having been imported
+            into the module's namespace are saved by reference. *Note:* this is
+            similar but independent from ``dill.settings[`byref`]``, as
+            ``refimported`` refers to virtually all imported objects, while
+            ``byref`` only affects select objects.
         **kwds: extra keyword arguments passed to :py:class:`Pickler()`.
 
     Raises:
@@ -221,6 +230,10 @@ def dump_module(
     *Changed in version 0.3.6:* Function ``dump_session()`` was renamed to
     ``dump_module()``.  Parameters ``main`` and ``byref`` were renamed to
     ``module`` and ``refimported``, respectively.
+
+    Note:
+        Currently, ``dill.settings['byref']`` and ``dill.settings['recurse']``
+        don't apply to this function.`
     """
     for old_par, par in [('main', 'module'), ('byref', 'refimported')]:
         if old_par in kwds:
@@ -342,7 +355,9 @@ def load_module(
 
     Parameters:
         filename: a path-like object or a readable stream.
-        module: a module object or the name of an importable module.
+        module: a module object or the name of an importable module, either of
+            which must match the name and kind (importable or module-type
+            object) of the session file's module.
         **kwds: extra keyword arguments passed to :py:class:`Unpickler()`.
 
     Raises:
@@ -449,7 +464,7 @@ def load_module(
                 main = _import_module(main)
         if main is not None:
             if not isinstance(main, ModuleType):
-                raise ValueError("%r is not a module" % main)
+                raise TypeError("%r is not a module" % main)
             unpickler._main = main
         else:
             main = unpickler._main
@@ -460,20 +475,18 @@ def load_module(
             is_runtime_mod = pickle_main.startswith('__runtime__.')
             if is_runtime_mod:
                 pickle_main = pickle_main.partition('.')[-1]
+            error_msg = "can't update{} module{} %r with the saved state of{} module{} %r"
+            if main.__name__ != pickle_main:
+                raise ValueError(error_msg.format("", "", "", "") % (main.__name__, pickle_main))
             if is_runtime_mod and is_main_imported:
                 raise ValueError(
-                    "can't restore non-imported module %r into an imported one"
-                    % pickle_main
+                    error_msg.format(" imported", "", "", "-type object")
+                    % (main.__name__, main.__name__)
                 )
             if not is_runtime_mod and not is_main_imported:
                 raise ValueError(
-                    "can't restore imported module %r into a non-imported one"
-                    % pickle_main
-                )
-            if main.__name__ != pickle_main:
-                raise ValueError(
-                    "can't restore module %r into module %r"
-                    % (pickle_main, main.__name__)
+                    error_msg.format("", "-type object", " imported", "")
+                    % (main.__name__, main.__name__)
                 )
 
         try:
