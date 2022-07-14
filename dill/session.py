@@ -16,6 +16,9 @@ __all__ = [
     'dump_session', 'load_session'  # backward compatibility
 ]
 
+import logging
+logger = logging.getLogger('dill.session')
+
 import builtins
 import pathlib
 import random
@@ -150,6 +153,12 @@ def _filter_vars(main, default_rules, exclude, include):
     namespace = rules.filter_vars(main.__dict__)
     if namespace is main.__dict__:
         return main
+
+    if logger.isEnabledFor(logging.INFO):
+        excluded = {name: type(value).__name__
+                for name, value in sorted(main.__dict__.items()) if name not in namespace}
+        excluded = str(excluded).translate({ord(","): "\n", ord("'"): None})
+        logger.info("Objects excluded from dump_session():\n%s\n", excluded)
 
     newmod = ModuleType(main.__name__)
     newmod.__dict__.update(namespace)

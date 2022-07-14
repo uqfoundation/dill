@@ -10,9 +10,6 @@ from __future__ import annotations
 
 __all__ = ['FilterRules', 'Filter', 'RuleType', '_open']
 
-import logging
-logger = logging.getLogger('dill._utils')
-
 import contextlib
 import re
 from dataclasses import dataclass, field, fields
@@ -203,56 +200,48 @@ class FilterRules:
                 else:
                     self.add(filter, rule_type=rule_type)
 
+    def _apply_filters(filter_set, objects):
+        filters = []
+        types_list = tuple(filter_set.types)
+        # Apply broader/cheaper filters first.
+        if types_list:
+            filters.append(lambda obj: isinstance(obj.value, types_list))
+        if filter_set.ids:
+            filters.append(lambda obj: id(obj.value) in filter_set.ids)
+        if filter_set.names:
+            filters.append(lambda obj: obj.name in filter_set.names)
+        if filter_set.regexes:
+            filters.append(lambda obj: any(regex.fullmatch(obj.name) for regex in filter_set.regexes))
+        filters.extend(filter_set.funcs)
+        for filter in filters:
+            objects = filterfalse(filter, objects)
+        return objects
+
     def filter_vars(self, namespace: Dict[str, Any]):
         """Apply filters to dictionary with names as keys."""
-        if not self.exclude and not self.include:
+        if not namespace or not (self.exclude or self.include):
             return namespace
-
         # Protect agains dict changes during the call.
         namespace_copy = namespace.copy()
-        objects = all_objects = [NamedObj._make(item) for item in namespace_copy.items()]
+        all_objs = [NamedObj._make(item) for item in namespace_copy.items()]
 
-        for filters in (self.exclude, self.include):
-            if filters is self.exclude and not filters:
-                # Treat the rule set as an allowlist.
-                exclude_objs = objects
-                continue
-            elif filters is self.include:
-                if not filters or not exclude_objs:
-                    break
-                objects = exclude_objs
-
-            flist = []
-            types_list = tuple(filters.types)
-            # Apply cheaper/broader filters first.
-            if types_list:
-                flist.append(lambda obj: isinstance(obj.value, types_list))
-            if filters.ids:
-                flist.append(lambda obj: id(obj.value) in filters.ids)
-            if filters.names:
-                flist.append(lambda obj: obj.name in filters.names)
-            if filters.regexes:
-                flist.append(lambda obj: any(regex.fullmatch(obj.name) for regex in filters.regexes))
-            flist.extend(filters.funcs)
-            for f in flist:
-                objects = filterfalse(f, objects)
-
-            if filters is self.exclude:
-                include_names = {obj.name for obj in objects}
-                exclude_objs = [obj for obj in all_objects if obj.name not in include_names]
-            else:
-                exclude_objs = list(objects)
-
+        if not self.exclude:
+            # Treat this rule set as an allowlist.
+            exclude_objs = all_objs
+        else:
+            include_names = {obj.name for obj in self._apply_filters(self.exclude, all_objs)}
+            exclude_objs = [obj for obj in all_objs if obj.name not in include_names]
+        if self.include and exclude_objs:
+            exclude_objs = list(self._apply_filters(self.include, exclude_objs))
         if not exclude_objs:
             return namespace
-        if len(exclude_objs) == len(namespace):
-            warnings.warn("filtering operation left the namespace empty!", PicklingWarning)
-            return {}
-        if logger.isEnabledFor(logging.INFO):
-            exclude_listing = {obj.name: type(obj.value).__name__ for obj in sorted(exclude_objs)}
-            exclude_listing = str(exclude_listing).translate({ord(","): "\n", ord("'"): None})
-            logger.info("Objects excluded from dump_session():\n%s\n", exclude_listing)
 
+        if len(exclude_objs) == len(namespace):
+            warnings.warn(
+                "the exclude/include rules applied have excluded all the %d items" % len(all_objects),
+                PicklingWarning
+            )
+            return {}
         for obj in exclude_objs:
             del namespace_copy[obj.name]
         return namespace_copy
