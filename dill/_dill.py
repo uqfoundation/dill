@@ -321,11 +321,9 @@ def loads(str, ignore=None, **kwds):
 
 ### Pickle the Interpreter Session
 import pathlib
+import re
 import tempfile
 from types import SimpleNamespace
-
-SESSION_IMPORTED_AS_TYPES = (BuiltinMethodType, FunctionType, MethodType,
-                             ModuleType, TypeType)
 
 TEMPDIR = pathlib.PurePath(tempfile.gettempdir())
 
@@ -338,7 +336,7 @@ def _module_map():
         top_level={},
     )
     for modname, module in sys.modules.items():
-        if not isinstance(module, ModuleType):
+        if modname in ('__main__', '__mp_main__') or not isinstance(module, ModuleType):
             continue
         if '.' not in modname:
             modmap.top_level[id(module)] = modname
@@ -347,12 +345,19 @@ def _module_map():
             modmap.by_id[id(modobj)].append((modobj, objname, modname))
     return modmap
 
+SESSION_IMPORTED_AS_TYPES = (ModuleType, TypeType, FunctionType, MethodType, BuiltinMethodType)
+SESSION_IMPORTED_AS_MODULES = ('ctypes', 'typing', 'subprocess', 'threading',
+                               r'concurrent\.futures(\.\w+)?', r'multiprocessing(\.\w+)?')
+SESSION_IMPORTED_AS_MODULES = tuple(re.compile(x) for x in SESSION_IMPORTED_AS_MODULES)
+
 def _lookup_module(modmap, name, obj, main_module):
     """lookup name or id of obj if module is imported"""
     for modobj, modname in modmap.by_name[name]:
         if modobj is obj and sys.modules[modname] is not main_module:
             return modname, name
-    if isinstance(obj, SESSION_IMPORTED_AS_TYPES):
+    __module__ = getattr(obj, '__module__', None)
+    if isinstance(obj, SESSION_IMPORTED_AS_TYPES) or (__module__ is not None
+            and any(regex.fullmatch(__module__) for regex in SESSION_IMPORTED_AS_MODULES)):
         for modobj, objname, modname in modmap.by_id[id(obj)]:
             if sys.modules[modname] is not main_module:
                 return modname, objname
@@ -377,7 +382,7 @@ def _stash_modules(main_module):
             original[name] = obj
         else:
             source_module, objname = _lookup_module(modmap, name, obj, main_module)
-            if source_module:
+            if source_module is not None:
                 if objname == name:
                     imported.append((source_module, name))
                 else:
@@ -503,6 +508,8 @@ def dump_module(
         main = _main_module
     elif isinstance(main, str):
         main = _import_module(main)
+    if not isinstance(main, ModuleType):
+        raise TypeError("%r is not a module" % main)
     if hasattr(filename, 'write'):
         file = filename
     else:
@@ -719,7 +726,7 @@ def load_module(
                 main = _import_module(main)
         if main is not None:
             if not isinstance(main, ModuleType):
-                raise ValueError("%r is not a module" % main)
+                raise TypeError("%r is not a module" % main)
             unpickler._main = main
         else:
             main = unpickler._main
@@ -2436,6 +2443,7 @@ if HAS_CTYPES and hasattr(ctypes, 'pythonapi'):
     _incedental_reverse_typemap['PyCapsuleType'] = PyCapsuleType
     _reverse_typemap['PyCapsuleType'] = PyCapsuleType
     _incedental_types.add(PyCapsuleType)
+    SESSION_IMPORTED_AS_TYPES += (PyCapsuleType,)
 else:
     _testcapsule = None
 
@@ -2454,7 +2462,7 @@ def pickles(obj,exact=False,safe=False,**kwds):
     """
     if safe: exceptions = (Exception,) # RuntimeError, ValueError
     else:
-        exceptions = (TypeError, AssertionError, PicklingError, UnpicklingError)
+        exceptions = (TypeError, AssertionError, NotImplementedError, PicklingError, UnpicklingError)
     try:
         pik = copy(obj, **kwds)
         #FIXME: should check types match first, then check content if "exact"
