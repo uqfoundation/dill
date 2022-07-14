@@ -616,7 +616,9 @@ def load_module(
 
     Parameters:
         filename: a path-like object or a readable stream.
-        module: a module object or the name of an importable module.
+        module: a module object or the name of an importable module, either of
+            which must match the name and kind (importable or module-type
+            object) of the session file's module.
         **kwds: extra keyword arguments passed to :py:class:`Unpickler()`.
 
     Raises:
