@@ -346,9 +346,11 @@ def _module_map():
     return modmap
 
 SESSION_IMPORTED_AS_TYPES = (ModuleType, TypeType, FunctionType, MethodType, BuiltinMethodType)
-SESSION_IMPORTED_AS_MODULES = ('ctypes', 'typing', 'subprocess', 'threading',
-                               r'concurrent\.futures(\.\w+)?', r'multiprocessing(\.\w+)?')
-SESSION_IMPORTED_AS_MODULES = tuple(re.compile(x) for x in SESSION_IMPORTED_AS_MODULES)
+
+SESSION_IMPORTED_AS_MODULES = [re.compile(x) for x in (
+    'ctypes', 'typing', 'subprocess', 'threading',
+    r'concurrent\.futures(\.\w+)?', r'multiprocessing(\.\w+)?'
+)]
 
 def _lookup_module(modmap, name, obj, main_module):
     """lookup name or id of obj if module is imported"""
@@ -740,18 +742,18 @@ def load_module(
             if is_runtime_mod:
                 pickle_main = pickle_main.partition('.')[-1]
             error_msg = "can't update{} module{} %r with the saved state of{} module{} %r"
+            if main.__name__ != pickle_main:
+                raise ValueError(error_msg.format("", "", "", "") % (main.__name__, pickle_main))
             if is_runtime_mod and is_main_imported:
                 raise ValueError(
                     error_msg.format(" imported", "", "", "-type object")
-                    % (main.__name__, pickle_main)
+                    % (main.__name__, main.__name__)
                 )
             if not is_runtime_mod and not is_main_imported:
                 raise ValueError(
                     error_msg.format("", "-type object", " imported", "")
-                    % (pickle_main, main.__name__)
+                    % (main.__name__, main.__name__)
                 )
-            if main.__name__ != pickle_main:
-                raise ValueError(error_msg.format("", "", "", "") % (main.__name__, pickle_main))
 
         # This is for find_class() to be able to locate it.
         if not is_main_imported:
