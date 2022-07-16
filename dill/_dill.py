@@ -17,11 +17,11 @@ Test against CH16+ Std. Lib. ... TBD.
 """
 __all__ = [
     'dump', 'dumps', 'load', 'loads', 'dump_module', 'load_module',
-    'load_module_asdict', 'dump_session', 'load_session', 'Pickler', 'Unpickler',
-    'register', 'copy', 'pickle', 'pickles', 'check', 'HIGHEST_PROTOCOL',
-    'DEFAULT_PROTOCOL', 'PicklingError', 'UnpicklingError', 'HANDLE_FMODE',
-    'CONTENTS_FMODE', 'FILE_FMODE', 'PickleError', 'PickleWarning',
-    'PicklingWarning', 'UnpicklingWarning'
+    'load_module_asdict', 'dump_session', 'load_session', 'is_module_pickle',
+    'Pickler', 'Unpickler', 'register', 'copy', 'pickle', 'pickles', 'check',
+    'HIGHEST_PROTOCOL', 'DEFAULT_PROTOCOL', 'PicklingError', 'UnpicklingError',
+    'HANDLE_FMODE', 'CONTENTS_FMODE', 'FILE_FMODE', 'PickleError',
+    'PickleWarning', 'PicklingWarning', 'UnpicklingWarning',
 ]
 
 __module__ = 'dill'
@@ -605,6 +605,28 @@ def _identify_module(file, main=None):
             # file is not peekable, but we have main.
             return None
         raise UnpicklingError("unable to identify main module") from error
+
+def is_module_pickle(filename, importable: bool = True) -> bool:
+    """Check if a file is a module state pickle file.
+
+    Parameters:
+        filename: a path-like object or a readable stream.
+        importable: expected kind of the file's saved module. Use `True` for
+            importable modules (the default) or `False` for module-type objects.
+
+    Returns:
+        `True` if the pickle file at ``filename`` was generated with
+        :py:func:`dump_module` **AND** the module whose state is saved in it is
+        of the kind specified by the ``importable`` argument. `False` otherwise.
+    """
+    with _open(filename, 'rb', peekable=True) as file:
+        try:
+            pickle_main = _identify_module(file)
+        except UnpicklingError:
+            return False
+        else:
+            is_runtime_mod = pickle_main.startswith('__runtime__.')
+            return importable ^ is_runtime_mod
 
 def load_module(
     filename = str(TEMPDIR/'session.pkl'),
