@@ -329,13 +329,53 @@ from types import SimpleNamespace
 
 TEMPDIR = pathlib.PurePath(tempfile.gettempdir())
 
-def _open(file, mode):
+class _PeekableReader:
+    """lightweight readable stream wrapper that implements peek()"""
+    def __init__(self, stream):
+        self.stream = stream
+    def read(self, n):
+        return self.stream.read(n)
+    def readline(self):
+        return self.stream.readline()
+    def tell(self):
+        return self.stream.tell()
+    def close(self):
+        return self.stream.close()
+    def peek(self, n):
+        stream = self.stream
+        try:
+            if hasattr(stream, 'flush'): stream.flush()
+            position = stream.tell()
+            stream.seek(position)  # assert seek() works before reading
+            chunk = stream.read(n)
+            stream.seek(position)
+            return chunk
+        except (AttributeError, OSError):
+            raise NotImplementedError("stream is not peekable: %r", stream) from None
+
+def _open(file, mode, *, peekable=False):
     """return a context manager with an opened file-like object"""
+    import io
     attr = 'write' if 'w' in mode else 'read'
-    if not hasattr(file, attr):
-        return open(file, mode)
-    else:
+    was_open = hasattr(file, attr)
+    if not was_open:
+        file = open(file, mode)
+    if attr == 'read' and peekable and not hasattr(file, 'peek'):
+        # Try our best to return the stream as an object with a peek() method.
+        if hasattr(file, 'tell') and hasattr(file, 'seek'):
+            file = _PeekableReader(file)
+        else:
+            try:
+                file = io.BufferedReader(file)
+            except Exception:
+                # Stream won't be peekable, but will fail gracefully in _identify_module().
+                file = _PeekableReader(file)
+    if was_open:  # should not close at exit
         return contextlib.nullcontext(file)
+    elif type(file) == _PeekableReader:
+        return contextlib.closing(file)
+    else:
+        return file
 
 def _module_map():
     """get map of imported modules"""
@@ -543,42 +583,6 @@ def dump_session(filename=str(TEMPDIR/'session.pkl'), main=None, byref=False, **
     dump_module(filename, module=main, refimported=byref, **kwds)
 dump_session.__doc__ = dump_module.__doc__
 
-class _PeekableReader:
-    """lightweight stream wrapper that implements peek()"""
-    def __init__(self, stream):
-        self.stream = stream
-    def read(self, n):
-        return self.stream.read(n)
-    def readline(self):
-        return self.stream.readline()
-    def tell(self):
-        return self.stream.tell()
-    def close(self):
-        return self.stream.close()
-    def peek(self, n):
-        stream = self.stream
-        try:
-            if hasattr(stream, 'flush'): stream.flush()
-            position = stream.tell()
-            stream.seek(position)  # assert seek() works before reading
-            chunk = stream.read(n)
-            stream.seek(position)
-            return chunk
-        except (AttributeError, OSError):
-            raise NotImplementedError("stream is not peekable: %r", stream) from None
-
-def _make_peekable(stream):
-    """return stream as an object with a peek() method"""
-    import io
-    if hasattr(stream, 'peek'):
-        return stream
-    if not (hasattr(stream, 'tell') and hasattr(stream, 'seek')):
-        try:
-            return io.BufferedReader(stream)
-        except Exception:
-            pass
-    return _PeekableReader(stream)
-
 def _identify_module(file, main=None):
     """identify the name of the module stored in the given file-type object"""
     from pickletools import genops
@@ -712,8 +716,7 @@ def load_module(
             raise TypeError("both 'module' and 'main' arguments were used")
         module = kwds.pop('main')
     main = module
-    with _open(filename, 'rb') as file:
-        file = _make_peekable(file)
+    with _open(filename, 'rb', peekable=True) as file:
         #FIXME: dill.settings are disabled
         unpickler = Unpickler(file, **kwds)
         unpickler._session = True
@@ -835,8 +838,7 @@ def load_module_asdict(
     """
     if 'module' in kwds:
         raise TypeError("'module' is an invalid keyword argument for load_module_asdict()")
-    with _open(filename, 'rb') as file:
-        file = _make_peekable(file)
+    with _open(filename, 'rb', peekable=True) as file:
         main_name = _identify_module(file)
         old_main = sys.modules.get(main_name)
         main = ModuleType(main_name)
