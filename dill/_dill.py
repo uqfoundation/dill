@@ -512,21 +512,22 @@ def dump_module(
         main = _import_module(main)
     if not isinstance(main, ModuleType):
         raise TypeError("%r is not a module" % main)
+    original_main = main
+    if refimported:
+        main = _stash_modules(main)
     if hasattr(filename, 'write'):
         file = filename
     else:
         file = open(filename, 'wb')
     try:
         pickler = Pickler(file, protocol, **kwds)
-        pickler._original_main = main
-        if refimported:
-            main = _stash_modules(main)
+        if main is not original_main:
+            pickler._original_main = original_main
         pickler._main = main     #FIXME: dill.settings are disabled
         pickler._byref = False   # disable pickling by name reference
         pickler._recurse = False # disable pickling recursion for globals
         pickler._session = True  # is best indicator of when pickling a session
         pickler._first_pass = True
-        pickler._main_modified = main is not pickler._original_main
         pickler.dump(main)
     finally:
         if file is not filename:  # if newly opened file
@@ -2317,8 +2318,7 @@ def save_function(pickler, obj):
         logger.trace(pickler, "F1: %s", obj)
         _recurse = getattr(pickler, '_recurse', None)
         _postproc = getattr(pickler, '_postproc', None)
-        _main_modified = getattr(pickler, '_main_modified', None)
-        _original_main = getattr(pickler, '_original_main', __builtin__)#'None'
+        _original_main = getattr(pickler, '_original_main', None)
         postproc_list = []
         if _recurse:
             # recurse to get all globals referred to by obj
@@ -2335,7 +2335,7 @@ def save_function(pickler, obj):
 
             # If the globals is the __dict__ from the module being saved as a
             # session, substitute it by the dictionary being actually saved.
-            if _main_modified and globs_copy is _original_main.__dict__:
+            if _original_main is not None and globs_copy is _original_main.__dict__:
                 globs_copy = getattr(pickler, '_main', _original_main).__dict__
                 globs = globs_copy
             # If the globals is a module __dict__, do not save it in the pickle.
