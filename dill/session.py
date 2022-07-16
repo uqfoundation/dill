@@ -93,7 +93,7 @@ def _stash_modules(main_module, original_main):
 
     imported = []
     imported_as = []
-    imported_top_level = []  # keep separeted for backward compatibility
+    imported_top_level = []  # keep separated for backward compatibility
     original = {}
     for name, obj in main_module.__dict__.items():
         if obj is main_module:
@@ -211,7 +211,7 @@ def dump_module(
           >>> import dill
           >>> import pox
           >>> pox.plus_one = lambda x: x+1
-          >>> dill.dump_module('pox_session.pkl', main=pox)
+          >>> dill.dump_module('pox_session.pkl', module=pox)
 
         - Save the state of a non-importable, module-type object:
 
@@ -221,7 +221,7 @@ def dump_module(
           >>> foo.values = [1,2,3]
           >>> import math
           >>> foo.sin = math.sin
-          >>> dill.dump_module('foo_session.pkl', main=foo, refimported=True)
+          >>> dill.dump_module('foo_session.pkl', module=foo, refimported=True)
 
         - Restore the state of the saved modules:
 
@@ -263,6 +263,8 @@ def dump_module(
         main = _main_module
     elif isinstance(main, str):
         main = _import_module(main)
+    if not isinstance(main, ModuleType):
+        raise TypeError("%r is not a module" % main)
     original_main = main
     main = _filter_vars(main, default_rules, exclude, include)
     if refimported:
@@ -322,7 +324,7 @@ def _make_peekable(stream):
     return _PeekableReader(stream)
 
 def _identify_module(file, main=None):
-    """identify the session file's module name"""
+    """identify the name of the module stored in the given file-type object"""
     from pickletools import genops
     UNICODE = {'UNICODE', 'BINUNICODE', 'SHORT_BINUNICODE'}
     found_import = False
@@ -349,8 +351,8 @@ def load_module(
     module: Union[ModuleType, str] = None,
     **kwds
 ) -> Optional[ModuleType]:
-    """Update :py:mod:`__main__` or another module with the state from the
-    session file.
+    """Update the selected module (default is :py:mod:`__main__`) with
+    the state saved at ``filename``.
 
     Restore a module to the state saved with :py:func:`dump_module`. The
     saved module can be :py:mod:`__main__` (e.g. an interpreter session),
@@ -364,9 +366,9 @@ def load_module(
 
     Parameters:
         filename: a path-like object or a readable stream.
-        module: a module object or the name of an importable module, either of
-            which must match the name and kind (importable or module-type
-            object) of the session file's module.
+        module: a module object or the name of an importable module;
+            the module name and kind (i.e. imported or non-imported) must
+            match the name and kind of the module stored at ``filename``.
         **kwds: extra keyword arguments passed to :py:class:`Unpickler()`.
 
     Raises:
@@ -388,14 +390,14 @@ def load_module(
           >>>
           >>> import pox # an imported module
           >>> pox.plus_one = lambda x: x+1
-          >>> dill.dump_module('pox_session.pkl', main=pox)
+          >>> dill.dump_module('pox_session.pkl', module=pox)
           >>>
           >>> from types import ModuleType
           >>> foo = ModuleType('foo') # a module-type object
           >>> foo.values = [1,2,3]
           >>> import math
           >>> foo.sin = math.sin
-          >>> dill.dump_module('foo_session.pkl', main=foo, refimported=True)
+          >>> dill.dump_module('foo_session.pkl', module=foo, refimported=True)
 
         - Restore the state of the interpreter:
 
@@ -434,7 +436,7 @@ def load_module(
           >>> foo = ModuleType('foo')
           >>> foo.values = ['a','b']
           >>> foo.sin = lambda x: x*x
-          >>> dill.load_module('foo_session.pkl', main=foo)
+          >>> dill.load_module('foo_session.pkl', module=foo)
           >>> [foo.sin(x) for x in foo.values]
           [0.8414709848078965, 0.9092974268256817, 0.1411200080598672]
 
@@ -549,8 +551,11 @@ def load_module_asdict(
         A copy of the restored module's dictionary.
 
     Note:
-        If ``update`` is True, the saved module may be imported then updated.
-        If imported, the loaded module remains unchanged as in the general case.
+        If ``update`` is True, the corresponding module may first be imported
+        into the current namespace before the saved state is loaded from
+        filename to the dictionary. Note that any module that is imported into
+        the current namespace as a side-effect of using ``update`` will not be
+        modified by loading the saved module in filename to a dictionary.
 
     Example:
         >>> import dill
