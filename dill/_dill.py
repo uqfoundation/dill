@@ -320,12 +320,22 @@ def loads(str, ignore=None, **kwds):
 ### End: Shorthands ###
 
 ### Pickle the Interpreter Session
+import contextlib
 import pathlib
 import re
 import tempfile
+from contextlib import suppress
 from types import SimpleNamespace
 
 TEMPDIR = pathlib.PurePath(tempfile.gettempdir())
+
+def _open(file, mode):
+    """return a context manager with an opened file-like object"""
+    attr = 'write' if 'w' in mode else 'read'
+    if not hasattr(file, attr):
+        return open(file, mode)
+    else:
+        return contextlib.nullcontext(file)
 
 def _module_map():
     """get map of imported modules"""
@@ -515,11 +525,7 @@ def dump_module(
     original_main = main
     if refimported:
         main = _stash_modules(main)
-    if hasattr(filename, 'write'):
-        file = filename
-    else:
-        file = open(filename, 'wb')
-    try:
+    with _open(filename, 'wb') as file:
         pickler = Pickler(file, protocol, **kwds)
         if main is not original_main:
             pickler._original_main = original_main
@@ -529,9 +535,6 @@ def dump_module(
         pickler._session = True  # is best indicator of when pickling a session
         pickler._first_pass = True
         pickler.dump(main)
-    finally:
-        if file is not filename:  # if newly opened file
-            file.close()
     return
 
 # Backward compatibility.
@@ -709,11 +712,7 @@ def load_module(
             raise TypeError("both 'module' and 'main' arguments were used")
         module = kwds.pop('main')
     main = module
-    if hasattr(filename, 'read'):
-        file = filename
-    else:
-        file = open(filename, 'rb')
-    try:
+    with _open(filename, 'rb') as file:
         file = _make_peekable(file)
         #FIXME: dill.settings are disabled
         unpickler = Unpickler(file, **kwds)
@@ -756,19 +755,16 @@ def load_module(
                     % (main.__name__, main.__name__)
                 )
 
-        # This is for find_class() to be able to locate it.
-        if not is_main_imported:
-            runtime_main = '__runtime__.%s' % main.__name__
-            sys.modules[runtime_main] = main
-
-        loaded = unpickler.load()
-    finally:
-        if not hasattr(filename, 'read'):  # if newly opened file
-            file.close()
         try:
-            del sys.modules[runtime_main]
-        except (KeyError, NameError):
-            pass
+            if not is_main_imported:
+                # This is for find_class() to be able to locate it.
+                runtime_main = '__runtime__.%s' % main.__name__
+                sys.modules[runtime_main] = main
+            loaded = unpickler.load()
+        finally:
+            if not is_main_imported:
+                del sys.modules[runtime_main]
+
     assert loaded is main
     _restore_modules(unpickler, main)
     if main is _main_module or main is module:
@@ -839,11 +835,7 @@ def load_module_asdict(
     """
     if 'module' in kwds:
         raise TypeError("'module' is an invalid keyword argument for load_module_asdict()")
-    if hasattr(filename, 'read'):
-        file = filename
-    else:
-        file = open(filename, 'rb')
-    try:
+    with _open(filename, 'rb') as file:
         file = _make_peekable(file)
         main_name = _identify_module(file)
         old_main = sys.modules.get(main_name)
@@ -854,18 +846,14 @@ def load_module_asdict(
             main.__dict__.update(old_main.__dict__)
         else:
             main.__builtins__ = __builtin__
-        sys.modules[main_name] = main
-        load_module(file, **kwds)
-    finally:
-        if not hasattr(filename, 'read'):  # if newly opened file
-            file.close()
         try:
+            sys.modules[main_name] = main
+            load_module(file, **kwds)
+        finally:
             if old_main is None:
                 del sys.modules[main_name]
             else:
                 sys.modules[main_name] = old_main
-        except NameError:  # failed before setting old_main
-            pass
     main.__session__ = str(filename)
     return main.__dict__
 
@@ -914,7 +902,7 @@ class Pickler(StockPickler):
         self._fmode = settings['fmode'] if _fmode is None else _fmode
         self._recurse = settings['recurse'] if _recurse is None else _recurse
         self._postproc = OrderedDict()
-        self._file = file
+        self._file = file  # for the logger
 
     def dump(self, obj): #NOTE: if settings change, need to update attributes
         # register if the object is a numpy ufunc
