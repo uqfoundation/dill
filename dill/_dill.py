@@ -367,7 +367,7 @@ class Pickler(StockPickler):
         self._refonfail = False #settings['dump_module']['refonfail'] if _refonfail is None else _refonfail
         self._strictio = False #_strictio
         self._postproc = OrderedDict()
-        self._file = file  # for the logger
+        self._file_tell = getattr(file, 'tell', None)  # for logger and refonfail
 
     def dump(self, obj): #NOTE: if settings change, need to update attributes
         # register if the object is a numpy ufunc
@@ -421,32 +421,29 @@ class Pickler(StockPickler):
         if not self._refonfail:
             super().save(obj, save_persistent_id)
             return
-        if self.framer.current_frame:
-            # protocol >= 4
-            self.framer.commit_frame()
-            stream = self.framer.current_frame
-        else:
-            stream = self._file
-        position = stream.tell()
+        # Disable framing (right after the framer.init_framing() call at dump()).
+        self.framer.current_frame = None
+        # Store initial state.
+        position = self._file_tell()
         memo_size = len(self.memo)
         try:
             super().save(obj, save_persistent_id)
         except UNPICKLEABLE_ERRORS + (AttributeError,) as error_stack:
-            # AttributeError may happen in save_global() call for child object.
+            # AttributeError may happen in the save_global() call from a child object.
             if (type(error_stack) == AttributeError
                     and "no attribute '__name__'" not in error_stack.args[0]):
                 raise
-            # roll back the stream
-            stream.seek(position)
-            stream.truncate()
-            # roll back memo
+            # Roll back the stream.
+            self._file_seek(position)
+            self._file_truncate()
+            # Roll back memo.
             for _ in range(len(self.memo) - memo_size):
-                self.memo.popitem()  # LIFO order is guaranteed for since 3.7
+                self.memo.popitem()  # LIFO order is guaranteed since 3.7
             try:
                 self.save_global(obj, name)
             except (AttributeError, PicklingError) as error:
                 if getattr(self, '_trace_stack', None) and id(obj) == self._trace_stack[-1]:
-                    # roll back trace state
+                    # Roll back trace state.
                     self._trace_stack.pop()
                     self._size_stack.pop()
                 raise error from error_stack

@@ -203,10 +203,12 @@ def dump_module(
             similar but independent from ``dill.settings[`byref`]``, as
             ``refimported`` refers to virtually all imported objects, while
             ``byref`` only affects select objects.
-        refonfail: if `True`, objects that fail to be saved by value will try to
-            be saved by reference.  If it also fails, saving their parent
+        refonfail: if `True`, objects that fail to pickle by value will try to
+            be saved by reference.  If this also fails, saving their parent
             objects by reference will be attempted recursively.  In the worst
-            case scenario, the module itself may be saved by reference.
+            case scenario, the module itself may be saved by reference.  Note:
+            The file-like object must be seekable and truncable with this
+            option set.
         **kwds: extra keyword arguments passed to :py:class:`Pickler()`.
 
     Raises:
@@ -302,9 +304,17 @@ def dump_module(
         pickler._main = main     #FIXME: dill.settings are disabled
         pickler._byref = False   # disable pickling by name reference
         pickler._recurse = False # disable pickling recursion for globals
-        pickler._refonfail = refonfail
         pickler._session = True  # is best indicator of when pickling a session
         pickler._first_pass = True
+        if refonfail:
+            pickler._refonfail = True  # False by default
+            pickler._file_seek = getattr(file, 'seek', None)
+            pickler._file_truncate = getattr(file, 'truncate', None)
+            if hasattr(file, 'seekable') and not file.seekable():
+                pickler._file_seek = None
+            if pickler._file_seek is None or pickler._file_truncate is None:
+                raise TypeError("file must have 'tell', 'seek' and 'truncate'"
+                                " attributes if the 'refonfail' option is set.")
         pickler.dump(main)
     return
 

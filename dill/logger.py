@@ -148,7 +148,7 @@ class TraceAdapter(logging.LoggerAdapter):
         size = None
         try:
             # Streams are not required to be tellable.
-            size = pickler._file.tell()
+            size = pickler._file_tell()
             frame = pickler.framer.current_frame
             try:
                 size += frame.tell()
