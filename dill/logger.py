@@ -129,18 +129,22 @@ class TraceAdapter(logging.LoggerAdapter):
         if not dill._dill.is_dill(pickler, child=False):
             return
         if self.isEnabledFor(logging.INFO):
-            pickler._trace_depth = 1
+            pickler._trace_stack = []
             pickler._size_stack = []
         else:
-            pickler._trace_depth = None
-    def trace(self, pickler, msg, *args, **kwargs):
-        if not hasattr(pickler, '_trace_depth'):
+            pickler._trace_stack = None
+    def trace(self, pickler, msg, *args, obj=None, **kwargs):
+        if not hasattr(pickler, '_trace_stack'):
             logger.info(msg, *args, **kwargs)
             return
-        if pickler._trace_depth is None:
+        if pickler._trace_stack is None:
             return
         extra = kwargs.get('extra', {})
         pushed_obj = msg.startswith('#')
+        if not pushed_obj:
+            if obj is None:
+                obj = args[-1]
+            pickler._trace_stack.append(id(obj))
         size = None
         try:
             # Streams are not required to be tellable.
@@ -159,13 +163,11 @@ class TraceAdapter(logging.LoggerAdapter):
             else:
                 size -= pickler._size_stack.pop()
                 extra['size'] = size
-        if pushed_obj:
-            pickler._trace_depth -= 1
-        extra['depth'] = pickler._trace_depth
+        extra['depth'] = len(pickler._trace_stack)
         kwargs['extra'] = extra
         self.info(msg, *args, **kwargs)
-        if not pushed_obj:
-            pickler._trace_depth += 1
+        if pushed_obj:
+            pickler._trace_stack.pop()
 
 class TraceFormatter(logging.Formatter):
     """

@@ -184,9 +184,10 @@ def dump_module(
     filename = str(TEMPDIR/'session.pkl'),
     module: Union[ModuleType, str] = None,
     refimported: bool = False,
+    refonfail: bool = False,
     **kwds
 ) -> None:
-    """Pickle the current state of :py:mod:`__main__` or another module to a file.
+    R"""Pickle the current state of :py:mod:`__main__` or another module to a file.
 
     Save the contents of :py:mod:`__main__` (e.g. from an interactive
     interpreter session), an imported module, or a module-type object (e.g.
@@ -202,6 +203,10 @@ def dump_module(
             similar but independent from ``dill.settings[`byref`]``, as
             ``refimported`` refers to virtually all imported objects, while
             ``byref`` only affects select objects.
+        refonfail: if `True`, objects that fail to be saved by value will try to
+            be saved by reference.  If it also fails, saving their parent
+            objects by reference will be attempted recursively.  In the worst
+            case scenario, the module itself may be saved by reference.
         **kwds: extra keyword arguments passed to :py:class:`Pickler()`.
 
     Raises:
@@ -232,6 +237,15 @@ def dump_module(
           >>> foo.sin = math.sin
           >>> dill.dump_module('foo_session.pkl', module=foo, refimported=True)
 
+        - Save the state of a module with unpickleable objects:
+
+          >>> import dill
+          >>> import os
+          >>> os.altsep = '\\'
+          >>> dill.dump_module('os_session.pkl', module=os)
+          PicklingError: ...
+          >>> dill.dump_module('os_session.pkl', module=os, refonfail=True)
+
         - Restore the state of the saved modules:
 
           >>> import dill
@@ -244,6 +258,9 @@ def dump_module(
           >>> foo = dill.load_module('foo_session.pkl')
           >>> [foo.sin(x) for x in foo.values]
           [0.8414709848078965, 0.9092974268256817, 0.1411200080598672]
+          >>> os = dill.load_module('os_session.pkl')
+          >>> print(os.altsep.join('path'))
+          p\a\t\h
 
     *Changed in version 0.3.6:* Function ``dump_session()`` was renamed to
     ``dump_module()``.  Parameters ``main`` and ``byref`` were renamed to
@@ -266,6 +283,8 @@ def dump_module(
 
     from .settings import settings
     protocol = settings['protocol']
+    if refimported is None: refimported = settings['dump_module']['refimported']
+    if refonfail is None: refonfail = settings['dump_module']['refonfail']
     main = module
     if main is None:
         main = _main_module
@@ -283,6 +302,7 @@ def dump_module(
         pickler._main = main     #FIXME: dill.settings are disabled
         pickler._byref = False   # disable pickling by name reference
         pickler._recurse = False # disable pickling recursion for globals
+        pickler._refonfail = refonfail
         pickler._session = True  # is best indicator of when pickling a session
         pickler._first_pass = True
         pickler.dump(main)
