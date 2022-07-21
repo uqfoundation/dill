@@ -13,14 +13,42 @@ def check(d, ok=True):
             if not ok: res.append(k)
     return res
 
-assert not bool(check(failures))
-assert not bool(check(registered, ok=False))
-assert not bool(check(succeeds, ok=False))
+fails = check(failures)
+try:
+    assert not bool(fails)
+except AssertionError as e:
+    print("FAILS: %s" % fails)
+    raise e from None
+
+register = check(registered, ok=False)
+try:
+    assert not bool(register)
+except AssertionError as e:
+    print("REGISTER: %s" % register)
+    raise e from None
+
+success = check(succeeds, ok=False)
+try:
+    assert not bool(success)
+except AssertionError as e:
+    print("SUCCESS: %s" % success)
+    raise e from None
 
 import builtins
 import types
 q = dill._dill._reverse_typemap
 p = {k:v for k,v in q.items() if k not in vars(builtins) and k not in vars(types)}
-assert not bool(set(p.keys()).difference(registered.keys()))
-assert not bool(set(registered.keys()).difference(p.keys()))
 
+diff = set(p.keys()).difference(registered.keys())
+try:
+    assert not bool(diff)
+except AssertionError as e:
+    print("DIFF: %s" % diff)
+    raise e from None
+
+miss = set(registered.keys()).difference(p.keys())
+try:
+    assert not bool(miss)
+except AssertionError as e:
+    print("MISS: %s" % miss)
+    raise e from None
