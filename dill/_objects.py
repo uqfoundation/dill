@@ -172,23 +172,25 @@ a['OptionParserType'] = _oparser = optparse.OptionParser() # pickle ok
 a['OptionGroupType'] = optparse.OptionGroup(_oparser,"foo") # pickle ok
 a['OptionType'] = optparse.Option('--foo') # pickle ok
 if HAS_CTYPES:
-    a['CCharType'] = _cchar = ctypes.c_char()
-    a['CWCharType'] = ctypes.c_wchar() # fail == 2.6
-    a['CByteType'] = ctypes.c_byte()
-    a['CUByteType'] = ctypes.c_ubyte()
-    a['CShortType'] = ctypes.c_short()
-    a['CUShortType'] = ctypes.c_ushort()
-    a['CIntType'] = ctypes.c_int()
-    a['CUIntType'] = ctypes.c_uint()
-    a['CLongType'] = ctypes.c_long()
-    a['CULongType'] = ctypes.c_ulong()
-    a['CLongLongType'] = ctypes.c_longlong()
-    a['CULongLongType'] = ctypes.c_ulonglong()
-    a['CFloatType'] = ctypes.c_float()
-    a['CDoubleType'] = ctypes.c_double()
-    a['CSizeTType'] = ctypes.c_size_t()
+    z = x if IS_PYPY else a
+    z['CCharType'] = _cchar = ctypes.c_char()
+    z['CWCharType'] = ctypes.c_wchar() # fail == 2.6
+    z['CByteType'] = ctypes.c_byte()
+    z['CUByteType'] = ctypes.c_ubyte()
+    z['CShortType'] = ctypes.c_short()
+    z['CUShortType'] = ctypes.c_ushort()
+    z['CIntType'] = ctypes.c_int()
+    z['CUIntType'] = ctypes.c_uint()
+    z['CLongType'] = ctypes.c_long()
+    z['CULongType'] = ctypes.c_ulong()
+    z['CLongLongType'] = ctypes.c_longlong()
+    z['CULongLongType'] = ctypes.c_ulonglong()
+    z['CFloatType'] = ctypes.c_float()
+    z['CDoubleType'] = ctypes.c_double()
+    z['CSizeTType'] = ctypes.c_size_t()
     x['CLibraryLoaderType'] = ctypes.cdll
     a['StructureType'] = _Struct
+    del z
     # if not IS_PYPY:
     #     a['BigEndianStructureType'] = ctypes.BigEndianStructure()
 #NOTE: also LittleEndianStructureType and UnionType... abstract classes
@@ -212,14 +214,18 @@ a['BufferedIOBaseType'] = io.BufferedIOBase()
 a['UnicodeIOType'] = TextIO() # the new StringIO
 a['LoggerAdapterType'] = logging.LoggerAdapter(_logger,_dict) # pickle ok
 if HAS_CTYPES:
-    a['CBoolType'] = ctypes.c_bool(1)
-    a['CLongDoubleType'] = ctypes.c_longdouble()
+    z = x if IS_PYPY else a
+    z['CBoolType'] = ctypes.c_bool(1)
+    z['CLongDoubleType'] = ctypes.c_longdouble()
+    del z
 import argparse
 # data types (CH 8)
 a['OrderedDictType'] = collections.OrderedDict(_dict)
 a['CounterType'] = collections.Counter(_dict)
 if HAS_CTYPES:
-    a['CSSizeTType'] = ctypes.c_ssize_t()
+    z = x if IS_PYPY else a
+    z['CSSizeTType'] = ctypes.c_ssize_t()
+    del z
 # generic operating system services (CH 15)
 a['NullHandlerType'] = logging.NullHandler() # pickle ok  # new 2.7
 a['ArgParseFileType'] = argparse.FileType() # pickle ok
@@ -254,7 +260,9 @@ try: # oddities: deprecated
 except ImportError:
     pass
 # other (concrete) object types
-d['CellType'] = (_lambda)(0).__closure__[0]
+z = d if sys.hexversion < 0x30800a2 else a
+z['CellType'] = (_lambda)(0).__closure__[0]
+del z
 a['XRangeType'] = _xrange = range(1)
 a['MethodDescriptorType'] = type.__dict__['mro']
 a['WrapperDescriptorType'] = type.__repr__
@@ -360,7 +368,9 @@ a['TupleIteratorType']= iter(_tuple) # empty vs non-empty
 a['XRangeIteratorType'] = iter(_xrange) # empty vs non-empty
 a["BytesIteratorType"] = iter(b'')
 a["BytearrayIteratorType"] = iter(bytearray(b''))
-a["CallableIteratorType"] = iter(iter, None)
+z = x if IS_PYPY else a
+z["CallableIteratorType"] = iter(iter, None)
+del z
 x["MemoryIteratorType"] = iter(memoryview(b''))
 a["ListReverseiteratorType"] = reversed([])
 X = a['OrderedDictType']
@@ -386,12 +396,12 @@ except ImportError:
     pass
 
 if sys.hexversion >= 0x30a00a0:
-    a['LineIteratorType'] = compile('3', '', 'eval').co_lines()
+    x['LineIteratorType'] = compile('3', '', 'eval').co_lines()
 
 if sys.hexversion >= 0x30b00b0:
     from types import GenericAlias
-    a["GenericAliasIteratorType"] = iter(GenericAlias(list, (int,)))
-    a['PositionsIteratorType'] = compile('3', '', 'eval').co_positions()
+    d["GenericAliasIteratorType"] = iter(GenericAlias(list, (int,)))
+    x['PositionsIteratorType'] = compile('3', '', 'eval').co_positions()
 
 # data types (CH 8)
 a['PrettyPrinterType'] = pprint.PrettyPrinter()
@@ -428,7 +438,9 @@ x['StreamReader'] = codecs.StreamReader(_cstrI) #XXX: ... and etc
 # python object persistence (CH 11)
 # x['DbShelveType'] = shelve.open('foo','n')#,protocol=2) #XXX: delete foo
 if HAS_ALL:
-    x['DbmType'] = dbm.open(_tempfile,'n')
+    z = a if IS_PYPY else x
+    z['DbmType'] = dbm.open(_tempfile,'n')
+    del z
 # x['DbCursorType'] = _dbcursor = anydbm.open('foo','n') #XXX: delete foo
 # x['DbType'] = _dbcursor.db
 # data compression and archiving (CH 12)
@@ -469,9 +481,11 @@ if HAS_CTYPES:
     x['NullPtrType'] = _lpchar()
     x['NullPyObjectType'] = ctypes.py_object()
     x['PyObjectType'] = ctypes.py_object(lambda :None)
-    x['FieldType'] = _field = _Struct._field
-    x['CFUNCTYPEType'] = _cfunc = ctypes.CFUNCTYPE(ctypes.c_char)
+    z = a if IS_PYPY else x
+    z['FieldType'] = _field = _Struct._field
+    z['CFUNCTYPEType'] = _cfunc = ctypes.CFUNCTYPE(ctypes.c_char)
     x['CFunctionType'] = _cfunc(str)
+    del z
 # numeric and mathematical types (CH 9)
 a['MethodCallerType'] = operator.methodcaller('mro') # 2.6
 # built-in types (CH 5)
@@ -484,8 +498,10 @@ d['DictValuesType'] = _dict.values() # 2.7
 a['RawTextHelpFormatterType'] = argparse.RawTextHelpFormatter('PROG')
 a['RawDescriptionHelpFormatterType'] = argparse.RawDescriptionHelpFormatter('PROG')
 a['ArgDefaultsHelpFormatterType'] = argparse.ArgumentDefaultsHelpFormatter('PROG')
-x['CmpKeyType'] = _cmpkey = functools.cmp_to_key(_methodwrap) # 2.7, >=3.2
-x['CmpKeyObjType'] = _cmpkey('0') #2.7, >=3.2
+z = a if IS_PYPY else x
+z['CmpKeyType'] = _cmpkey = functools.cmp_to_key(_methodwrap) # 2.7, >=3.2
+z['CmpKeyObjType'] = _cmpkey('0') #2.7, >=3.2
+del z
 # oddities: removed, etc
 x['BufferType'] = x['MemoryType']
 
@@ -495,16 +511,16 @@ if _testcapsule is not None:
 del _testcapsule
 
 if hasattr(dataclasses, '_HAS_DEFAULT_FACTORY'):
-    x['DataclassesHasDefaultFactoryType'] = dataclasses._HAS_DEFAULT_FACTORY
+    a['DataclassesHasDefaultFactoryType'] = dataclasses._HAS_DEFAULT_FACTORY
 
 if hasattr(dataclasses, 'MISSING'):
-    x['DataclassesMissingType'] = dataclasses.MISSING
+    a['DataclassesMissingType'] = dataclasses.MISSING
 
 if hasattr(dataclasses, 'KW_ONLY'):
-    x['DataclassesKWOnlyType'] = dataclasses.KW_ONLY
+    a['DataclassesKWOnlyType'] = dataclasses.KW_ONLY
 
 if hasattr(dataclasses, '_FIELD_BASE'):
-    x['DataclassesFieldBaseType'] = dataclasses._FIELD
+    a['DataclassesFieldBaseType'] = dataclasses._FIELD
 
 # -- cleanup ----------------------------------------------------------------
 a.update(d) # registered also succeed

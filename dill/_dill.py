@@ -1053,12 +1053,15 @@ def _create_typemap():
     return
 _reverse_typemap = dict(_create_typemap())
 _reverse_typemap.update({
-    'CellType': CellType,
     'PartialType': PartialType,
     'SuperType': SuperType,
     'ItemGetterType': ItemGetterType,
     'AttrGetterType': AttrGetterType,
 })
+if sys.hexversion < 0x30800a2:
+    _reverse_typemap.update({
+        'CellType': CellType,
+    })
 
 # "Incidental" implementation specific types. Unpickling these types in another
 # implementation of Python (PyPy -> CPython) is not guaranteed to work
@@ -1100,15 +1103,17 @@ try:
     _incedental_reverse_typemap["SymtableEntryType"] = type(symtable.symtable("", "string", "exec")._table)
 except: #FIXME: fails to pickle
     pass
-'''
 
 if sys.hexversion >= 0x30a00a0:
     _incedental_reverse_typemap['LineIteratorType'] = type(compile('3', '', 'eval').co_lines())
+'''
 
 if sys.hexversion >= 0x30b00b0:
     from types import GenericAlias
     _incedental_reverse_typemap["GenericAliasIteratorType"] = type(iter(GenericAlias(list, (int,))))
+    '''
     _incedental_reverse_typemap['PositionsIteratorType'] = type(compile('3', '', 'eval').co_positions())
+    '''
 
 try:
     import winreg
