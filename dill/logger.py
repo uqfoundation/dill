@@ -53,6 +53,7 @@ from functools import partial
 from typing import NoReturn, TextIO, Union
 
 import dill
+from ._utils import _format_bytes_size
 
 # Tree drawing characters: Unicode to ASCII map.
 ASCII_MAP = str.maketrans({"│": "|", "├": "|", "┬": "+", "└": "`"})
@@ -201,10 +202,7 @@ class TraceFormatter(logging.Formatter):
                 prefix = prefix.translate(ASCII_MAP) + "-"
             fields['prefix'] = prefix + " "
         if hasattr(record, 'size'):
-            # Show object size in human-redable form.
-            power = int(math.log(record.size, 2)) // 10
-            size = record.size >> power*10
-            fields['suffix'] = " [%d %sB]" % (size, "KMGTP"[power] + "i" if power else "")
+            fields['suffix'] = " [%d %s]" % _format_bytes_size(record.size)
         vars(record).update(fields)
         return super().format(record)
 

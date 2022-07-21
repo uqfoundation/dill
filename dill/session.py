@@ -21,13 +21,11 @@ logger = logging.getLogger('dill.session')
 
 import builtins
 import pathlib
-import random
 import re
 import sys
 import tempfile
 import warnings
 from contextlib import suppress
-from statistics import mean
 from types import SimpleNamespace
 
 from dill import _dill, Pickler, Unpickler
@@ -36,7 +34,7 @@ from ._dill import (
     _import_module, _is_builtin_module, _is_imported_module, _main_module,
     _reverse_typemap,
 )
-from ._utils import FilterRules, RuleType
+from ._utils import FilterRules, RuleType, size_filter
 from .settings import settings
 
 # Type hints.
@@ -603,93 +601,24 @@ def load_module_asdict(
     return main.__dict__
 
 
-######################
-#  Filter factories  #
-######################
+##############################
+#  Session filter factories  #
+##############################
 
-import collections
-import collections.abc
-from sys import getsizeof
-
-# Cover "true" collections from 'builtins', 'collections' and 'collections.abc'.
-COLLECTION_TYPES = (
-    list,
-    tuple,
-    collections.deque,
-    collections.UserList,
-    collections.abc.Mapping,
-    collections.abc.Set,
-)
-
-def _estimate_size(obj, recursive=True):
-    if recursive:
-        return _estimate_size_recursively(obj, memo=set())
-    try:
-        return getsizeof(obj)
-    except Exception:
-        return 0
-
-def _estimate_size_recursively(obj, memo):
-    obj_id = id(obj)
-    if obj_id in memo:
-        return 0
-    memo.add(obj_id)
-    size = 0
-    try:
-        if isinstance(obj, ModuleType) and _is_builtin_module(obj):
-            return 0
-        size += getsizeof(obj)
-        if hasattr(obj, '__dict__'):
-            size += sum(_estimate_size(k, memo) + _estimate_size(v, memo) for k, v in obj.__dict__.items())
-        if (isinstance(obj, str)   # common case shortcut
-            or not isinstance(obj, collections.abc.Collection)  # general, single test
-            or not isinstance(obj, COLLECTION_TYPES)  # specific, multiple tests
-        ):
-            return size
-        if isinstance(obj, collections.ChainMap):  # collections.Mapping subtype
-            size += sum(_estimate_size(mapping, memo) for mapping in obj.maps)
-        elif len(obj) < 1000:
-            if isinstance(obj, collections.abc.Mapping):
-                size += sum(_estimate_size(k, memo) + _estimate_size(v, memo) for k, v in obj.items())
-            else:
-                size += sum(_estimate_size(item, memo) for item in obj)
-        else:
-            # Use random sample for large collections.
-            sample = set(random.sample(range(len(obj)), k=100))
-            if isinstance(obj, collections.abc.Mapping):
-                samples_size = (_estimate_size(k, memo) + _estimate_size(v, memo)
-                                for i, (k, v) in enumerate(obj.items()) if i in sample)
-            else:
-                samples_size = (_estimate_size(item, memo) for i, item in enumerate(obj) if i in sample)
-            size += len(obj) * mean(filter(None, samples_size))
-    except Exception:
-        pass
-    return size
-
-def size_filter(limit, recursive=True):
-    match = re.fullmatch(r'(\d+)\s*(B|[KMGT]i?B?)', limit, re.IGNORECASE)
-    if not match:
-        raise ValueError("invalid 'limit' value: %r" % limit)
-    coeff, unit = match.groups()
-    coeff, unit = int(coeff), unit.lower()
-    if unit == 'b':
-        limit = coeff
-    else:
-        base = 1024 if unit[1:2] == 'i' else 1000
-        exponent = 'kmgt'.index(unit[0]) + 1
-        limit = coeff * base**exponent
-    def exclude_large(obj):
-        return _estimate_size(obj.value, recursive) < limit
-    return exclude_large
-
-def ipython_filter(*, keep_input=True, keep_output=False):
+def ipython_filter(*, keep_history: str = 'input'):
     """filter factory for IPython sessions (can't be added to settings currently)
 
     Usage:
     >>> from dill.session import *
     >>> dump_session(exclude=[ipython_filter()])
     """
-    if not __builtins__.get('__IPYTHON__'):
+    HISTORY_OPTIONS = {'input', 'output', 'both', 'none'}
+    if keep_history not in HISTORY_OPTIONS:
+        raise ValueError(
+            "invalid 'keep_history' argument: %r (must be one of %r)" %
+            (keep_history, HISTORY_OPTIONS)
+        )
+    if not _dill.IS_IPYTHON:
         # Return no-op filter if not in IPython.
         return (lambda x: False)
 
@@ -704,10 +633,10 @@ def ipython_filter(*, keep_input=True, keep_output=False):
 
     # Input and output history.
     history_regex = []
-    if keep_input:
+    if keep_history in {'input', 'both'}:
         interactive_vars |= {'_ih', 'In', '_i', '_ii', '_iii'}
         history_regex.append(re.compile(r'_i\d+'))
-    if keep_output:
+    if keep_history in {'output', 'both'}:
         interactive_vars |= {'_oh', 'Out', '_', '__', '___'}
         history_regex.append(re.compile(r'_\d+'))
 

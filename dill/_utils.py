@@ -8,18 +8,24 @@
 
 from __future__ import annotations
 
-__all__ = ['FilterRules', 'Filter', 'RuleType', '_open']
+__all__ = ['FilterRules', 'Filter', 'RuleType', 'size_filter', '_open']
 
 import contextlib
+import math
+import random
 import re
+import warnings
 from dataclasses import dataclass, field, fields
 from collections import namedtuple
 from collections.abc import MutableSet
 from enum import Enum
 from functools import partialmethod
 from itertools import chain, filterfalse
+from statistics import mean
 from types import ModuleType
 from typing import Any, Callable, Dict, Iterable, Pattern, Set, Tuple, Union
+
+from dill import _dill
 
 def _open(filename, mode):
     """return a context manager with an opened file"""
@@ -29,13 +35,36 @@ def _open(filename, mode):
     else:
         return open(filename, mode)
 
+def _format_bytes_size(size: Union[int, float]) -> Tuple[int, str]:
+    """Return bytes size text representation in human-redable form."""
+    unit = "B"
+    power_of_2 = math.trunc(size).bit_length() - 1
+    magnitude = min(power_of_2 - power_of_2 % 10, 80)  # 2**80 == 1 YiB
+    if magnitude:
+        size = ((size >> magnitude-1) + 1) >> 1  # rounding trick: 1535 -> 1K; 1536 -> 2K
+        unit = "%siB" % "KMGTPEZY"[magnitude // 10]
+    return size, unit
+
 # Namespace filtering.
 
 Filter = Union[str, Pattern[str], int, type, Callable]
 RuleType = Enum('RuleType', 'EXCLUDE INCLUDE', module=__name__)
 Rule = Tuple[RuleType, Union[Filter, Iterable[Filter]]]
 
-NamedObj = namedtuple('NamedObj', 'name value', module=__name__)
+class NamedObject:
+    """Simple container class for a variable name and value."""
+    __slots__ = 'name', 'value'
+    def __init__(self, name_value):
+        self.name, self.value = name_value
+    def __eq__(self, other):
+        """
+        Prevent simple bugs from writing `lambda obj: obj == 'literal'` instead
+        of `lambda obj: obj.value == 'literal' in a filter definition.`
+        """
+        if type(other) != NamedObject:
+            raise TypeError("'==' not supported between instances of 'NamedObject' and %r" %
+                    type(other).__name__)
+        return super().__eq__(other)
 
 def _iter(filters):
     if isinstance(filters, str):
@@ -54,6 +83,7 @@ class FilterSet(MutableSet):
     funcs: Set[Callable] = field(default_factory=set)
     _fields = None
     _rtypemap = None
+    _typename_regex = re.compile(r'\w+(?=Type$)|\w+$', re.IGNORECASE)
     def _match_type(self, filter):
         if isinstance(filter, str):
             if filter.isidentifier():
@@ -118,16 +148,15 @@ class FilterSet(MutableSet):
     def copy(self):
         return FilterSet(*(getattr(self, field).copy() for field in self._fields))
     @classmethod
+    def _get_typename(cls, key):
+        return cls._typename_regex.match(key).group().lower()
+    @classmethod
     def get_type(cls, key):
         if cls._rtypemap is None:
-            from ._dill import _reverse_typemap
-            cls._rtypemap = {(k[:-4] if k.endswith('Type') else k).lower(): v
-                             for k, v in _reverse_typemap.items()}
-        if key.endswith('Type'):
-            key = key[:-4]
-        return cls._rtypemap[key.lower()]
-    def add_type(self, type_name):
-        self.types.add(self.get_type(type_name))
+            cls._rtypemap = {cls._get_typename(k): v for k, v in _dill._reverse_typemap.items()}
+        return cls._rtypemap[cls._get_typename(key)]
+    def add_type(self, typename):
+        self.types.add(self.get_type(typename))
 FilterSet._fields = tuple(field.name for field in fields(FilterSet))
 
 class _FilterSetDescriptor:
@@ -200,7 +229,7 @@ class FilterRules:
                 else:
                     self.add(filter, rule_type=rule_type)
 
-    def _apply_filters(filter_set, objects):
+    def _apply_filters(self, filter_set, objects):
         filters = []
         types_list = tuple(filter_set.types)
         # Apply broader/cheaper filters first.
@@ -217,13 +246,13 @@ class FilterRules:
             objects = filterfalse(filter, objects)
         return objects
 
-    def filter_vars(self, namespace: Dict[str, Any]):
+    def filter_vars(self, namespace: Dict[str, Any]) -> Dict[str, Any]:
         """Apply filters to dictionary with names as keys."""
         if not namespace or not (self.exclude or self.include):
             return namespace
         # Protect agains dict changes during the call.
         namespace_copy = namespace.copy()
-        all_objs = [NamedObj._make(item) for item in namespace_copy.items()]
+        all_objs = [NamedObject(item) for item in namespace_copy.items()]
 
         if not self.exclude:
             # Treat this rule set as an allowlist.
@@ -238,10 +267,130 @@ class FilterRules:
 
         if len(exclude_objs) == len(namespace):
             warnings.warn(
-                "the exclude/include rules applied have excluded all the %d items" % len(all_objects),
-                PicklingWarning
+                "the exclude/include rules applied have excluded all %d items" % len(all_objs),
+                _dill.PicklingWarning,
+                stacklevel=2
             )
             return {}
         for obj in exclude_objs:
             del namespace_copy[obj.name]
         return namespace_copy
+
+
+######################
+#  Filter factories  #
+######################
+
+import collections
+import collections.abc
+from sys import getsizeof
+
+class size_filter:
+    """Create a filter function with a limit for estimated object size.
+
+    Note: Doesn't work on PyPy. See ``help('``py:func:`sys.getsizeof```)'``
+    """
+    __slots__ = 'limit', 'recursive'
+    # Cover "true" collections from 'builtins', 'collections' and 'collections.abc'.
+    COLLECTION_TYPES = (
+        list,
+        tuple,
+        collections.deque,
+        collections.UserList,
+        collections.abc.Mapping,
+        collections.abc.Set,
+    )
+    MINIMUM_SIZE = getsizeof(None, 16)
+    MISSING_SLOT = object()
+
+    def __init__(self, limit: str, recursive: bool = True):
+        if _dill.IS_PYPY:
+            raise NotImplementedError("size_filter() is not implemented for PyPy")
+        self.limit = limit
+        if type(limit) != int:
+            try:
+                self.limit = float(limit)
+            except (TypeError, ValueError):
+                limit_match = re.fullmatch(r'(\d+)\s*(B|[KMGT]i?B?)', limit, re.IGNORECASE)
+                if limit_match:
+                    coeff, unit = limit_match.groups()
+                    coeff, unit = int(coeff), unit.lower()
+                    if unit == 'b':
+                        self.limit = coeff
+                    else:
+                        base = 1024 if unit[1:2] == 'i' else 1000
+                        exponent = 'kmgt'.index(unit[0]) + 1
+                        self.limit = coeff * base**exponent
+            else:
+                # Will raise error for Inf and NaN.
+                self.limit = math.truc(self.limit)
+        if type(self.limit) != int:
+            # Everything failed.
+            raise ValueError("invalid 'limit' value: %r" % limit)
+        elif self.limit < 0:
+            raise ValueError("'limit' can't be negative %r" % limit)
+        self.recursive = recursive
+
+    def __call__(self, obj: NamedObject) -> bool:
+        if self.recursive:
+            size = self.estimate_size(obj.value)
+        else:
+            try:
+                size = getsizeof(obj.value)
+            except ReferenceError:
+                size = self.MINIMUM_SIZE
+        return size > self.limit
+
+    def __repr__(self):
+        return "size_filter(limit=%r, recursive=%r)" % (
+                "%d %s" % _format_bytes_size(self.limit),
+                self.recursive,
+                )
+
+    @classmethod
+    def estimate_size(cls, obj: Any, memo: set = None) -> int:
+        if memo is None:
+            memo = set()
+        obj_id = id(obj)
+        if obj_id in memo:
+            # Object size already counted.
+            return 0
+        memo.add(obj_id)
+        size = cls.MINIMUM_SIZE
+        try:
+            if isinstance(obj, ModuleType) and _dill._is_builtin_module(obj):
+                # Always saved by reference.
+                return cls.MINIMUM_SIZE
+            size = getsizeof(obj)
+            if hasattr(obj, '__dict__'):
+                size += cls.estimate_size(obj.__dict__, memo)
+            if hasattr(obj, '__slots__'):
+                slots = (getattr(obj, x, cls.MISSING_SLOT) for x in obj.__slots__ if x != '__dict__')
+                size += sum(cls.estimate_size(x, memo) for x in slots if x is not cls.MISSING_SLOT)
+            if (
+                isinstance(obj, str)   # common case shortcut
+                or not isinstance(obj, collections.abc.Collection)  # general, single test
+                or not isinstance(obj, cls.COLLECTION_TYPES)  # specific, multiple tests
+            ):
+                return size
+            if isinstance(obj, collections.ChainMap):  # collections.Mapping subtype
+                size += sum(cls.estimate_size(mapping, memo) for mapping in obj.maps)
+            elif len(obj) < 1000:
+                if isinstance(obj, collections.abc.Mapping):
+                    size += sum(cls.estimate_size(k, memo) + cls.estimate_size(v, memo)
+                            for k, v in obj.items())
+                else:
+                    size += sum(cls.estimate_size(item, memo) for item in obj)
+            else:
+                # Use random sample for large collections.
+                sample = set(random.sample(range(len(obj)), k=100))
+                if isinstance(obj, collections.abc.Mapping):
+                    samples_sizes = (cls.estimate_size(k, memo) + cls.estimate_size(v, memo)
+                            for i, (k, v) in enumerate(obj.items()) if i in sample)
+                else:
+                    samples_sizes = (cls.estimate_size(item, memo)
+                            for i, item in enumerate(obj) if i in sample)
+                size += len(obj) * mean(samples_sizes)
+        except Exception:
+            pass
+        return size

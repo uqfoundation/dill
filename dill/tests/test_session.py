@@ -11,8 +11,10 @@ import sys
 import __main__
 from contextlib import suppress
 from io import BytesIO
+from types import ModuleType
 
 import dill
+from dill.session import ipython_filter, EXCLUDE, INCLUDE
 
 session_file = os.path.join(os.path.dirname(__file__), 'session-refimported-%s.pkl')
 
@@ -192,12 +194,12 @@ def test_session_other():
     assert module.selfref is module
 
 def test_runtime_module():
-    from types import ModuleType
+    from dill.session import _stash_modules
     modname = '__runtime__'
     runtime = ModuleType(modname)
     runtime.x = 42
 
-    mod = dill.session._stash_modules(runtime, runtime)
+    mod = _stash_modules(runtime, runtime)
     if mod is not runtime:
         print("There are objects to save by referenece that shouldn't be:",
               mod.__dill_imported, mod.__dill_imported_as, mod.__dill_imported_top_level,
@@ -230,7 +232,7 @@ def test_refimported_imported_as():
     import concurrent.futures
     import types
     import typing
-    mod = sys.modules['__test__'] = types.ModuleType('__test__')
+    mod = sys.modules['__test__'] = ModuleType('__test__')
     dill.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     mod.Dict = collections.UserDict             # select by type
     mod.AsyncCM = typing.AsyncContextManager    # select by __module__
@@ -271,6 +273,31 @@ def test_load_module_asdict():
         assert 'y' not in main_vars
         assert 'empty' in main_vars
 
+def test_ipython_filter():
+    from itertools import filterfalse
+    from types import SimpleNamespace
+    from dill._utils import FilterRules
+    dill._dill.IS_IPYTHON = True  # trick ipython_filter
+    sys.modules['IPython'] = MockIPython = ModuleType('IPython')
+
+    # Mimic the behavior of IPython namespaces at __main__.
+    user_ns_actual = {'user_var': 1, 'x': 2}
+    user_ns_hidden = {'x': 3, '_i1': '1 / 2', '_1': 0.5, 'hidden': 4}
+    user_ns = user_ns_hidden.copy()  # user_ns == vars(__main__)
+    user_ns.update(user_ns_actual)
+    assert user_ns['x'] == user_ns_actual['x']  # user_ns.x masks user_ns_hidden.x
+    MockIPython.get_ipython = lambda: SimpleNamespace(user_ns=user_ns, user_ns_hidden=user_ns_hidden)
+
+    # Test variations of keeping or dropping the interpreter history.
+    user_vars = set(user_ns_actual)
+    def namespace_matches(keep_history, should_keep_vars):
+        rules = FilterRules([(EXCLUDE, ipython_filter(keep_history=keep_history))])
+        return set(rules.filter_vars(user_ns)) == user_vars | should_keep_vars
+    assert namespace_matches(keep_history='input', should_keep_vars={'_i1'})
+    assert namespace_matches(keep_history='output', should_keep_vars={'_1'})
+    assert namespace_matches(keep_history='both', should_keep_vars={'_i1', '_1'})
+    assert namespace_matches(keep_history='none', should_keep_vars=set())
+
 if __name__ == '__main__':
     test_session_main(refimported=False)
     test_session_main(refimported=True)
@@ -278,3 +305,4 @@ if __name__ == '__main__':
     test_runtime_module()
     test_refimported_imported_as()
     test_load_module_asdict()
+    test_ipython_filter()
