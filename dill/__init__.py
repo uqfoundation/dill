@@ -30,7 +30,7 @@ from ._dill import (
     PickleError, PickleWarning, PicklingError, PicklingWarning, UnpicklingError,
     UnpicklingWarning,
 )
-from .session import dump_module, is_module_pickle, load_module, load_module_asdict
+from .session import dump_module, is_pickled_module, load_module, load_module_asdict
 from .session import dump_session, load_session  # backward compatibility
 from . import detect, session, source, temp
 

@@ -16,12 +16,11 @@ Test against "all" python types (Std. Lib. CH 1-15 @ 2.7) by mmckerns.
 Test against CH16+ Std. Lib. ... TBD.
 """
 __all__ = [
-    'dump', 'dumps', 'load', 'loads', 'dump_module', 'load_module',
-    'load_module_asdict', 'dump_session', 'load_session', 'is_module_pickle',
-    'Pickler', 'Unpickler', 'register', 'copy', 'pickle', 'pickles', 'check',
-    'HIGHEST_PROTOCOL', 'DEFAULT_PROTOCOL', 'PicklingError', 'UnpicklingError',
-    'HANDLE_FMODE', 'CONTENTS_FMODE', 'FILE_FMODE', 'PickleError',
-    'PickleWarning', 'PicklingWarning', 'UnpicklingWarning',
+    'Pickler','Unpickler',
+    'check','copy','dump','dumps','load','loads','pickle','pickles','register',
+    'DEFAULT_PROTOCOL','HIGHEST_PROTOCOL','CONTENTS_FMODE','FILE_FMODE','HANDLE_FMODE',
+    'PickleError','PickleWarning','PicklingError','PicklingWarning','UnpicklingError',
+    'UnpicklingWarning',
 ]
 
 __module__ = 'dill'

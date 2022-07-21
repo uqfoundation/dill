@@ -11,7 +11,7 @@ Pickle and restore the intepreter session.
 """
 
 __all__ = [
-    'dump_module', 'is_module_pickle', 'load_module', 'load_module_asdict',
+    'dump_module', 'is_pickled_module', 'load_module', 'load_module_asdict',
     'dump_session', 'load_session'  # backward compatibility
 ]
 
@@ -347,7 +347,7 @@ def _identify_module(file, main=None):
             return None
         raise UnpicklingError("unable to identify main module") from error
 
-def is_module_pickle(filename, importable: bool = True) -> bool:
+def is_pickled_module(filename, importable: bool = True) -> bool:
     """Check if a file is a module state pickle file.
 
     Parameters:
