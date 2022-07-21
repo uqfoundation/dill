@@ -23,6 +23,7 @@ import array
 import collections
 import codecs
 import struct
+import dataclasses
 import datetime
 import calendar
 import weakref
@@ -492,6 +493,18 @@ from dill._dill import _testcapsule
 if _testcapsule is not None:
     d['PyCapsuleType'] = _testcapsule
 del _testcapsule
+
+if hasattr(dataclasses, '_HAS_DEFAULT_FACTORY'):
+    x['DataclassesHasDefaultFactoryType'] = dataclasses._HAS_DEFAULT_FACTORY
+
+if hasattr(dataclasses, 'MISSING'):
+    x['DataclassesMissingType'] = dataclasses.MISSING
+
+if hasattr(dataclasses, 'KW_ONLY'):
+    x['DataclassesKWOnlyType'] = dataclasses.KW_ONLY
+
+if hasattr(dataclasses, '_FIELD_BASE'):
+    x['DataclassesFieldBaseType'] = dataclasses._FIELD
 
 # -- cleanup ----------------------------------------------------------------
 a.update(d) # registered also succeed
