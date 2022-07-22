@@ -1904,7 +1904,6 @@ if HAS_CTYPES and hasattr(ctypes, 'pythonapi'):
     _incedental_reverse_typemap['PyCapsuleType'] = PyCapsuleType
     _reverse_typemap['PyCapsuleType'] = PyCapsuleType
     _incedental_types.add(PyCapsuleType)
-    SESSION_IMPORTED_AS_TYPES += (PyCapsuleType,)
 else:
     _testcapsule = None
 
