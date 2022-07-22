@@ -347,6 +347,7 @@ class UnpicklingWarning(PickleWarning, UnpicklingError):
 class Pickler(StockPickler):
     """python's Pickler extended to interpreter sessions"""
     dispatch = MetaCatchingDict(StockPickler.dispatch.copy())
+    _refonfail = False
     _session = False
     from .settings import settings
 
@@ -355,7 +356,6 @@ class Pickler(StockPickler):
         _byref = kwds.pop('byref', None)
         _fmode = kwds.pop('fmode', None)
         _recurse = kwds.pop('recurse', None)
-       #_refonfail = kwds.pop('refonfail', None)
        #_strictio = kwds.pop('strictio', None)
         StockPickler.__init__(self, file, *args, **kwds)
         self._main = _main_module
@@ -363,7 +363,6 @@ class Pickler(StockPickler):
         self._byref = settings['byref'] if _byref is None else _byref
         self._fmode = settings['fmode'] if _fmode is None else _fmode
         self._recurse = settings['recurse'] if _recurse is None else _recurse
-        self._refonfail = False #settings['dump_module']['refonfail'] if _refonfail is None else _refonfail
         self._strictio = False #_strictio
         self._postproc = OrderedDict()
         self._file_tell = getattr(file, 'tell', None)  # for logger and refonfail
@@ -439,7 +438,11 @@ class Pickler(StockPickler):
             for _ in range(len(self.memo) - memo_size):
                 self.memo.popitem()  # LIFO order is guaranteed since 3.7
             try:
-                self.save_global(obj, name)
+                if isinstance(obj, ModuleType) and \
+                        (_is_builtin_module(obj) or obj is sys.modules['dill']):
+                    self.save_reduce(_import_module, (obj.__name__,), obj=obj)
+                else:
+                    self.save_global(obj, name)
             except (AttributeError, PicklingError) as error:
                 if getattr(self, '_trace_stack', None) and id(obj) == self._trace_stack[-1]:
                     # Roll back trace state.
