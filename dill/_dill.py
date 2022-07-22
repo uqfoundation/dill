@@ -2237,7 +2237,9 @@ def save_type(pickler, obj, postproc_list=None):
            #print (_dict)
            #print ("%s\n%s" % (type(obj), obj.__name__))
            #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
-            for name in _dict.get('__slots__', ()):
+            slots = _dict.get('__slots__', ())
+            if type(slots) == str: slots = (slots,) # __slots__ accepts a single string
+            for name in slots:
                 del _dict[name]
             _dict.pop('__dict__', None)
             _dict.pop('__weakref__', None)
