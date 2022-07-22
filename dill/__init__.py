@@ -30,13 +30,13 @@ from ._dill import (
     UnpicklingError, HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE, PickleError,
     PickleWarning, PicklingWarning, UnpicklingWarning,
 )
-from . import source, temp, detect
+from . import source, temp, detect, logger
 
 # get global settings
 from .settings import settings
 
 # make sure "trace" is turned off
-detect.trace(False)
+logger.trace(False)
 
 from importlib import reload
 
