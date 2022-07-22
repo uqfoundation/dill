@@ -23,7 +23,7 @@ from dill import _dill, Pickler, Unpickler
 from ._dill import (
     BuiltinMethodType, FunctionType, MethodType, ModuleType, TypeType,
     _import_module, _is_builtin_module, _is_imported_module, _main_module,
-    _reverse_typemap,
+    _reverse_typemap, __builtin__,
 )
 
 # Type hints.
@@ -544,7 +544,6 @@ def load_module_asdict(
         >>> new_var in main # would be True if the option 'update' was set
         False
     """
-    import builtins
     if 'module' in kwds:
         raise TypeError("'module' is an invalid keyword argument for load_module_asdict()")
     if hasattr(filename, 'read'):
@@ -561,7 +560,7 @@ def load_module_asdict(
                 old_main = _import_module(main_name)
             main.__dict__.update(old_main.__dict__)
         else:
-            main.__builtins__ = builtins
+            main.__builtins__ = __builtin__
         sys.modules[main_name] = main
         load_module(file, **kwds)
     finally:
