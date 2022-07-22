@@ -9,6 +9,8 @@
 global settings for Pickler
 """
 
+__all__ = ['settings']
+
 from pickle import DEFAULT_PROTOCOL
 
 settings = {
@@ -26,4 +28,3 @@ settings = {
 }
 
 del DEFAULT_PROTOCOL
-

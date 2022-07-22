@@ -183,8 +183,9 @@ def _restore_modules(unpickler, main_module):
 def dump_module(
     filename = str(TEMPDIR/'session.pkl'),
     module: Union[ModuleType, str] = None,
-    refimported: bool = False,
-    refonfail: bool = False,
+    *,
+    refimported: bool = None,
+    refonfail: bool = None,
     **kwds
 ) -> None:
     R"""Pickle the current state of :py:mod:`__main__` or another module to a file.
@@ -285,8 +286,10 @@ def dump_module(
 
     from .settings import settings
     protocol = settings['protocol']
-    if refimported is None: refimported = settings['dump_module']['refimported']
-    if refonfail is None: refonfail = settings['dump_module']['refonfail']
+    if refimported is None:
+        refimported = settings['dump_module']['refimported']
+    if refonfail is None:
+        refonfail = settings['dump_module']['refonfail']
     main = module
     if main is None:
         main = _main_module
@@ -486,7 +489,7 @@ def load_module(
 
         # Resolve unpickler._main
         pickle_main = _identify_module(file, main)
-        if main is None and pickle_main is not None:
+        if main is None:
             main = pickle_main
         if isinstance(main, str):
             if main.startswith('__runtime__.'):
@@ -494,12 +497,9 @@ def load_module(
                 main = ModuleType(main.partition('.')[-1])
             else:
                 main = _import_module(main)
-        if main is not None:
-            if not isinstance(main, ModuleType):
-                raise TypeError("%r is not a module" % main)
-            unpickler._main = main
-        else:
-            main = unpickler._main
+        if not isinstance(main, ModuleType):
+            raise TypeError("%r is not a module" % main)
+        unpickler._main = main
 
         # Check against the pickle's main.
         is_main_imported = _is_imported_module(main)

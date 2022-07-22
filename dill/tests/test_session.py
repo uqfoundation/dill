@@ -11,6 +11,7 @@ import sys
 import __main__
 from contextlib import suppress
 from io import BytesIO
+from types import ModuleType
 
 import dill
 
@@ -192,7 +193,6 @@ def test_session_other():
     assert module.selfref is module
 
 def test_runtime_module():
-    from types import ModuleType
     modname = '__runtime__'
     runtime = ModuleType(modname)
     runtime.x = 42
@@ -230,7 +230,7 @@ def test_refimported_imported_as():
     import concurrent.futures
     import types
     import typing
-    mod = sys.modules['__test__'] = types.ModuleType('__test__')
+    mod = sys.modules['__test__'] = ModuleType('__test__')
     dill.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     mod.Dict = collections.UserDict             # select by type
     mod.AsyncCM = typing.AsyncContextManager    # select by __module__
