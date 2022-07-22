@@ -241,7 +241,8 @@ def copy(obj, *args, **kwds):
 
     See :func:`dumps` and :func:`loads` for keyword arguments.
     """
-    ignore = kwds.pop('ignore', Unpickler.settings['ignore'])
+    from .settings import settings
+    ignore = kwds.pop('ignore', settings['ignore'])
     return loads(dumps(obj, *args, **kwds), ignore=ignore)
 
 def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
@@ -344,10 +345,9 @@ class Pickler(StockPickler):
     """python's Pickler extended to interpreter sessions"""
     dispatch = MetaCatchingDict(StockPickler.dispatch.copy())
     _session = False
-    from .settings import settings
 
     def __init__(self, file, *args, **kwds):
-        settings = Pickler.settings
+        from .settings import settings
         _byref = kwds.pop('byref', None)
        #_strictio = kwds.pop('strictio', None)
         _fmode = kwds.pop('fmode', None)
@@ -412,7 +412,6 @@ class Pickler(StockPickler):
 
 class Unpickler(StockUnpickler):
     """python's Unpickler extended to interpreter sessions and more types"""
-    from .settings import settings
     _session = False
 
     def find_class(self, module, name):
@@ -424,7 +423,7 @@ class Unpickler(StockUnpickler):
         return StockUnpickler.find_class(self, module, name)
 
     def __init__(self, *args, **kwds):
-        settings = Pickler.settings
+        from .settings import settings
         _ignore = kwds.pop('ignore', None)
         StockUnpickler.__init__(self, *args, **kwds)
         self._main = _main_module

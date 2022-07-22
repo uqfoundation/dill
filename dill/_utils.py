@@ -8,9 +8,8 @@
 
 from __future__ import annotations
 
-__all__ = ['FilterRules', 'Filter', 'RuleType', 'size_filter', '_open']
+__all__ = ['FilterRules', 'Filter', 'RuleType', 'size_filter']
 
-import contextlib
 import math
 import random
 import re
@@ -26,14 +25,6 @@ from types import ModuleType
 from typing import Any, Callable, Dict, Iterable, Pattern, Set, Tuple, Union
 
 from dill import _dill
-
-def _open(filename, mode):
-    """return a context manager with an opened file"""
-    attr = 'write' if 'w' in mode else 'read'
-    if hasattr(filename, attr):
-        return contextlib.nullcontext(filename)
-    else:
-        return open(filename, mode)
 
 def _format_bytes_size(size: Union[int, float]) -> Tuple[int, str]:
     """Return bytes size text representation in human-redable form."""

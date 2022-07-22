@@ -10,9 +10,11 @@
 Pickle and restore the intepreter session.
 """
 
+from __future__ import annotations
+
 __all__ = [
-    'FilterRules', 'dump_module', 'ipython_filter', 'load_module',
-    'load_module_asdict', 'size_filter', 'EXCLUDE', 'INCLUDE',
+    'FilterSet', 'ModuleFilters', 'dump_module', 'ipython_filter',
+    'is_pickled_module', 'load_module', 'load_module_asdict', 'size_filter',
     'dump_session', 'load_session'  # backward compatibility
 ]
 
@@ -20,12 +22,12 @@ import logging
 logger = logging.getLogger('dill.session')
 
 import builtins
+import contextlib
 import pathlib
 import re
 import sys
 import tempfile
 import warnings
-from contextlib import suppress
 from types import SimpleNamespace
 
 from dill import _dill, Pickler, Unpickler
@@ -34,16 +36,63 @@ from ._dill import (
     _import_module, _is_builtin_module, _is_imported_module, _main_module,
     _reverse_typemap,
 )
-from ._utils import FilterRules, RuleType, size_filter
-from .settings import settings
+from ._utils import FilterRules, FilterSet, RuleType, size_filter
 
 # Type hints.
 from typing import Iterable, Optional, Union
-from ._utils import Filter, _open
+from ._utils import Filter
 
 EXCLUDE, INCLUDE = RuleType.EXCLUDE, RuleType.INCLUDE
 
 TEMPDIR = pathlib.PurePath(tempfile.gettempdir())
+
+class _PeekableReader:
+    """lightweight readable stream wrapper that implements peek()"""
+    def __init__(self, stream):
+        self.stream = stream
+    def read(self, n):
+        return self.stream.read(n)
+    def readline(self):
+        return self.stream.readline()
+    def tell(self):
+        return self.stream.tell()
+    def close(self):
+        return self.stream.close()
+    def peek(self, n):
+        stream = self.stream
+        try:
+            if hasattr(stream, 'flush'): stream.flush()
+            position = stream.tell()
+            stream.seek(position)  # assert seek() works before reading
+            chunk = stream.read(n)
+            stream.seek(position)
+            return chunk
+        except (AttributeError, OSError):
+            raise NotImplementedError("stream is not peekable: %r", stream) from None
+
+def _open(file, mode, *, peekable=False):
+    """return a context manager with an opened file-like object"""
+    import io
+    attr = 'write' if 'w' in mode else 'read'
+    was_open = hasattr(file, attr)
+    if not was_open:
+        file = open(file, mode)
+    if attr == 'read' and peekable and not hasattr(file, 'peek'):
+        # Try our best to return the stream as an object with a peek() method.
+        if hasattr(file, 'tell') and hasattr(file, 'seek'):
+            file = _PeekableReader(file)
+        else:
+            try:
+                file = io.BufferedReader(file)
+            except Exception:
+                # Stream won't be peekable, but will fail gracefully in _identify_module().
+                file = _PeekableReader(file)
+    if was_open:  # should not close at exit
+        return contextlib.nullcontext(file)
+    elif type(file) == _PeekableReader:
+        return contextlib.closing(file)
+    else:
+        return file
 
 def _module_map():
     """get map of imported modules"""
@@ -138,9 +187,9 @@ def _restore_modules(unpickler, main_module):
     except KeyError:
         pass
 
-def _filter_vars(main, default_rules, exclude, include):
+def _filter_vars(main, base_rules, exclude, include):
     rules = FilterRules()
-    mod_rules = default_rules.get(main.__name__, default_rules)
+    mod_rules = base_rules.get(main.__name__, base_rules)
     rules.exclude |= mod_rules.get_filters(EXCLUDE)
     rules.include |= mod_rules.get_filters(INCLUDE)
     if exclude is not None:
@@ -170,9 +219,11 @@ def _filter_vars(main, default_rules, exclude, include):
 def dump_module(
     filename = str(TEMPDIR/'session.pkl'),
     module: Union[ModuleType, str] = None,
-    refimported: bool = False,
+    *,
+    refimported: bool = None,
     exclude: Union[Filter, Iterable[Filter]] = None,
     include: Union[Filter, Iterable[Filter]] = None,
+    base_rules: ModuleFilters = None,
     **kwds
 ) -> None:
     """Pickle the current state of :py:mod:`__main__` or another module to a file.
@@ -191,6 +242,9 @@ def dump_module(
             similar but independent from ``dill.settings[`byref`]``, as
             ``refimported`` refers to virtually all imported objects, while
             ``byref`` only affects select objects.
+        exclude: here be dragons
+        include: here be dragons
+        base_rules: here be dragons
         **kwds: extra keyword arguments passed to :py:class:`Pickler()`.
 
     Raises:
@@ -255,7 +309,13 @@ def dump_module(
 
     from .settings import settings
     protocol = settings['protocol']
-    default_rules = settings['dump_module']
+    if refimported is None:
+        refimported = settings['dump_module']['refimported']
+    if base_rules is None:
+        base_rules = settings['dump_module']['filters']
+    else:
+        base_rules = ModuleFilters(base_rules)
+
     main = module
     if main is None:
         main = _main_module
@@ -264,7 +324,7 @@ def dump_module(
     if not isinstance(main, ModuleType):
         raise TypeError("%r is not a module" % main)
     original_main = main
-    main = _filter_vars(main, default_rules, exclude, include)
+    main = _filter_vars(main, base_rules, exclude, include)
     if refimported:
         main = _stash_modules(main, original_main)
     with _open(filename, 'wb') as file:
@@ -284,42 +344,6 @@ def dump_session(filename=str(TEMPDIR/'session.pkl'), main=None, byref=False, **
     warnings.warn("dump_session() has been renamed dump_module()", PendingDeprecationWarning)
     dump_module(filename, module=main, refimported=byref, **kwds)
 dump_session.__doc__ = dump_module.__doc__
-
-class _PeekableReader:
-    """lightweight stream wrapper that implements peek()"""
-    def __init__(self, stream):
-        self.stream = stream
-    def read(self, n):
-        return self.stream.read(n)
-    def readline(self):
-        return self.stream.readline()
-    def tell(self):
-        return self.stream.tell()
-    def close(self):
-        return self.stream.close()
-    def peek(self, n):
-        stream = self.stream
-        try:
-            if hasattr(stream, 'flush'): stream.flush()
-            position = stream.tell()
-            stream.seek(position)  # assert seek() works before reading
-            chunk = stream.read(n)
-            stream.seek(position)
-            return chunk
-        except (AttributeError, OSError):
-            raise NotImplementedError("stream is not peekable: %r", stream) from None
-
-def _make_peekable(stream):
-    """return stream as an object with a peek() method"""
-    import io
-    if hasattr(stream, 'peek'):
-        return stream
-    if not (hasattr(stream, 'tell') and hasattr(stream, 'seek')):
-        try:
-            return io.BufferedReader(stream)
-        except Exception:
-            pass
-    return _PeekableReader(stream)
 
 def _identify_module(file, main=None):
     """identify the name of the module stored in the given file-type object"""
@@ -343,6 +367,28 @@ def _identify_module(file, main=None):
             # file is not peekable, but we have main.
             return None
         raise UnpicklingError("unable to identify main module") from error
+
+def is_pickled_module(filename, importable: bool = True) -> bool:
+    """Check if a file is a module state pickle file.
+
+    Parameters:
+        filename: a path-like object or a readable stream.
+        importable: expected kind of the file's saved module. Use `True` for
+            importable modules (the default) or `False` for module-type objects.
+
+    Returns:
+        `True` if the pickle file at ``filename`` was generated with
+        :py:func:`dump_module` **AND** the module whose state is saved in it is
+        of the kind specified by the ``importable`` argument. `False` otherwise.
+    """
+    with _open(filename, 'rb', peekable=True) as file:
+        try:
+            pickle_main = _identify_module(file)
+        except UnpicklingError:
+            return False
+        else:
+            is_runtime_mod = pickle_main.startswith('__runtime__.')
+            return importable ^ is_runtime_mod
 
 def load_module(
     filename = str(TEMPDIR/'session.pkl'),
@@ -454,16 +500,14 @@ def load_module(
             raise TypeError("both 'module' and 'main' arguments were used")
         module = kwds.pop('main')
     main = module
-    with _open(filename, 'rb') as file:
-        file = _make_peekable(file)
+    with _open(filename, 'rb', peekable=True) as file:
         #FIXME: dill.settings are disabled
         unpickler = Unpickler(file, **kwds)
-        unpickler._main = main
         unpickler._session = True
 
         # Resolve unpickler._main
         pickle_main = _identify_module(file, main)
-        if main is None and pickle_main is not None:
+        if main is None:
             main = pickle_main
         if isinstance(main, str):
             if main.startswith('__runtime__.'):
@@ -471,12 +515,9 @@ def load_module(
                 main = ModuleType(main.partition('.')[-1])
             else:
                 main = _import_module(main)
-        if main is not None:
-            if not isinstance(main, ModuleType):
-                raise TypeError("%r is not a module" % main)
-            unpickler._main = main
-        else:
-            main = unpickler._main
+        if not isinstance(main, ModuleType):
+            raise TypeError("%r is not a module" % main)
+        unpickler._main = main
 
         # Check against the pickle's main.
         is_main_imported = _is_imported_module(main)
@@ -499,13 +540,13 @@ def load_module(
                 )
 
         try:
-            # This is for find_class() to be able to locate it.
             if not is_main_imported:
+                # This is for find_class() to be able to locate it.
                 runtime_main = '__runtime__.%s' % main.__name__
                 sys.modules[runtime_main] = main
             loaded = unpickler.load()
         finally:
-            with suppress(KeyError, NameError):
+            if not is_main_imported:
                 del sys.modules[runtime_main]
 
     assert loaded is main
@@ -578,8 +619,7 @@ def load_module_asdict(
     """
     if 'module' in kwds:
         raise TypeError("'module' is an invalid keyword argument for load_module_asdict()")
-    with _open(filename, 'rb') as file:
-        file = _make_peekable(file)
+    with _open(filename, 'rb', peekable=True) as file:
         main_name = _identify_module(file)
         old_main = sys.modules.get(main_name)
         main = ModuleType(main_name)
@@ -599,6 +639,73 @@ def load_module_asdict(
                 sys.modules[main_name] = old_main
     main.__session__ = str(filename)
     return main.__dict__
+
+
+#############################
+#  Module filters settings  #
+#############################
+
+class ModuleFilters(FilterRules):
+    __slots__ = 'module', '_parent', '__dict__'
+    _fields = tuple(x.lstrip('_') for x in FilterRules.__slots__)
+    def __init__(self,
+        rules: Union[Iterable[Rule], FilterRules] = None,
+        module: str = 'DEFAULT',
+        parent: ModuleFilters = None,
+    ):
+        # Don't call super().__init__()
+        if rules is not None:
+            super().__init__(rules)
+        super().__setattr__('module', module)
+        super().__setattr__('_parent', parent)
+    def __repr__(self):
+        desc = "DEFAULT" if self.module == 'DEFAULT' else "for %r" % self.module
+        return "<ModuleFilters %s %s>" % (desc, super().__repr__())
+    def __setattr__(self, name, value):
+        if name in FilterRules.__slots__:
+            # Don't interfere with superclass attributes.
+            super().__setattr__(name, value)
+        elif name in self._fields:
+            if not any(hasattr(self, x) for x in FilterRules.__slots__):
+                # Initialize other. This is not a placeholder anymore.
+                other = '_include' if name == 'exclude' else '_exclude'
+                super().__setattr__(other, ())
+            super().__setattr__(name, value)
+        else:
+            # Create a child node for submodule 'name'.
+            super().__setattr__(name, ModuleFilters(rules=value, module=name, parent=self))
+    def __setitem__(self, name, value):
+        if '.' not in name:
+            setattr(self, name, value)
+        else:
+            module, _, submodules = name.partition('.')
+            if module not in self.__dict__:
+                # Create a placeholder node, like logging.PlaceHolder.
+                setattr(self, module, None)
+            mod_rules = getattr(self, module)
+            mod_rules[submodules] = value
+    def __getitem__(self, name):
+        module, _, submodules = name.partition('.')
+        mod_rules = getattr(self, module)
+        if not submodules:
+            return mod_rules
+        else:
+            return mod_rules[submodules]
+    def get(self, name: str, default: ModuleFilters = None):
+        try:
+            return self[name]
+        except AttributeError:
+            return default
+    def get_filters(self, rule_type: RuleType):
+        if not isinstance(rule_type, RuleType):
+            raise ValueError("invalid rule type: %r (must be one of %r)" % (rule_type, list(RuleType)))
+        try:
+            return getattr(self, rule_type.name.lower())
+        except AttributeError:
+            # 'self' is a placeholder, 'exclude' and 'include' are unset.
+            if self._parent is None:
+                raise
+            return self._parent.get_filters(rule_type)
 
 
 ##############################

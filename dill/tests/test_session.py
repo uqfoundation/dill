@@ -194,12 +194,11 @@ def test_session_other():
     assert module.selfref is module
 
 def test_runtime_module():
-    from dill.session import _stash_modules
     modname = '__runtime__'
     runtime = ModuleType(modname)
     runtime.x = 42
 
-    mod = _stash_modules(runtime, runtime)
+    mod = dill.session._stash_modules(runtime, runtime)
     if mod is not runtime:
         print("There are objects to save by referenece that shouldn't be:",
               mod.__dill_imported, mod.__dill_imported_as, mod.__dill_imported_top_level,
