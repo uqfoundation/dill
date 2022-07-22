@@ -576,3 +576,13 @@ def load_module_asdict(
             pass
     main.__session__ = str(filename)
     return main.__dict__
+
+
+# Internal exports for backward compatibility with dill v0.3.5.1
+# Can't be placed in dill._dill because of circular import problems.
+for name in (
+    '_lookup_module', '_module_map', '_restore_modules', '_stash_modules',
+    'dump_session', 'load_session' # backward compatibility functions
+):
+    setattr(_dill, name, globals()[name])
+del name
