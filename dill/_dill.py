@@ -196,6 +196,10 @@ except NameError:
     singletontypes = []
 
 import inspect
+import dataclasses
+
+from pickle import GLOBAL
+
 
 ### Shims for different versions of Python and dill
 class Sentinel(object):
@@ -497,12 +501,15 @@ def _create_typemap():
     return
 _reverse_typemap = dict(_create_typemap())
 _reverse_typemap.update({
-    'CellType': CellType,
     'PartialType': PartialType,
     'SuperType': SuperType,
     'ItemGetterType': ItemGetterType,
     'AttrGetterType': AttrGetterType,
 })
+if sys.hexversion < 0x30800a2:
+    _reverse_typemap.update({
+        'CellType': CellType,
+    })
 
 # "Incidental" implementation specific types. Unpickling these types in another
 # implementation of Python (PyPy -> CPython) is not guaranteed to work
@@ -544,15 +551,17 @@ try:
     _incedental_reverse_typemap["SymtableEntryType"] = type(symtable.symtable("", "string", "exec")._table)
 except: #FIXME: fails to pickle
     pass
-'''
 
 if sys.hexversion >= 0x30a00a0:
     _incedental_reverse_typemap['LineIteratorType'] = type(compile('3', '', 'eval').co_lines())
+'''
 
 if sys.hexversion >= 0x30b00b0:
     from types import GenericAlias
     _incedental_reverse_typemap["GenericAliasIteratorType"] = type(iter(GenericAlias(list, (int,))))
+    '''
     _incedental_reverse_typemap['PositionsIteratorType'] = type(compile('3', '', 'eval').co_positions())
+    '''
 
 try:
     import winreg
@@ -1895,8 +1904,44 @@ if HAS_CTYPES and hasattr(ctypes, 'pythonapi'):
     _incedental_reverse_typemap['PyCapsuleType'] = PyCapsuleType
     _reverse_typemap['PyCapsuleType'] = PyCapsuleType
     _incedental_types.add(PyCapsuleType)
+    SESSION_IMPORTED_AS_TYPES += (PyCapsuleType,)
 else:
     _testcapsule = None
+
+
+#############################
+# A quick fix for issue #500
+# This should be removed when a better solution is found.
+
+if hasattr(dataclasses, "_HAS_DEFAULT_FACTORY_CLASS"):
+    @register(dataclasses._HAS_DEFAULT_FACTORY_CLASS)
+    def save_dataclasses_HAS_DEFAULT_FACTORY_CLASS(pickler, obj):
+        logger.trace(pickler, "DcHDF: %s", obj)
+        pickler.write(GLOBAL + b"dataclasses\n_HAS_DEFAULT_FACTORY\n")
+        logger.trace(pickler, "# DcHDF")
+
+if hasattr(dataclasses, "MISSING"):
+    @register(type(dataclasses.MISSING))
+    def save_dataclasses_MISSING_TYPE(pickler, obj):
+        logger.trace(pickler, "DcM: %s", obj)
+        pickler.write(GLOBAL + b"dataclasses\nMISSING\n")
+        logger.trace(pickler, "# DcM")
+
+if hasattr(dataclasses, "KW_ONLY"):
+    @register(type(dataclasses.KW_ONLY))
+    def save_dataclasses_KW_ONLY_TYPE(pickler, obj):
+        logger.trace(pickler, "DcKWO: %s", obj)
+        pickler.write(GLOBAL + b"dataclasses\nKW_ONLY\n")
+        logger.trace(pickler, "# DcKWO")
+
+if hasattr(dataclasses, "_FIELD_BASE"):
+    @register(dataclasses._FIELD_BASE)
+    def save_dataclasses_FIELD_BASE(pickler, obj):
+        logger.trace(pickler, "DcFB: %s", obj)
+        pickler.write(GLOBAL + b"dataclasses\n" + obj.name.encode() + b"\n")
+        logger.trace(pickler, "# DcFB")
+
+#############################
 
 # quick sanity checking
 def pickles(obj,exact=False,safe=False,**kwds):
@@ -1913,7 +1958,7 @@ def pickles(obj,exact=False,safe=False,**kwds):
     """
     if safe: exceptions = (Exception,) # RuntimeError, ValueError
     else:
-        exceptions = (TypeError, AssertionError, PicklingError, UnpicklingError)
+        exceptions = (TypeError, AssertionError, NotImplementedError, PicklingError, UnpicklingError)
     try:
         pik = copy(obj, **kwds)
         #FIXME: should check types match first, then check content if "exact"

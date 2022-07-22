@@ -232,7 +232,8 @@ def test_refimported_imported_as():
     import types
     import typing
     mod = sys.modules['__test__'] = ModuleType('__test__')
-    dill.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+dill.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     mod.Dict = collections.UserDict             # select by type
     mod.AsyncCM = typing.AsyncContextManager    # select by __module__
     mod.thread_exec = dill.executor             # select by __module__ with regex
