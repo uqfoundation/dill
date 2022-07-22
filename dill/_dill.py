@@ -235,8 +235,8 @@ CONTENTS_FMODE = 1
 #: Pickles the entire file (handle and contents), preserving mode and position.
 FILE_FMODE = 2
 
-# Exceptions commonly raised by unpicklable objects.
-UNPICKLEABLE_ERRORS = (PicklingError, TypeError, NotImplementedError)
+# Exceptions commonly raised by unpicklable objects in the Standard Library.
+UNPICKLEABLE_ERRORS = (PicklingError, TypeError, ValueError, NotImplementedError)
 
 ### Shorthands (modified from python2.5/lib/pickle.py)
 def copy(obj, *args, **kwds):
