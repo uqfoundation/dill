@@ -29,8 +29,8 @@ import warnings
 from dill import _dill, Pickler, Unpickler
 from ._dill import (
     BuiltinMethodType, FunctionType, MethodType, ModuleType, TypeType,
-    _import_module, _is_builtin_module, _is_imported_module, _main_module,
-    _reverse_typemap, __builtin__,
+    _getopt, _import_module, _is_builtin_module, _is_imported_module,
+    _main_module, _reverse_typemap, __builtin__,
 )
 from ._utils import FilterRules, FilterSet, RuleType, size_filter
 
@@ -309,12 +309,9 @@ def dump_module(
 
     from .settings import settings
     protocol = settings['protocol']
-    if refimported is None:
-        refimported = settings['dump_module']['refimported']
-    if base_rules is None:
-        base_rules = settings['dump_module']['filters']
-    else:
-        base_rules = ModuleFilters(base_rules)
+    refimported = _getopt(settings, 'dump_module.refimported', refimported)
+    base_rules = _getopt(settings, 'dump_module.filters', base_rules)
+    if type(base_rules) != ModuleFilters: base_rules = ModuleFilters(base_rules)
 
     main = module
     if main is None:
@@ -499,6 +496,7 @@ def load_module(
         if module is not None:
             raise TypeError("both 'module' and 'main' arguments were used")
         module = kwds.pop('main')
+
     main = module
     with _open(filename, 'rb', peekable=True) as file:
         #FIXME: dill.settings are disabled

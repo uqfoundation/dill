@@ -4,7 +4,10 @@
 # Copyright (c) 2022 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
-"""auxiliary internal classes used in multiple submodules, set here to avoid import recursion"""
+"""
+Auxiliary classes and functions used in more than one module, defined here to
+avoid circular import problems.
+"""
 
 from __future__ import annotations
 

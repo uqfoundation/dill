@@ -245,8 +245,7 @@ def copy(obj, *args, **kwds):
 
     See :func:`dumps` and :func:`loads` for keyword arguments.
     """
-    from .settings import settings
-    ignore = kwds.pop('ignore', settings['ignore'])
+    ignore = kwds.pop('ignore', Unpickler.settings['ignore'])
     return loads(dumps(obj, *args, **kwds), ignore=ignore)
 
 def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
@@ -256,7 +255,7 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, **kwds)
     See :func:`dumps` for keyword arguments.
     """
     from .settings import settings
-    protocol = settings['protocol'] if protocol is None else int(protocol)
+    protocol = _getopt(settings, 'protocol', int(protocol))
     _kwds = kwds.copy()
     _kwds.update(dict(byref=byref, fmode=fmode, recurse=recurse))
     Pickler(file, protocol, **_kwds).dump(obj)
@@ -344,25 +343,32 @@ class PicklingWarning(PickleWarning, PicklingError):
 class UnpicklingWarning(PickleWarning, UnpicklingError):
     pass
 
+def _getopt(settings, key, arg=None, *, kwds=None):
+    if kwds is not None:
+        arg = kwds.pop(key, None)
+    if arg is not None:
+        return arg
+    while '.' in key:
+        prefix, _, key = key.partition('.')
+        settings = settings[prefix]
+    return settings[key]
+
 ### Extend the Picklers
 class Pickler(StockPickler):
     """python's Pickler extended to interpreter sessions"""
     dispatch = MetaCatchingDict(StockPickler.dispatch.copy())
     _session = False
+    from .settings import settings
 
     def __init__(self, file, *args, **kwds):
-        from .settings import settings
-        _byref = kwds.pop('byref', None)
-       #_strictio = kwds.pop('strictio', None)
-        _fmode = kwds.pop('fmode', None)
-        _recurse = kwds.pop('recurse', None)
+        settings = Pickler.settings
         StockPickler.__init__(self, file, *args, **kwds)
         self._main = _main_module
         self._diff_cache = {}
-        self._byref = settings['byref'] if _byref is None else _byref
-        self._strictio = False #_strictio
-        self._fmode = settings['fmode'] if _fmode is None else _fmode
-        self._recurse = settings['recurse'] if _recurse is None else _recurse
+        self._byref = _getopt(settings, 'byref', kwds=kwds)
+        self._fmode = _getopt(settings, 'fmode', kwds=kwds)
+        self._recurse = _getopt(settings, 'recurse', kwds=kwds)
+        self._strictio = False #_getopt(settings, 'strictio', kwds=kwds)
         self._postproc = OrderedDict()
         self._file = file
 
@@ -416,6 +422,7 @@ class Pickler(StockPickler):
 
 class Unpickler(StockUnpickler):
     """python's Unpickler extended to interpreter sessions and more types"""
+    from .settings import settings
     _session = False
 
     def find_class(self, module, name):
@@ -427,11 +434,10 @@ class Unpickler(StockUnpickler):
         return StockUnpickler.find_class(self, module, name)
 
     def __init__(self, *args, **kwds):
-        from .settings import settings
-        _ignore = kwds.pop('ignore', None)
+        settings = Pickler.settings
         StockUnpickler.__init__(self, *args, **kwds)
         self._main = _main_module
-        self._ignore = settings['ignore'] if _ignore is None else _ignore
+        self._ignore = _getopt(settings, 'ignore', kwds=kwds)
 
     def load(self): #NOTE: if settings change, need to update attributes
         obj = StockUnpickler.load(self)
