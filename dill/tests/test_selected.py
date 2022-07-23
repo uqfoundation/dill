@@ -98,9 +98,26 @@ def test_frame_related():
   assert ok
   if verbose: print ("")
 
+def test_typing():
+  import typing #FIXME: test special cases
+  x = typing.Dict[int, str]
+  assert x == dill.copy(x)
+  x = typing.List[int]
+  assert x == dill.copy(x)
+  x = typing.Tuple[int, str]
+  assert x == dill.copy(x)
+  x = typing.Tuple[int]
+  assert x == dill.copy(x)
+  x = typing.Tuple[()]
+  assert x == dill.copy(x)
+  x = typing.Tuple[()].copy_with(())
+  assert x == dill.copy(x)
+  return
+
 
 if __name__ == '__main__':
   test_frame_related()
   test_dict_contents()
   test_class()
   test_class_descriptors()
+  test_typing()

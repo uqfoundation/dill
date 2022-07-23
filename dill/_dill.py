@@ -196,6 +196,7 @@ except NameError:
 
 import inspect
 import dataclasses
+import typing
 
 from pickle import GLOBAL
 
@@ -761,6 +762,13 @@ def _create_ftype(ftypeobj, func, args, kwds):
         args = ()
     return ftypeobj(func, *args, **kwds)
 
+def _create_typing_tuple(argz, *args): #NOTE: workaround python bug
+    if not argz:
+        return typing.Tuple[()].copy_with(())
+    if argz == ((),):
+        return typing.Tuple[()]
+    return typing.Tuple[argz]
+
 def _create_lock(locked, *args): #XXX: ignores 'blocking'
     from threading import Lock
     lock = Lock()
@@ -1274,6 +1282,23 @@ def save_classobj(pickler, obj): #FIXME: enable pickler._byref
         name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
         StockPickler.save_global(pickler, obj, name=name)
         logger.trace(pickler, "# C2")
+    return
+
+@register(typing._GenericAlias)
+def save_generic_alias(pickler, obj):
+    args = obj.__args__
+    if type(obj.__reduce__()) is str:
+        logger.trace(pickler, "Ga0: %s", obj)
+        StockPickler.save_global(pickler, obj, name=obj.__reduce__())
+        logger.trace(pickler, "# Ga0")
+    elif obj.__origin__ is tuple and (not args or args == ((),)):
+        logger.trace(pickler, "Ga1: %s", obj)
+        pickler.save_reduce(_create_typing_tuple, (args,), obj=obj)
+        logger.trace(pickler, "# Ga1")
+    else:
+        logger.trace(pickler, "Ga2: %s", obj)
+        StockPickler.save_reduce(pickler, *obj.__reduce__(), obj=obj)
+        logger.trace(pickler, "# Ga2")
     return
 
 @register(LockType)
