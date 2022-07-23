@@ -197,7 +197,7 @@ def test_runtime_module():
     runtime = ModuleType(modname)
     runtime.x = 42
 
-    mod = dill._dill._stash_modules(runtime)
+    mod = dill.session._stash_modules(runtime)
     if mod is not runtime:
         print("There are objects to save by referenece that shouldn't be:",
               mod.__dill_imported, mod.__dill_imported_as, mod.__dill_imported_top_level,

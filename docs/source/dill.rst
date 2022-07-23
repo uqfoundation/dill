@@ -11,7 +11,7 @@ dill module
     :special-members:
     :show-inheritance:
     :imported-members:
-    :exclude-members: dump_session, load_session
+..  :exclude-members:
 
 detect module
 -------------
@@ -60,6 +60,18 @@ pointers module
     :show-inheritance:
     :imported-members:
 ..  :exclude-members:
+
+session module
+---------------
+
+.. automodule:: dill.session
+    :members:
+    :undoc-members:
+    :private-members:
+    :special-members:
+    :show-inheritance:
+    :imported-members:
+    :exclude-members: dump_session, load_session
 
 settings module
 ---------------
