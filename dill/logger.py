@@ -107,7 +107,7 @@ class TraceAdapter(logging.LoggerAdapter):
 
     Usage of logger with 'trace()' method:
 
-    >>> from .logger import adapter as logger  # instead of 'from .logger import logger'
+    >>> from dill.logger import adapter as logger  #NOTE: not dill.logger.logger
     >>> ...
     >>> def save_atype(pickler, obj):
     >>>     logger.trace(pickler, "Message with %s and %r etc. placeholders", 'text', obj)

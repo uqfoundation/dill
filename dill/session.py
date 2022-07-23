@@ -12,30 +12,26 @@ Pickle and restore the intepreter session.
 
 __all__ = [
     'dump_module', 'is_pickled_module', 'load_module', 'load_module_asdict',
-    'dump_session', 'load_session'  # backward compatibility
+    'dump_session', 'load_session' # backward compatibility
 ]
 
-import logging
-logger = logging.getLogger('dill.session')
-
-import builtins
 import contextlib
-import pathlib
 import re
 import sys
-import tempfile
 import warnings
-from types import SimpleNamespace
 
 from dill import _dill, Pickler, Unpickler
 from ._dill import (
     BuiltinMethodType, FunctionType, MethodType, ModuleType, TypeType,
     _import_module, _is_builtin_module, _is_imported_module, _main_module,
-    _reverse_typemap,
+    _reverse_typemap, __builtin__,
 )
 
 # Type hints.
 from typing import Optional, Union
+
+import pathlib
+import tempfile
 
 TEMPDIR = pathlib.PurePath(tempfile.gettempdir())
 
@@ -90,6 +86,7 @@ def _open(file, mode, *, peekable=False):
 def _module_map():
     """get map of imported modules"""
     from collections import defaultdict
+    from types import SimpleNamespace
     modmap = SimpleNamespace(
         by_name=defaultdict(list),
         by_id=defaultdict(list),
@@ -106,8 +103,8 @@ def _module_map():
     return modmap
 
 IMPORTED_AS_TYPES = (ModuleType, TypeType, FunctionType, MethodType, BuiltinMethodType)
-PyCapsuleType = _reverse_typemap.get('PyCapsuleType')
-if PyCapsuleType is not None: IMPORTED_AS_TYPES += (PyCapsuleType,)
+if 'PyCapsuleType' in _reverse_typemap:
+    IMPORTED_AS_TYPES += (_reverse_typemap['PyCapsuleType'],)
 
 IMPORTED_AS_MODULES = [re.compile(x) for x in (
     'ctypes', 'typing', 'subprocess', 'threading',
@@ -610,7 +607,7 @@ def load_module_asdict(
                 old_main = _import_module(main_name)
             main.__dict__.update(old_main.__dict__)
         else:
-            main.__builtins__ = builtins
+            main.__builtins__ = __builtin__
         try:
             sys.modules[main_name] = main
             load_module(file, **kwds)
@@ -621,3 +618,13 @@ def load_module_asdict(
                 sys.modules[main_name] = old_main
     main.__session__ = str(filename)
     return main.__dict__
+
+
+# Internal exports for backward compatibility with dill v0.3.5.1
+# Can't be placed in dill._dill because of circular import problems.
+for name in (
+    '_lookup_module', '_module_map', '_restore_modules', '_stash_modules',
+    'dump_session', 'load_session' # backward compatibility functions
+):
+    setattr(_dill, name, globals()[name])
+del name
