@@ -255,10 +255,10 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, **kwds)
     See :func:`dumps` for keyword arguments.
     """
     from .settings import settings
-    protocol = _getopt(settings, 'protocol', int(protocol))
-    _kwds = kwds.copy()
-    _kwds.update(dict(byref=byref, fmode=fmode, recurse=recurse))
-    Pickler(file, protocol, **_kwds).dump(obj)
+    protocol = int(_getopt(settings, 'protocol', protocol))
+    kwds = kwds.copy()
+    kwds.update(byref=byref, fmode=fmode, recurse=recurse)
+    Pickler(file, protocol, **kwds).dump(obj)
     return
 
 def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
@@ -362,7 +362,6 @@ class Pickler(StockPickler):
 
     def __init__(self, file, *args, **kwds):
         settings = Pickler.settings
-        StockPickler.__init__(self, file, *args, **kwds)
         self._main = _main_module
         self._diff_cache = {}
         self._byref = _getopt(settings, 'byref', kwds=kwds)
@@ -371,6 +370,7 @@ class Pickler(StockPickler):
         self._strictio = False #_getopt(settings, 'strictio', kwds=kwds)
         self._postproc = OrderedDict()
         self._file = file
+        StockPickler.__init__(self, file, *args, **kwds)
 
     def dump(self, obj): #NOTE: if settings change, need to update attributes
         # register if the object is a numpy ufunc
@@ -435,9 +435,9 @@ class Unpickler(StockUnpickler):
 
     def __init__(self, *args, **kwds):
         settings = Pickler.settings
-        StockUnpickler.__init__(self, *args, **kwds)
         self._main = _main_module
         self._ignore = _getopt(settings, 'ignore', kwds=kwds)
+        StockUnpickler.__init__(self, *args, **kwds)
 
     def load(self): #NOTE: if settings change, need to update attributes
         obj = StockUnpickler.load(self)

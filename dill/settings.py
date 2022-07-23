@@ -12,7 +12,6 @@ global settings for Pickler
 __all__ = ['settings']
 
 from pickle import DEFAULT_PROTOCOL
-from .session import ModuleFilters
 
 settings = {
    #'main' : None,
@@ -23,9 +22,9 @@ settings = {
     'recurse' : False,
     'ignore' : False,
     'dump_module' : {
-        'filters': ModuleFilters(rules=()),
+        'filters': None, #ModuleFilters(rules=())  # set in dill.session
         'refimported': False,
     },
 }
 
-del DEFAULT_PROTOCOL, ModuleFilters
+del DEFAULT_PROTOCOL

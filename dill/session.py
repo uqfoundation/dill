@@ -753,11 +753,16 @@ def ipython_filter(*, keep_history: str = 'input'):
     return not_interactive_var
 
 
+## Variables set in this module to avoid circular import problems. ##
+
+from .settings import settings
+settings['dump_module']['filters'] = ModuleFilters(rules=())
+
 # Internal exports for backward compatibility with dill v0.3.5.1
-# Can't be placed in dill._dill because of circular import problems.
 for name in (
     '_lookup_module', '_module_map', '_restore_modules', '_stash_modules',
     'dump_session', 'load_session' # backward compatibility functions
 ):
     setattr(_dill, name, globals()[name])
-del name
+
+del name, settings
