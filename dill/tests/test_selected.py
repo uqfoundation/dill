@@ -99,7 +99,9 @@ def test_frame_related():
   if verbose: print ("")
 
 def test_typing():
-  import typing #FIXME: test special cases
+  import typing
+  x = typing.Any
+  assert x == dill.copy(x)
   x = typing.Dict[int, str]
   assert x == dill.copy(x)
   x = typing.List[int]
