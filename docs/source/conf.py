@@ -66,6 +66,14 @@ author = 'Mike McKerns'
 # extension config
 github_project_url = "https://github.com/uqfoundation/dill"
 autoclass_content = 'both'
+autodoc_default_options = {
+    'members': True,
+    'undoc-members': True,
+    'private-members': True,
+    'special-members': True,
+    'show-inheritance': True,
+    'exclude-members': '__dict__, __module__, __slots__, __weakref__',
+}
 autodoc_typehints = 'description'
 napoleon_include_init_with_doc = True
 napoleon_include_private_with_doc = False

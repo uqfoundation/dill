@@ -7,14 +7,14 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 """
-Pickle and restore the intepreter session.
+Pickle and restore the intepreter session or a module's state.
 """
 
 from __future__ import annotations
 
 __all__ = [
-    'FilterSet', 'ModuleFilters', 'dump_module', 'ipython_filter',
-    'is_pickled_module', 'load_module', 'load_module_asdict', 'size_filter',
+    'dump_module', 'load_module', 'load_module_asdict', 'is_pickled_module',
+    'ModuleFilters', 'FilterRules', 'FilterSet', 'size_filter', 'ipython_filter',
     'dump_session', 'load_session' # backward compatibility
 ]
 
