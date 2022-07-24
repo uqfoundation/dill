@@ -16,9 +16,9 @@ Test against "all" python types (Std. Lib. CH 1-15 @ 2.7) by mmckerns.
 Test against CH16+ Std. Lib. ... TBD.
 """
 __all__ = [
-    'Pickler','Unpickler',
-    'check','copy','dump','dumps','load','loads','pickle','pickles','register',
-    'DEFAULT_PROTOCOL','HIGHEST_PROTOCOL','CONTENTS_FMODE','FILE_FMODE','HANDLE_FMODE',
+    'dump','dumps','load','loads','copy',
+    'Pickler','Unpickler','register','pickle','pickles','check',
+    'DEFAULT_PROTOCOL','HIGHEST_PROTOCOL','HANDLE_FMODE','CONTENTS_FMODE','FILE_FMODE',
     'PickleError','PickleWarning','PicklingError','PicklingWarning','UnpicklingError',
     'UnpicklingWarning',
 ]

@@ -7,11 +7,11 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 """
-Pickle and restore the intepreter session.
+Pickle and restore the intepreter session or a module's state.
 """
 
 __all__ = [
-    'dump_module', 'is_pickled_module', 'load_module', 'load_module_asdict',
+    'dump_module', 'load_module', 'load_module_asdict', 'is_pickled_module',
     'dump_session', 'load_session' # backward compatibility
 ]
 
