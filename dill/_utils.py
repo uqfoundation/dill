@@ -82,14 +82,15 @@ class FilterSet(MutableSet):
     _rtypemap = None
     _typename_regex = re.compile(r'\w+(?=Type$)|\w+$', re.IGNORECASE)
     def _match_type(self, filter):
-        if isinstance(filter, str):
+        filter_type = type_filter
+        if filter_type == str:
             if filter.isidentifier():
                 field = 'names'
             else:
                 filter, field = re.compile(filter), 'regexes'
-        elif isinstance(filter, re.Pattern):
+        elif filter_type == re.Pattern:
             field = 'regexes'
-        elif isinstance(filter, int):
+        elif filter_type == int:
             field = 'ids'
         elif isinstance(filter, type):
             field = 'types'
