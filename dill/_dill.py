@@ -762,7 +762,7 @@ def _create_ftype(ftypeobj, func, args, kwds):
         args = ()
     return ftypeobj(func, *args, **kwds)
 
-def _create_typing_tuple(argz, *args): #NOTE: workaround python bug
+def _create_typing_tuple(argz, *args): #NOTE: workaround python/cpython#94245
     if not argz:
         return typing.Tuple[()].copy_with(())
     if argz == ((),):
