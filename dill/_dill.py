@@ -186,10 +186,11 @@ from socket import socket as SocketType
 #FIXME: additionally calls ForkingPickler.register several times
 from multiprocessing.reduction import _reduce_socket as reduce_socket
 try:
-    __IPYTHON__ is True # is ipython
+    IS_IPYTHON = __IPYTHON__  # is True
     ExitType = None     # IPython.core.autocall.ExitAutocall
     singletontypes = ['exit', 'quit', 'get_ipython']
 except NameError:
+    IS_IPYTHON = False
     try: ExitType = type(exit) # apparently 'exit' can be removed
     except NameError: ExitType = None
     singletontypes = []
