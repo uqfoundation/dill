@@ -326,7 +326,7 @@ class FilterRules:
             objects = filterfalse(filter, objects)
         return objects
 
-    def filter_vars(self, namespace: Dict[str, Any]) -> Dict[str, Any]:
+    def apply_filters(self, namespace: Dict[str, Any]) -> Dict[str, Any]:
         """Apply filters to dictionary with names as keys."""
         if not namespace or not (self.exclude or self.include):
             return namespace

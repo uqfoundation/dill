@@ -197,7 +197,7 @@ def _filter_vars(main_module, exclude, include, base_rules):
     if include is not None:
         rules.update([(INCLUDE, include)])
 
-    namespace = rules.filter_vars(main_module.__dict__)
+    namespace = rules.apply_filters(main_module.__dict__)
     if namespace is main_module.__dict__:
         return main_module
 
