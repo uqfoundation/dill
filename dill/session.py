@@ -20,7 +20,7 @@ import re
 import sys
 import warnings
 
-from dill import _dill, Pickler, Unpickler
+from dill import _dill, Pickler, Unpickler, UnpicklingError
 from ._dill import (
     BuiltinMethodType, FunctionType, MethodType, ModuleType, TypeType,
     _import_module, _is_builtin_module, _is_imported_module, _main_module,
@@ -326,20 +326,30 @@ dump_session.__doc__ = dump_module.__doc__
 
 def _identify_module(file, main=None):
     """identify the name of the module stored in the given file-type object"""
-    from pickletools import genops
-    UNICODE = {'UNICODE', 'BINUNICODE', 'SHORT_BINUNICODE'}
-    found_import = False
+    import pickletools
+    NEUTRAL = {'PROTO', 'FRAME', 'PUT', 'BINPUT', 'MEMOIZE', 'MARK', 'STACK_GLOBAL'}
+    opcodes = ((opcode.name, arg) for opcode, arg, pos in pickletools.genops(file.peek(256))
+               if opcode.name not in NEUTRAL)
     try:
-        for opcode, arg, pos in genops(file.peek(256)):
-            if not found_import:
-                if opcode.name in ('GLOBAL', 'SHORT_BINUNICODE') and \
-                        arg.endswith('_import_module'):
-                    found_import = True
-            else:
-                if opcode.name in UNICODE:
-                    return arg
-        else:
-            raise UnpicklingError("reached STOP without finding main module")
+        opcode, arg = next(opcodes)
+        if (opcode, arg) == ('SHORT_BINUNICODE', 'dill._dill'):
+            # The file uses STACK_GLOBAL instead of GLOBAL.
+            opcode, arg = next(opcodes)
+        if not (opcode in ('SHORT_BINUNICODE', 'GLOBAL') and arg.split()[-1] == '_import_module'):
+            raise ValueError
+        opcode, arg = next(opcodes)
+        if not opcode in ('SHORT_BINUNICODE', 'BINUNICODE', 'UNICODE'):
+            raise ValueError
+        module_name = arg
+        if not (
+            next(opcodes)[0] in ('TUPLE1', 'TUPLE') and
+            next(opcodes)[0] == 'REDUCE' and
+            next(opcodes)[0] in ('EMPTY_DICT', 'DICT')
+        ):
+            raise ValueError
+        return module_name
+    except StopIteration:
+        raise UnpicklingError("reached STOP without finding main module") from None
     except (NotImplementedError, ValueError) as error:
         # ValueError occours when the end of the chunk is reached (without a STOP).
         if isinstance(error, NotImplementedError) and main is not None:
