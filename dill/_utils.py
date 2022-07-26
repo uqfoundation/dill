@@ -81,13 +81,17 @@ class FilterSet(MutableSet):
     _fields = None
     _rtypemap = None
     _typename_regex = re.compile(r'\w+(?=Type$)|\w+$', re.IGNORECASE)
-    def _match_type(self, filter):
+    def _match_type(self, filter: Filter) -> Tuple[filter, str]:
         filter_type = type(filter)
         if filter_type == str:
             if filter.isidentifier():
                 field = 'names'
+            elif filter.startswith('type:'):
+                filter = self.get_type(filter.partition(':')[-1].strip())
+                field = 'types'
             else:
-                filter, field = re.compile(filter), 'regexes'
+                filter = re.compile(filter)
+                field = 'regexes'
         elif filter_type == re.Pattern:
             field = 'regexes'
         elif filter_type == int:
@@ -146,33 +150,14 @@ class FilterSet(MutableSet):
     def copy(self):
         return FilterSet(*(getattr(self, field).copy() for field in self._fields))
     @classmethod
-    def _get_typename(cls, key):
-        return cls._typename_regex.match(key).group().lower()
+    def _get_typekey(cls, typename: str) -> str:
+        return cls._typename_regex.match(typename).group().lower()
     @classmethod
-    def get_type(cls, key):
+    def get_type(cls, typename: str) -> type:
+        """retrieve a type registered in ``dill``'s "reverse typemap"'"""
         if cls._rtypemap is None:
-            cls._rtypemap = {cls._get_typename(k): v for k, v in _dill._reverse_typemap.items()}
-        return cls._rtypemap[cls._get_typename(key)]
-    def add_type(self, typename: str) -> None:
-        """Add a type filter to the set by passsing the type name.
-
-        Parameters:
-            typename: a type name (case insensitive).
-
-        Example:
-            Add some type filters to default exclusion filters:
-
-            >>> import dill
-            >>> filters = dill.settings['dump_module']['filters']
-            >>> filters.exclude.add_type('type')
-            >>> filters.exclude.add_type('Function')
-            >>> filters.exclude.add_type('ModuleType')
-            >>> filters
-            <ModuleFilters DEFAULT:
-              exclude=FilterSet(types={<class 'type'>, <class 'module'>, <class 'function'>}),
-              include=FilterSet()>
-        """
-        self.types.add(self.get_type(typename))
+            cls._rtypemap = {cls._get_typekey(k): v for k, v in _dill._reverse_typemap.items()}
+        return cls._rtypemap[cls._get_typekey(typename)]
 FilterSet._fields = tuple(field.name for field in fields(FilterSet))
 
 class _FilterSetDescriptor:
@@ -211,8 +196,8 @@ class FilterRules:
           arbitrary logic.
 
     A `name` filter is specified by a simple string, e.g. 'some_var'. If its
-    value is not a valid Python identifier, it is treated as a regular
-    expression instead.
+    value is not a valid Python identifier, except for the special `type` case
+    below, it is treated as a regular expression instead.
 
     A `regex` filter is specified either by a string containing a regular
     expression, e.g. ``r'\w+_\d+'``, or by a :py:class:`re.Pattern` object.
@@ -222,8 +207,10 @@ class FilterRules:
     assigned to multiple variables, just use ``id(obj)`` as an `id` filter.
 
     A `type` filter is specified by a type-object, e.g. ``list`` or
-    ``type(some_var)``.  For adding `type` filters by the type name, see
-    :py:func:`FilterSet.add_type`.
+    ``type(some_var)``, or by a string with the format ``"type:<typename>"``,
+    where ``<typename>`` is a type name (case insensitive) known by ``dill`` ,
+    e.g. ``"type:function"`` or ``"type: FunctionType"``.  These include all
+    the types defined in the module :py:module:`types` and many more.
 
     A `func` filter can be any callable that accepts a single argument and
     returns a boolean value, being it ``True`` if the object should be excluded

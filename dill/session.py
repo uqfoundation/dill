@@ -186,7 +186,7 @@ def _restore_modules(unpickler, main_module):
     for modname, name in main_module.__dict__.pop('__dill_imported_top_level', ()):
         main_module.__dict__[name] = _import_module(modname)
 
-def _filter_vars(main_module, base_rules, exclude, include):
+def _filter_vars(main_module, exclude, include, base_rules):
     """apply exclude/include filters from arguments *and* settings"""
     rules = FilterRules()
     mod_rules = base_rules.get(main_module.__name__, base_rules)
@@ -334,7 +334,7 @@ def dump_module(
     if not isinstance(main, ModuleType):
         raise TypeError("%r is not a module" % main)
     original_main = main
-    main = _filter_vars(main, base_rules, exclude, include)
+    main = _filter_vars(main, exclude, include, base_rules)
     if refimported:
         main = _stash_modules(main, original_main)
     if main is not original_main:

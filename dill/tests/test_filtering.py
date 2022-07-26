@@ -65,9 +65,9 @@ def test_exclude_include():
 
 def test_add_type():
     type_rules = FilterRules()                 # Formats accepted (actually case insensitive):
-    type_rules.exclude.add_type('function')    # 1. typename
-    type_rules.exclude.add_type('Type')        # 2. Typename
-    type_rules.exclude.add_type('ModuleType')  # 2. TypenameType
+    type_rules.exclude.add('type: function')   # 1. typename
+    type_rules.exclude.add('type:  Type  ')    # 2. Typename
+    type_rules.exclude.add('type:ModuleType')  # 2. TypenameType
     NS_copy = NS.copy()
     NS_copy.update(F=test_basic_filtering, T=FilterRules, M=_dill)
     assert did_exclude(NS_copy, type_rules, excluded_subset={'F', 'T', 'M', 'Integer'})
