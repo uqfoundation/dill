@@ -11,7 +11,7 @@ avoid circular import problems.
 
 from __future__ import annotations
 
-__all__ = ['FilterRules', 'Filter', 'RuleType', 'size_filter']
+__all__ = ['FilterRules', 'Filter', 'RuleType', 'size_filter', 'EXCLUDE', 'INCLUDE']
 
 import math
 import random
@@ -41,8 +41,10 @@ def _format_bytes_size(size: Union[int, float]) -> Tuple[int, str]:
 
 # Namespace filtering.
 
-Filter = Union[str, Pattern[str], int, type, Callable]
 RuleType = Enum('RuleType', 'EXCLUDE INCLUDE', module=__name__)
+EXCLUDE, INCLUDE = RuleType.EXCLUDE, RuleType.INCLUDE
+
+Filter = Union[str, Pattern[str], int, type, Callable]
 Rule = Tuple[RuleType, Union[Filter, Iterable[Filter]]]
 
 class NamedObject:
@@ -70,9 +72,10 @@ def _iter(filters):
 
 @dataclass
 class FilterSet(MutableSet):
-    ids: Set[int] = field(default_factory=set)
+    """A superset of exclude/include filter sets."""
     names: Set[str] = field(default_factory=set)
     regexes: Set[Pattern[str]] = field(default_factory=set)
+    ids: Set[int] = field(default_factory=set)
     types: Set[type] = field(default_factory=set)
     funcs: Set[Callable] = field(default_factory=set)
     _fields = None
@@ -149,7 +152,25 @@ class FilterSet(MutableSet):
         if cls._rtypemap is None:
             cls._rtypemap = {cls._get_typename(k): v for k, v in _dill._reverse_typemap.items()}
         return cls._rtypemap[cls._get_typename(key)]
-    def add_type(self, typename):
+    def add_type(self, typename: str) -> None:
+        """Add a type filter to the set by passsing the type name.
+
+        Parameters:
+            typename: a type name (case insensitive).
+
+        Example:
+            Add some type filters to default exclusion filters:
+
+            >>> import dill
+            >>> filters = dill.settings['dump_module']['filters']
+            >>> filters.exclude.add_type('type')
+            >>> filters.exclude.add_type('Function')
+            >>> filters.exclude.add_type('ModuleType')
+            >>> filters
+            <ModuleFilters DEFAULT:
+              exclude=FilterSet(types={<class 'type'>, <class 'module'>, <class 'function'>}),
+              include=FilterSet()>
+        """
         self.types.add(self.get_type(typename))
 FilterSet._fields = tuple(field.name for field in fields(FilterSet))
 
@@ -176,6 +197,72 @@ class _FilterSetDescriptor:
             raise AttributeError(self.name) from None
 
 class FilterRules:
+    """Exclude and include rules for filtering a namespace.
+
+    Namespace filtering rules can be of two types, ``EXCLUDE`` and ``INCLUDE``
+    rules, and of five "flavors":
+
+        - `name`: match a variable name exactly;
+        - `regex`: match a variable name by regular expression;
+        - `id`: match a variable value by id;
+        - `type`: match a variable value by type (using ``isinstance``);
+        - `func`: callable filter, match a variable name and/or value by an
+          arbitrary logic.
+
+    A `name` filter is specified by a simple string, e.g. 'some_var'. If its
+    value is not a valid Python identifier, it is treated as a regular
+    expression instead.
+
+    A `regex` filter is specified either by a string containing a regular
+    expression, e.g. ``r'\w+_\d+'``, or by a :py:class:`re.Pattern` object.
+
+    An `id` filter is specified by an ``int`` that corresponds to the id of an
+    object. For example, to exclude a specific object ``obj`` that may me
+    assigned to multiple variables, just use ``id(obj)`` as an `id` filter.
+
+    A `type` filter is specified by a type-object, e.g. ``list`` or
+    ``type(some_var)``.  For adding `type` filters by the type name, see
+    :py:func:`FilterSet.add_type`.
+
+    A `func` filter can be any callable that accepts a single argument and
+    returns a boolean value, being it ``True`` if the object should be excluded
+    (or included) or ``False`` if it should *not* be excluded (or included).
+    The single argument is an object with two attributes: ``name`` is the
+    variable's name in the namespace and ``value`` is the object that it refers
+    to.  Below are some examples of `func` filters.
+
+    Exclude objects that were renamed after definition:
+
+    >>> renamed_filter = lambda obj: obj.name != getattr(obj.value, '__name__', obj.name)
+
+    Strict type filter, exclude ``int`` but not ``bool`` (an ``int`` subclass):
+
+    >>> int_filter = lambda obj: type(obj) == int
+
+    Filters may be added interactively after creating an empty ``FilterRules``
+    object:
+
+    >>> from dill.session import FilterRules
+    >>> filters = FilterRules()
+    >>> filters.exclude.add('some_var')
+    >>> filters.exclude.add(r'__\w+')
+    >>> filters.include.add(r'__\w+__') # keep __dunder__ variables
+
+    Or may be created all at once at initialization with "filter rule literals":
+
+    >>> from dill.session import FilterRules, EXCLUDE, INCLUDE
+    >>> filters = FilterRules([
+    ...     (EXCLUDE, ['some_var', r'__\+']),
+    ...     (INCLUDE, r'__\w+__'),
+    ... ])
+
+    The order that the exclude and include filters are added is irrelevant
+    because **exclude filters are always applied first**.  Therefore, generally
+    the rules work as a blocklist, with include filters acting as exceptions to
+    the exclusion rules.  However, **if there are only include filters, the
+    rules work as an allowlist** instead, and only the variables matched by the
+    include filters are kept.
+    """
     __slots__ = '_exclude', '_include'
     exclude = _FilterSetDescriptor()
     include = _FilterSetDescriptor()
@@ -186,12 +273,23 @@ class FilterRules:
             self.update(rules)
     def __repr__(self):
         desc = ["<FilterRules:"]
-        desc += (
-            ["{}={!r}".format(x, getattr(self, x)) for x in ('exclude', 'include') if hasattr(self, x)]
-            or ["NOT SET"]
-        )
-        sep = "\n  " if len(desc) > 2 else " "
-        return sep.join(desc).replace("set()", "{}") + ">"
+        for attr in ('exclude', 'include'):
+            set_desc = getattr(self, attr, None)
+            if set_desc is None:
+                continue
+            set_desc = repr(set_desc)
+            set_desc = re.sub(r'(\w+=set\(\)(, )?)', '', set_desc).replace(', )', ')')
+            if len(set_desc) > 78:
+                set_desc = ["FilterSet("] + re.findall(r'\w+={.+?}', set_desc)
+                set_desc = ",\n    ".join(set_desc) + "\n  )"
+            set_desc = "%s=%s" % (attr, set_desc)
+            if attr == 'exclude' and hasattr(self, 'include'):
+                set_desc += ','
+            desc.append(set_desc)
+        if len(desc) == 1:
+            desc += ["NOT SET"]
+        sep = "\n  " if sum(len(x) for x in desc) > 78 else " "
+        return sep.join(desc) + ">"
     # Proxy add(), discard(), remove() and clear() to FilterSets.
     def __proxy__(self, method, filter, *, rule_type=RuleType.EXCLUDE):
         if not isinstance(rule_type, RuleType):
@@ -282,7 +380,19 @@ from sys import getsizeof
 class size_filter:
     """Create a filter function with a limit for estimated object size.
 
-    Note: Doesn't work on PyPy. See ``help('``py:func:`sys.getsizeof```)'``
+    Parameters:
+        limit: maximum size allowed in bytes. May be an absolute number of bytes
+          as an ``int`` or ``float``, or a string representing a size in bytes,
+          e.g. ``1000``, ``10e3``, ``"1000"``, ``"1k"`` and ``"1 KiB"`` are all
+          valid and roughly equivalent (the last one represents 1024 bytes).
+        recursive: if `False`, the function won't recurse into the object's
+          attributes and items to estimate its size.
+
+    Returns:
+        A callable filter to be used with :py:func:`dump_module`.
+
+    Note:
+        Doesn't work on PyPy. See ``help(sys.getsizeof)``.
     """
     __slots__ = 'limit', 'recursive'
     # Cover "true" collections from 'builtins', 'collections' and 'collections.abc'.
@@ -297,7 +407,10 @@ class size_filter:
     MINIMUM_SIZE = getsizeof(None, 16)
     MISSING_SLOT = object()
 
-    def __init__(self, limit: str, recursive: bool = True):
+    def __init__(self,
+        limit: Union[int, float, str],
+        recursive: bool = True,
+    ) -> Callable[NamedObject, bool]:
         if _dill.IS_PYPY:
             raise NotImplementedError("size_filter() is not implemented for PyPy")
         self.limit = limit

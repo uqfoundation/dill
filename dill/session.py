@@ -32,13 +32,11 @@ from ._dill import (
     _getopt, _import_module, _is_builtin_module, _is_imported_module,
     _main_module, _reverse_typemap, __builtin__,
 )
-from ._utils import FilterRules, FilterSet, RuleType, size_filter
+from ._utils import FilterRules, FilterSet, size_filter, EXCLUDE, INCLUDE
 
 # Type hints.
-from typing import Iterable, Optional, Union
-from ._utils import Filter
-
-EXCLUDE, INCLUDE = RuleType.EXCLUDE, RuleType.INCLUDE
+from typing import Callable, Iterable, Optional, Union
+from ._utils import Filter, NamedObject, RuleType
 
 import pathlib
 import tempfile
@@ -60,7 +58,8 @@ class _PeekableReader:
     def peek(self, n):
         stream = self.stream
         try:
-            if hasattr(stream, 'flush'): stream.flush()
+            if hasattr(stream, 'flush'):
+                stream.flush()
             position = stream.tell()
             stream.seek(position)  # assert seek() works before reading
             chunk = stream.read(n)
@@ -100,7 +99,7 @@ def _module_map():
     modmap = SimpleNamespace(
         by_name=defaultdict(list),
         by_id=defaultdict(list),
-        top_level={},
+        top_level={},  # top-level modules
     )
     for modname, module in sys.modules.items():
         if modname in ('__main__', '__mp_main__') or not isinstance(module, ModuleType):
@@ -112,10 +111,12 @@ def _module_map():
             modmap.by_id[id(modobj)].append((modobj, objname, modname))
     return modmap
 
+# Unique objects (with no duplicates) that may be imported with "import as".
 IMPORTED_AS_TYPES = (ModuleType, TypeType, FunctionType, MethodType, BuiltinMethodType)
 if 'PyCapsuleType' in _reverse_typemap:
     IMPORTED_AS_TYPES += (_reverse_typemap['PyCapsuleType'],)
 
+# For unique objects of various types that have a '__module__' attribute.
 IMPORTED_AS_MODULES = [re.compile(x) for x in (
     'ctypes', 'typing', 'subprocess', 'threading',
     r'concurrent\.futures(\.\w+)?', r'multiprocessing(\.\w+)?'
@@ -134,7 +135,10 @@ def _lookup_module(modmap, name, obj, main_module):
                 return modname, objname
     return None, None
 
+BUILTIN_CONSTANTS = (None, False, True, NotImplemented)
+
 def _stash_modules(main_module, original_main):
+    """pop imported variables to be saved by reference in the __dill_imported* attributes"""
     modmap = _module_map()
     newmod = ModuleType(main_module.__name__)
 
@@ -143,13 +147,14 @@ def _stash_modules(main_module, original_main):
     imported_top_level = []  # keep separated for backward compatibility
     original = {}
     for name, obj in main_module.__dict__.items():
+        # Self-references.
         if obj is main_module:
-            original[name] = newmod  # self-reference
+            original[name] = newmod
         elif obj is main_module.__dict__:
             original[name] = newmod.__dict__
-        # Avoid incorrectly matching a singleton value in another package (ex.: __doc__).
-        elif any(obj is singleton for singleton in (None, False, True)) \
-                or isinstance(obj, ModuleType) and _is_builtin_module(obj):  # always saved by ref
+        # Avoid incorrectly matching a singleton value in another package (e.g. __doc__ == None).
+        elif (any(obj is constant for constant in BUILTIN_CONSTANTS)  # must compare by identity
+                or isinstance(obj, ModuleType) and _is_builtin_module(obj)):  # always saved by ref
             original[name] = obj
         else:
             source_module, objname = _lookup_module(modmap, name, obj, main_module=original_main)
@@ -169,27 +174,22 @@ def _stash_modules(main_module, original_main):
         newmod.__dill_imported = imported
         newmod.__dill_imported_as = imported_as
         newmod.__dill_imported_top_level = imported_top_level
-        if getattr(newmod, '__loader__', None) is None and _is_imported_module(main_module):
-            # Trick _is_imported_module() to force saving as an imported module.
-            newmod.__loader__ = True  # will be discarded by save_module()
         return newmod
     else:
         return main_module
 
 def _restore_modules(unpickler, main_module):
-    try:
-        for modname, name in main_module.__dict__.pop('__dill_imported'):
-            main_module.__dict__[name] = unpickler.find_class(modname, name)
-        for modname, objname, name in main_module.__dict__.pop('__dill_imported_as'):
-            main_module.__dict__[name] = unpickler.find_class(modname, objname)
-        for modname, name in main_module.__dict__.pop('__dill_imported_top_level'):
-            main_module.__dict__[name] = __import__(modname)
-    except KeyError:
-        pass
+    for modname, name in main_module.__dict__.pop('__dill_imported', ()):
+        main_module.__dict__[name] = unpickler.find_class(modname, name)
+    for modname, objname, name in main_module.__dict__.pop('__dill_imported_as', ()):
+        main_module.__dict__[name] = unpickler.find_class(modname, objname)
+    for modname, name in main_module.__dict__.pop('__dill_imported_top_level', ()):
+        main_module.__dict__[name] = _import_module(modname)
 
-def _filter_vars(main, base_rules, exclude, include):
+def _filter_vars(main_module, base_rules, exclude, include):
+    """apply exclude/include filters from arguments *and* settings"""
     rules = FilterRules()
-    mod_rules = base_rules.get(main.__name__, base_rules)
+    mod_rules = base_rules.get(main_module.__name__, base_rules)
     rules.exclude |= mod_rules.get_filters(EXCLUDE)
     rules.include |= mod_rules.get_filters(INCLUDE)
     if exclude is not None:
@@ -197,22 +197,22 @@ def _filter_vars(main, base_rules, exclude, include):
     if include is not None:
         rules.update([(INCLUDE, include)])
 
-    namespace = rules.filter_vars(main.__dict__)
-    if namespace is main.__dict__:
-        return main
+    namespace = rules.filter_vars(main_module.__dict__)
+    if namespace is main_module.__dict__:
+        return main_module
 
     if logger.isEnabledFor(logging.INFO):
         excluded = {name: type(value).__name__
-                for name, value in sorted(main.__dict__.items()) if name not in namespace}
-        excluded = str(excluded).translate({ord(","): "\n", ord("'"): None})
-        logger.info("Objects excluded from dump_session():\n%s\n", excluded)
+                for name, value in sorted(main_module.__dict__.items()) if name not in namespace}
+        excluded = str(excluded).translate({ord(","): "\n  ", ord("'"): None})
+        logger.info("Objects excluded from dump_session():\n  %s", excluded)
 
-    newmod = ModuleType(main.__name__)
+    newmod = ModuleType(main_module.__name__)
     newmod.__dict__.update(namespace)
     for name, obj in namespace.items():
-        if obj is main:
+        if obj is main_module:
             setattr(newmod, name, newmod)
-        elif obj is main.__dict__:
+        elif obj is main_module.__dict__:
             setattr(newmod, name, newmod.__dict__)
     return newmod
 
@@ -232,6 +232,13 @@ def dump_module(
     interpreter session), an imported module, or a module-type object (e.g.
     built with :py:class:`~types.ModuleType`), to a file. The pickled
     module can then be restored with the function :py:func:`load_module`.
+
+    Only a subset of the module's variables may be saved if exclusion/inclusion
+    filters are specified.  Filters apply to every variable name or value and
+    determine if they should be saved or not.  They can be set in
+    ``dill.settings['dump_module']['filters']`` or passed directly to the
+    ``exclude`` and ``include`` parameters.  See :py:class:`ModuleFilters` for
+    details.
 
     Parameters:
         filename: a path-like object or a writable stream.
@@ -288,6 +295,12 @@ def dump_module(
           >>> [foo.sin(x) for x in foo.values]
           [0.8414709848078965, 0.9092974268256817, 0.1411200080598672]
 
+        - Save current session but exclude some variables:
+
+          >>> import dill
+          >>> num, text, alist = 1, 'apple', [4, 9, 16]
+          >>> dill.dump_module(exclude=['text', int])) # only 'alist' is saved
+
     *Changed in version 0.3.6:* Function ``dump_session()`` was renamed to
     ``dump_module()``.  Parameters ``main`` and ``byref`` were renamed to
     ``module`` and ``refimported``, respectively.
@@ -324,15 +337,25 @@ def dump_module(
     main = _filter_vars(main, base_rules, exclude, include)
     if refimported:
         main = _stash_modules(main, original_main)
+    if main is not original_main:
+        # Some empty attributes like __doc__ may have been added by ModuleType().
+        added_names = set(main.__dict__)
+        added_names.difference_update(original_main.__dict__)
+        added_names.difference_update('__dill_imported%s' % s for s in ('', '_as', '_top_level'))
+        for name in added_names:
+            delattr(main, name)
+        if getattr(main, '__loader__', None) is None and _is_imported_module(original_main):
+            # Trick _is_imported_module() to force saving this as an imported module.
+            main.__loader__ = True  # will be discarded by _dill.save_module()
     with _open(filename, 'wb') as file:
         pickler = Pickler(file, protocol, **kwds)
-        if main is not original_main:
-            pickler._original_main = original_main
         pickler._main = main     #FIXME: dill.settings are disabled
         pickler._byref = False   # disable pickling by name reference
         pickler._recurse = False # disable pickling recursion for globals
         pickler._session = True  # is best indicator of when pickling a session
         pickler._first_pass = True
+        if main is not original_main:
+            pickler._original_main = original_main
         pickler.dump(main)
     return
 
@@ -350,10 +373,12 @@ def _identify_module(file, main=None):
     try:
         for opcode, arg, pos in genops(file.peek(256)):
             if not found_import:
+                # Find the first '_import_module' constructor.
                 if opcode.name in ('GLOBAL', 'SHORT_BINUNICODE') and \
                         arg.endswith('_import_module'):
                     found_import = True
             else:
+                # Just after that, the argument is the main module name.
                 if opcode.name in UNICODE:
                     return arg
         else:
@@ -361,12 +386,12 @@ def _identify_module(file, main=None):
     except (NotImplementedError, ValueError) as error:
         # ValueError occours when the end of the chunk is reached (without a STOP).
         if isinstance(error, NotImplementedError) and main is not None:
-            # file is not peekable, but we have main.
+            # The file is not peekable, but we have the argument main.
             return None
         raise UnpicklingError("unable to identify main module") from error
 
 def is_pickled_module(filename, importable: bool = True) -> bool:
-    """Check if a file is a module state pickle file.
+    """Check if file is a pickled module state.
 
     Parameters:
         filename: a path-like object or a readable stream.
@@ -377,6 +402,31 @@ def is_pickled_module(filename, importable: bool = True) -> bool:
         `True` if the pickle file at ``filename`` was generated with
         :py:func:`dump_module` **AND** the module whose state is saved in it is
         of the kind specified by the ``importable`` argument. `False` otherwise.
+
+    Examples:
+        Create three types of pickle files:
+
+        >>> import dill
+        >>> import types
+        >>> dill.dump_module('module_session.pkl') # saves __main__
+        >>> dill.dump_module('module_object.pkl', module=types.ModuleType('example'))
+        >>> with open('common_object.pkl', 'wb') as file:
+        >>>     dill.dump('example', file)
+
+        Test each file's kind:
+
+        >>> dill.is_pickled_module('module_session.pkl') # the module is importable
+        True
+        >>> dill.is_pickled_module('module_session.pkl', importable=False)
+        False
+        >>> dill.is_pickled_module('module_object.pkl') # the module is not importable
+        False
+        >>> dill.is_pickled_module('module_object.pkl', importable=False)
+        True
+        >>> dill.is_pickled_module('common_object.pkl') # always return False
+        False
+        >>> dill.is_pickled_module('common_object.pkl', importable=False)
+        False
     """
     with _open(filename, 'rb', peekable=True) as file:
         try:
@@ -497,13 +547,13 @@ def load_module(
             raise TypeError("both 'module' and 'main' arguments were used")
         module = kwds.pop('main')
 
-    main = module
     with _open(filename, 'rb', peekable=True) as file:
         #FIXME: dill.settings are disabled
         unpickler = Unpickler(file, **kwds)
         unpickler._session = True
 
-        # Resolve unpickler._main
+        # Resolve main.
+        main = module
         pickle_main = _identify_module(file, main)
         if main is None:
             main = pickle_main
@@ -515,7 +565,6 @@ def load_module(
                 main = _import_module(main)
         if not isinstance(main, ModuleType):
             raise TypeError("%r is not a module" % main)
-        unpickler._main = main
 
         # Check against the pickle's main.
         is_main_imported = _is_imported_module(main)
@@ -526,17 +575,18 @@ def load_module(
             error_msg = "can't update{} module{} %r with the saved state of{} module{} %r"
             if main.__name__ != pickle_main:
                 raise ValueError(error_msg.format("", "", "", "") % (main.__name__, pickle_main))
-            if is_runtime_mod and is_main_imported:
+            elif is_runtime_mod and is_main_imported:
                 raise ValueError(
                     error_msg.format(" imported", "", "", "-type object")
                     % (main.__name__, main.__name__)
                 )
-            if not is_runtime_mod and not is_main_imported:
+            elif not is_runtime_mod and not is_main_imported:
                 raise ValueError(
                     error_msg.format("", "-type object", " imported", "")
                     % (main.__name__, main.__name__)
                 )
 
+        # Load the module's state.
         try:
             if not is_main_imported:
                 # This is for find_class() to be able to locate it.
@@ -619,31 +669,94 @@ def load_module_asdict(
         raise TypeError("'module' is an invalid keyword argument for load_module_asdict()")
     with _open(filename, 'rb', peekable=True) as file:
         main_name = _identify_module(file)
-        old_main = sys.modules.get(main_name)
+        original_main = sys.modules.get(main_name)
         main = ModuleType(main_name)
         if update:
-            if old_main is None:
-                old_main = _import_module(main_name)
-            main.__dict__.update(old_main.__dict__)
+            if original_main is None:
+                original_main = _import_module(main_name)
+            main.__dict__.update(original_main.__dict__)
         else:
             main.__builtins__ = __builtin__
         try:
             sys.modules[main_name] = main
             load_module(file, **kwds)
         finally:
-            if old_main is None:
+            if original_main is None:
                 del sys.modules[main_name]
             else:
-                sys.modules[main_name] = old_main
+                sys.modules[main_name] = original_main
     main.__session__ = str(filename)
     return main.__dict__
 
 
-#############################
-#  Module filters settings  #
-#############################
-
 class ModuleFilters(FilterRules):
+    """Stores default filtering rules for modules.
+
+    :py:class:`FilterRules` subclass with a tree-like structure that may hold
+    exclusion/inclusion filters for specific modules and submodules.  See the
+    base class documentation to learn more about how to create and use filters.
+
+    This is the type of ``dill.settings['dump_module']['filters']``:
+
+    >>> import dill
+    >>> filters = dill.settings['dump_module']['filters']
+    >>> filters
+    <ModuleFilters DEFAULT: exclude=FilterSet(), include=FilterSet()>
+
+    Exclusion and inclusion filters for global variables can be added using the
+    ``add()`` methods of the ``exclude`` and ``include`` attributes, or of the
+    ``ModuleFilters`` object itself.  In the latter case, the filter is added to
+    its ``exclude`` :py:class:`FilterSet` by default:
+
+    >>> filters.add('some_var') # exclude a variable named 'some_var'
+    >>> filters.exclude.add('_.*') # exclude any variable with a name prefixed by '_'
+    >>> filters.include.add('_keep_this') # an exception to the rule above
+    <ModuleFilters DEFAULT:
+      exclude=FilterSet(names={'some_var'}, regexes={re.compile('_.*')}),
+      include=FilterSet(names={'_keep_this'})>
+
+    Similarly, a filter can be discarded with the ``discard()`` method:
+
+    >>> filters.discard('some_var')
+    >>> filters.exclude.discard('_.*')
+    >>> filters
+    <ModuleFilters DEFAULT: exclude=FilterSet(), include=FilterSet(names={'_keep_this'})>
+
+    Note how, after the last operation, ``filters.exclude`` was left empty but
+    ``filters.include`` still contains a name filter.  In cases like this, i.e.
+    when ``len(filters.exclude) == 0 and len(filters.include) > 0.``, the
+    filters are treated as an "allowlist", which means that **only** the
+    variables that match the ``include`` filters will be pickled.  In this
+    example, only the variable ``_keep_this``, if it existed, would be saved.
+
+    To create filters specific for a module and its submodules, use the
+    following syntax to add a child node to the default ``ModuleFilters``:
+
+    >>> from dill.session import EXCLUDE, INCLUDE
+    >>> filters['foo'] = []
+    >>> filters['foo'] # override default with empty rules for module 'foo'
+    <ModuleFilters for 'foo': exclude=FilterSet(), include=FilterSet()>
+    >>> filters['bar.baz'] = [(EXCLUDE, r'\w+\d+'), (INCLUDE, 'ERROR404')]
+    >>> filters['bar.baz'] # specific rules for the submodule 'bar.baz'
+    <ModuleFilters for 'bar.baz':
+      exclude=FilterSet(regexes={re.compile('\\w+\\d+')}),
+      include=FilterSet(names={'ERROR404'})>
+    >>> filters['bar'] # but the default rules would apply for the module 'bar'
+    <ModuleFilters for 'bar': NOT SET>
+
+    Module-specific filter rules may be accessed using different syntaxes:
+
+    >>> filters['bar.baz'] is filters['bar']['baz'] is filters.bar.baz
+    True
+
+    Note, however, that using the attribute syntax to directly set rules for
+    a submodule will fail if its parent module doesn't have an entry yet:
+
+    >>> filters.parent.child = [] # filters.parent doesn't exist
+    AttributeError: 'ModuleFilters' object has no attribute 'parent'
+    >>> filters['parent.child'] = [] # use this syntax instead
+    >>> filters.parent.child.grandchild = [(EXCLUDE, str)] # works fine
+    """
     __slots__ = 'module', '_parent', '__dict__'
     _fields = tuple(x.lstrip('_') for x in FilterRules.__slots__)
     def __init__(self,
@@ -654,11 +767,13 @@ class ModuleFilters(FilterRules):
         # Don't call super().__init__()
         if rules is not None:
             super().__init__(rules)
+        if parent is not None and parent.module != 'DEFAULT':
+            module = '%s.%s' % (parent.module, module)
         super().__setattr__('module', module)
         super().__setattr__('_parent', parent)
     def __repr__(self):
         desc = "DEFAULT" if self.module == 'DEFAULT' else "for %r" % self.module
-        return "<ModuleFilters %s %s>" % (desc, super().__repr__())
+        return "<ModuleFilters %s:%s" % (desc, super().__repr__().partition(':')[-1])
     def __setattr__(self, name, value):
         if name in FilterRules.__slots__:
             # Don't interfere with superclass attributes.
@@ -705,17 +820,37 @@ class ModuleFilters(FilterRules):
                 raise
             return self._parent.get_filters(rule_type)
 
+## Session filter factories ##
 
-##############################
-#  Session filter factories  #
-##############################
+def ipython_filter(*, keep_history: str = 'input') -> Callable[NamedObject, bool]:
+    """Filter factory to exclude IPython hidden variables.
 
-def ipython_filter(*, keep_history: str = 'input'):
-    """filter factory for IPython sessions (can't be added to settings currently)
+    When saving the session with :py:func:`dump_module` in an IPython
+    interpreter, hidden variables, i.e. variables listed by ``dir()`` but
+    not listed by the ``%who`` magic command, are saved unless they are excluded
+    by filters.  This function generates a filter that will exclude these hidden
+    variables from the list of saved variables, with the optional exception of
+    command history variables.
 
-    Usage:
-    >>> from dill.session import *
-    >>> dump_session(exclude=[ipython_filter()])
+    Parameters:
+        keep_history: whether to keep (i.e. not exclude) the input and output
+          history of the IPython interactive session. Accepted values:
+
+            - `'input'`: the input history contained in the hidden variables
+              ``In``, ``_ih``, ``_i``, ``_i1``, ``_i2``, etc. will be saved.
+            - `'output'`, the output history contained in the hidden variables
+              ``Out``, ``_oh``, ``_``, ``_1``, ``_2``, etc. will be saved.
+            - `'both'`: both the input and output history will be saved.
+            - `'none'`: all the hidden history variables will be excluded.
+
+    Returns:
+        An exclude filter function to be used with :py:func:`dump_module`.
+
+    Example:
+
+        >>> import dill
+        >>> from dill.session import ipython_filter
+        >>> dill.dump_module(exclude=ipython_filter(keep_history='none'))
     """
     HISTORY_OPTIONS = {'input', 'output', 'both', 'none'}
     if keep_history not in HISTORY_OPTIONS:
@@ -736,7 +871,7 @@ def ipython_filter(*, keep_history: str = 'input'):
     nonmatching = object()  # This can never be in user_ns
     interactive_vars = {x for x in user_ns if user_ns[x] is not user_ns_hidden.get(x, nonmatching)}
 
-    # Input and output history.
+    # Input and output history hidden variables.
     history_regex = []
     if keep_history in {'input', 'both'}:
         interactive_vars |= {'_ih', 'In', '_i', '_ii', '_iii'}
