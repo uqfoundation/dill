@@ -82,7 +82,7 @@ class FilterSet(MutableSet):
     _rtypemap = None
     _typename_regex = re.compile(r'\w+(?=Type$)|\w+$', re.IGNORECASE)
     def _match_type(self, filter):
-        filter_type = type_filter
+        filter_type = type(filter)
         if filter_type == str:
             if filter.isidentifier():
                 field = 'names'

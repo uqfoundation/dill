@@ -358,6 +358,8 @@ class Pickler(StockPickler):
     """python's Pickler extended to interpreter sessions"""
     dispatch = MetaCatchingDict(StockPickler.dispatch.copy())
     _session = False
+    _first_pass = False
+    _original_main = None
     from .settings import settings
 
     def __init__(self, file, *args, **kwds):
