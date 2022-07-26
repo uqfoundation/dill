@@ -115,8 +115,9 @@ def findsource(object):
     module = getmodule(object)
     try: file = getfile(module)
     except TypeError: file = None
-    if IS_IPYTHON and module and module.__name__ == '__main__' and not file:
-        # quickfix for functions and classes in IPython interpreter
+    is_module_main = (module and module.__name__ == '__main__' and not file)
+    if IS_IPYTHON and is_module_main:
+        #FIXME: quick fix for functions and classes in IPython interpreter
         try:
             file = getfile(object)
             sourcefile = getsourcefile(object)
@@ -137,7 +138,7 @@ def findsource(object):
             history = '\n'.join(get_ipython().history_manager.input_hist_parsed)
             lines = [line + '\n' for line in history.splitlines()]
     # use readline when working in interpreter (i.e. __main__ and not file)
-    elif module and module.__name__ == '__main__' and not file:
+    elif is_module_main:
         try:
             import readline
             err = ''
