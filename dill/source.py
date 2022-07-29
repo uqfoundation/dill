@@ -12,7 +12,7 @@
 """
 Extensions to python's 'inspect' module, which can be used
 to retrieve information from live python objects. The methods
-defined in this module are augmented to facilitate access to 
+defined in this module are augmented to facilitate access to
 source code of interactively defined functions and classes,
 as well as provide access to source code for objects defined
 in a file.
@@ -29,6 +29,8 @@ from inspect import (getblock, getfile, getmodule, getsourcefile, indentsize,
                      ismodule, istraceback)
 from tokenize import TokenError
 
+from ._dill import IS_IPYTHON
+
 
 def isfrommain(obj):
     "check if object was built in __main__"
@@ -41,7 +43,7 @@ def isfrommain(obj):
 def isdynamic(obj):
     "check if object was built in the interpreter"
     try: file = getfile(obj)
-    except TypeError: file = None 
+    except TypeError: file = None
     if file == '<stdin>' and isfrommain(obj):
         return True
     return False
@@ -112,10 +114,32 @@ def findsource(object):
 
     module = getmodule(object)
     try: file = getfile(module)
-    except TypeError: file = None 
+    except TypeError: file = None
+    is_module_main = (module and module.__name__ == '__main__' and not file)
+    if IS_IPYTHON and is_module_main:
+        #FIXME: quick fix for functions and classes in IPython interpreter
+        try:
+            file = getfile(object)
+            sourcefile = getsourcefile(object)
+        except TypeError:
+            if isclass(object):
+                for object_method in filter(isfunction, object.__dict__.values()):
+                    # look for a method of the class
+                    file_candidate = getfile(object_method)
+                    if not file_candidate.startswith('<ipython-input-'):
+                        continue
+                    file = file_candidate
+                    sourcefile = getsourcefile(object_method)
+                    break
+        if file:
+            lines = linecache.getlines(file)
+        else:
+            # fallback to use history
+            history = '\n'.join(get_ipython().history_manager.input_hist_parsed)
+            lines = [line + '\n' for line in history.splitlines()]
     # use readline when working in interpreter (i.e. __main__ and not file)
-    if module and module.__name__ == '__main__' and not file:
-        try: 
+    elif is_module_main:
+        try:
             import readline
             err = ''
         except ImportError:
@@ -130,7 +154,7 @@ def findsource(object):
     else:
         try: # special handling for class instances
             if not isclass(object) and isclass(type(object)): # __class__
-                file = getfile(module)        
+                file = getfile(module)
                 sourcefile = getsourcefile(module)
             else: # builtins fail with a TypeError
                 file = getfile(object)
@@ -456,7 +480,7 @@ def _isstring(object): #XXX: isstringlike better?
 
 def indent(code, spaces=4):
     '''indent a block of code with whitespace (default is 4 spaces)'''
-    indent = indentsize(code) 
+    indent = indentsize(code)
     if type(spaces) is int: spaces = ' '*spaces
     # if '\t' is provided, will indent with a tab
     nspaces = indentsize(spaces)
@@ -486,7 +510,7 @@ def indent(code, spaces=4):
 
 def _outdent(lines, spaces=None, all=True):
     '''outdent lines of code, accounting for docs and line continuations'''
-    indent = indentsize(lines[0]) 
+    indent = indentsize(lines[0])
     if spaces is None or spaces > indent or spaces < 0: spaces = indent
     for i in range(len(lines) if all else 1):
         #FIXME: works... but shouldn't outdent 2nd+ lines of multiline doc
@@ -498,7 +522,7 @@ def _outdent(lines, spaces=None, all=True):
 
 def outdent(code, spaces=None, all=True):
     '''outdent a block of code (default is to strip all leading whitespace)'''
-    indent = indentsize(code) 
+    indent = indentsize(code)
     if spaces is None or spaces > indent or spaces < 0: spaces = indent
     #XXX: will this delete '\n' in some cases?
     if not all: return code[spaces:]
@@ -554,7 +578,7 @@ def dumpsource(object, alias='', new=False, enclose=True):
     else:
         stub = alias
         pre = '%s = ' % stub if alias else alias
-    
+
     # if a 'new' instance is not needed, then just dump and load
     if not new or not _isinstance(object):
         code += pre + 'dill.loads(%s)\n' % pik
@@ -829,7 +853,7 @@ def _closuredimport(func, alias='', builtin=False):
                          re.match(pat, line)]
             if not candidate:
                 mod = getname(getmodule(fobj))
-                #HACK: get file containing 'inner' function; is func there? 
+                #HACK: get file containing 'inner' function; is func there?
                 lines,_ = findsource(fobj)
                 candidate = [line for line in lines \
                              if getname(fobj) in line and re.match(pat, line)]
