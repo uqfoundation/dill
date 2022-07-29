@@ -170,7 +170,7 @@ class _FilterSetDescriptor:
         if isinstance(value, FilterSet):
             setattr(obj, self._name, value)
         else:
-            setattr(obj, self._name, FilterSet(value))
+            setattr(obj, self._name, FilterSet._from_iterable(value))
     def __get__(self, obj, objtype=None):
         try:
             return getattr(obj, self._name)
@@ -210,7 +210,7 @@ class FilterRules:
     ``type(some_var)``, or by a string with the format ``"type:<typename>"``,
     where ``<typename>`` is a type name (case insensitive) known by ``dill`` ,
     e.g. ``"type:function"`` or ``"type: FunctionType"``.  These include all
-    the types defined in the module :py:module:`types` and many more.
+    the types defined in the module :py:mod:`types` and many more.
 
     A `func` filter can be any callable that accepts a single argument and
     returns a boolean value, being it ``True`` if the object should be excluded

@@ -757,7 +757,7 @@ class ModuleFilters(FilterRules):
     >>> filters['parent.child'] = [] # use this syntax instead
     >>> filters.parent.child.grandchild = [(EXCLUDE, str)] # works fine
     """
-    __slots__ = 'module', '_parent', '__dict__'
+    __slots__ = '_module', '_parent', '__dict__'
     _fields = tuple(x.lstrip('_') for x in FilterRules.__slots__)
     def __init__(self,
         rules: Union[Iterable[Rule], FilterRules] = None,
@@ -767,12 +767,12 @@ class ModuleFilters(FilterRules):
         # Don't call super().__init__()
         if rules is not None:
             super().__init__(rules)
-        if parent is not None and parent.module != 'DEFAULT':
-            module = '%s.%s' % (parent.module, module)
-        super().__setattr__('module', module)
+        if parent is not None and parent._module != 'DEFAULT':
+            module = '%s.%s' % (parent._module, module)
+        super().__setattr__('_module', module)
         super().__setattr__('_parent', parent)
     def __repr__(self):
-        desc = "DEFAULT" if self.module == 'DEFAULT' else "for %r" % self.module
+        desc = "DEFAULT" if self._module == 'DEFAULT' else "for %r" % self._module
         return "<ModuleFilters %s:%s" % (desc, super().__repr__().partition(':')[-1])
     def __setattr__(self, name, value):
         if name in FilterRules.__slots__:
@@ -781,7 +781,7 @@ class ModuleFilters(FilterRules):
         elif name in self._fields:
             if not any(hasattr(self, x) for x in FilterRules.__slots__):
                 # Initialize other. This is not a placeholder anymore.
-                other = '_include' if name == 'exclude' else '_exclude'
+                other = 'include' if name == 'exclude' else 'exclude'
                 super().__setattr__(other, ())
             super().__setattr__(name, value)
         else:
