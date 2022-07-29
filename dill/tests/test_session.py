@@ -292,7 +292,7 @@ def test_ipython_filter():
     user_vars = set(user_ns_actual)
     def namespace_matches(keep_history, should_keep_vars):
         rules = FilterRules([(EXCLUDE, ipython_filter(keep_history=keep_history))])
-        return set(rules.filter_vars(user_ns)) == user_vars | should_keep_vars
+        return set(rules.apply_filters(user_ns)) == user_vars | should_keep_vars
     assert namespace_matches(keep_history='input', should_keep_vars={'_i1'})
     assert namespace_matches(keep_history='output', should_keep_vars={'_1'})
     assert namespace_matches(keep_history='both', should_keep_vars={'_i1', '_1'})

@@ -25,7 +25,7 @@ NS = {
 
 def did_exclude(namespace, rules, excluded_subset):
     rules = FilterRules(rules)
-    filtered = rules.filter_vars(namespace)
+    filtered = rules.apply_filters(namespace)
     return set(namespace).difference(filtered) == excluded_subset
 
 def test_basic_filtering():
