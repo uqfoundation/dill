@@ -349,13 +349,13 @@ def _identify_module(file, main=None):
             raise ValueError
         return module_name
     except StopIteration:
-        raise UnpicklingError("reached STOP without finding main module") from None
+        raise UnpicklingError("reached STOP without finding module") from None
     except (NotImplementedError, ValueError) as error:
         # ValueError occours when the end of the chunk is reached (without a STOP).
         if isinstance(error, NotImplementedError) and main is not None:
             # file is not peekable, but we have main.
             return None
-        raise UnpicklingError("unable to identify main module") from error
+        raise UnpicklingError("unable to identify module") from error
 
 def is_pickled_module(filename, importable: bool = True) -> bool:
     """Check if a file is a module state pickle file.
@@ -393,10 +393,39 @@ def load_module(
     :py:class:`~types.ModuleType`).
 
     When restoring the state of a non-importable module-type object, the
-    current instance of this module may be passed as the argument ``main``.
+    current instance of this module may be passed as the argument ``module``.
     Otherwise, a new instance is created with :py:class:`~types.ModuleType`
     and returned.
 
+    Passing a `module` argument forces dill to verify that the module being
+    loaded is compatible with the argument value.  Additionally, if the argument
+    is a module (instead of a module name), it supresses the return value.
+
+    This call loads ``math`` and returns it at the end:
+    
+        >>> import dill
+        >>> # load module -> restore state -> return module
+        >>> dill.load_module('math_session.pkl')
+        <module 'math' (built-in)>
+
+    Passing the module name does the same as above, but also verifies that the
+    module loaded, restored and returned is indeed ``math``:
+    
+        >>> import dill
+        >>> # load module -> check name/kind -> restore state -> return module
+        >>> dill.load_module('math_session.pkl', module='math')
+        <module 'math' (built-in)>
+        >>> dill.load_module('math_session.pkl', module='cmath')
+        ValueError: can't update module 'cmath' with the saved state of module 'math'
+
+    Passing the module itself instead of its name have the additional effect of
+    supressing the return value (and the module is already loaded at this point):
+    
+        >>> import dill
+        >>> import math
+        >>> # check name/kind -> restore state -> return None
+        >>> dill.load_module('math_session.pkl', module=math)
+        
     Parameters:
         filename: a path-like object or a readable stream.
         module: a module object or the name of an importable module;
@@ -406,12 +435,12 @@ def load_module(
 
     Raises:
         :py:exc:`UnpicklingError`: if unpickling fails.
-        :py:exc:`ValueError`: if the argument ``main`` and module saved
+        :py:exc:`ValueError`: if the argument ``module`` and module saved
             at ``filename`` are incompatible.
 
     Returns:
         A module object, if the saved module is not :py:mod:`__main__` or
-        a module instance wasn't provided with the argument ``main``.
+        a module instance wasn't provided with the argument ``module``.
 
     Examples:
 
