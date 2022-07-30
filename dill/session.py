@@ -8,7 +8,29 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 """
 Pickle and restore the intepreter session or a module's state.
+
+The functions :py:func:`dump_module`, :py:func:`load_module` and
+:py:func:`load_module_asdict` are capable of saving and restoring, as long as
+objects are pickleable, the complete state of a module.  For imported modules
+that are pickled, `dill` assumes that they are importable when unpickling.
+
+Contrary of using :py:func:`dill.dump` and :py:func:`dill.load` to save and load
+a module object, :py:func:`dill.dump_module` always try to pickle the module by
+value (including built-in modules).  Also, options like
+``dill.settings['byref']`` and ``dill.settings['recurse']`` don't affect its
+behavior.
+
+However, if a module contains references to objects originating from other
+modules, that would prevent it from pickling or drastically increase its disk
+size, they can be saved by reference instead of by value using the option
+``refimported``.
+
+With :py:func:`dump_module`, namespace filters may be used to restrict the list
+of variables pickled to a subset of those in the module, based on their names or
+values.  Also, using :py:func:`load_module_asdict` allows one to load the
+variables from different saved states of the same module into dictionaries.
 """
+
 
 __all__ = [
     'dump_module', 'load_module', 'load_module_asdict', 'is_pickled_module',
