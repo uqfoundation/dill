@@ -268,7 +268,7 @@ def dump_module(
 
     Note:
         Currently, ``dill.settings['byref']`` and ``dill.settings['recurse']``
-        don't apply to this function.`
+        don't apply to this function.
     """
     for old_par, par in [('main', 'module'), ('byref', 'refimported')]:
         if old_par in kwds:
@@ -397,35 +397,6 @@ def load_module(
     Otherwise, a new instance is created with :py:class:`~types.ModuleType`
     and returned.
 
-    Passing a `module` argument forces dill to verify that the module being
-    loaded is compatible with the argument value.  Additionally, if the argument
-    is a module (instead of a module name), it supresses the return value.
-
-    This call loads ``math`` and returns it at the end:
-    
-        >>> import dill
-        >>> # load module -> restore state -> return module
-        >>> dill.load_module('math_session.pkl')
-        <module 'math' (built-in)>
-
-    Passing the module name does the same as above, but also verifies that the
-    module loaded, restored and returned is indeed ``math``:
-    
-        >>> import dill
-        >>> # load module -> check name/kind -> restore state -> return module
-        >>> dill.load_module('math_session.pkl', module='math')
-        <module 'math' (built-in)>
-        >>> dill.load_module('math_session.pkl', module='cmath')
-        ValueError: can't update module 'cmath' with the saved state of module 'math'
-
-    Passing the module itself instead of its name have the additional effect of
-    supressing the return value (and the module is already loaded at this point):
-    
-        >>> import dill
-        >>> import math
-        >>> # check name/kind -> restore state -> return None
-        >>> dill.load_module('math_session.pkl', module=math)
-        
     Parameters:
         filename: a path-like object or a readable stream.
         module: a module object or the name of an importable module;
@@ -441,6 +412,60 @@ def load_module(
     Returns:
         A module object, if the saved module is not :py:mod:`__main__` or
         a module instance wasn't provided with the argument ``module``.
+
+    Passing an argument to ``module`` forces `dill` to verify that the module
+    being loaded is compatible with the argument value.  Additionally, if the
+    argument is a module (instead of a module name), it supresses the return
+    value. Each case and behavior is exemplified below:
+
+        1. `module`: ``None`` --- This call loads a previously saved state of
+        the module ``math`` and returns this at the end:
+
+            >>> import dill
+            >>> # load module -> restore state -> return module
+            >>> dill.load_module('math_session.pkl')
+            <module 'math' (built-in)>
+
+        2. `module`: ``str`` --- Passing the module name does the same as above,
+        but also verifies that the module loaded, restored and returned is
+        indeed ``math``:
+
+            >>> import dill
+            >>> # load module -> check name/kind -> restore state -> return module
+            >>> dill.load_module('math_session.pkl', module='math')
+            <module 'math' (built-in)>
+            >>> dill.load_module('math_session.pkl', module='cmath')
+            ValueError: can't update module 'cmath' with the saved state of module 'math'
+
+        3. `module`: ``ModuleType`` --- Passing the module itself instead of its
+        name have the additional effect of supressing the return value (and the
+        module is already loaded at this point):
+
+            >>> import dill
+            >>> import math
+            >>> # check name/kind -> restore state -> return None
+            >>> dill.load_module('math_session.pkl', module=math)
+
+    For imported modules, the return value is meant as a convenience, so that
+    the function call can substitute an ``import`` statement.  Therefore these
+    statements:
+
+        >>> import dill
+        >>> math2 = dill.load_module('math_session.pkl', module='math')
+
+    are equivalent to these:
+
+        >>> import dill
+        >>> import math as math2
+        >>> dill.load_module('math_session.pkl', module=math2)
+
+    Note that, in both cases, ``math2`` is just a reference to
+    ``sys.modules['math']``:
+
+        >>> import math
+        >>> import sys
+        >>> math is math2 is sys.modules['math']
+        True
 
     Examples:
 
