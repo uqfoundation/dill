@@ -460,9 +460,14 @@ class Pickler(StockPickler):
         """
         Use object name in the module namespace as a last resource to try to
         save it by reference when pickling fails.
-
-        Modified from Pickler.save_dict() and Pickler._batch_setitems().
         """
+        # Modified from Python Standard Library's pickle._Pickler.save_dict()
+        # and pickle._Pickler._batch_setitems().
+        #
+        # Copyright (c) 2001-2022 Python Software Foundation; All Rights Reserved
+        # Changes summary: use SETITEM for all pickle protocols and
+        #   conditionally pass an extra argument to a custom implementation of
+        #   the method 'save'.
         if not self._refonfail:
             super().save_dict(obj)
             return
