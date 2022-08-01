@@ -198,7 +198,7 @@ def test_method_decorator():
 
 # test slots
 class Y(object):
-  __slots__ = ['y']
+  __slots__ = ('y', '__weakref__')
   def __init__(self, y):
     self.y = y
 

@@ -1012,13 +1012,6 @@ def _get_attr(self, name):
     # stop recursive pickling
     return getattr(self, name, None) or getattr(__builtin__, name)
 
-def _dict_from_dictproxy(dictproxy):
-    _dict = dictproxy.copy() # convert dictproxy to dict
-    _dict.pop('__dict__', None)
-    _dict.pop('__weakref__', None)
-    _dict.pop('__prepare__', None)
-    return _dict
-
 def _import_module(import_name, safe=False):
     try:
         if import_name.startswith('__runtime__.'):
@@ -1712,20 +1705,19 @@ def save_type(pickler, obj, postproc_list=None):
         obj_recursive = id(obj) in getattr(pickler, '_postproc', ())
         incorrectly_named = not _locate_function(obj, pickler)
         if not _byref and not obj_recursive and incorrectly_named: # not a function, but the name was held over
-            if issubclass(type(obj), type):
-                # thanks to Tom Stepleton pointing out pickler._session unneeded
-                _t = 'T2'
-                logger.trace(pickler, "%s: %s", _t, obj)
-                _dict = _dict_from_dictproxy(obj.__dict__)
-            else:
-                _t = 'T3'
-                logger.trace(pickler, "%s: %s", _t, obj)
-                _dict = obj.__dict__
+            # thanks to Tom Stepleton pointing out pickler._session unneeded
+            logger.trace(pickler, "T2: %s", obj)
+            _dict = obj.__dict__.copy() # convert dictproxy to dict
            #print (_dict)
            #print ("%s\n%s" % (type(obj), obj.__name__))
            #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
-            for name in _dict.get("__slots__", []):
+            slots = _dict.get('__slots__', ())
+            if type(slots) == str: slots = (slots,) # __slots__ accepts a single string
+            for name in slots:
                 del _dict[name]
+            _dict.pop('__dict__', None)
+            _dict.pop('__weakref__', None)
+            _dict.pop('__prepare__', None)
             if obj_name != obj.__name__:
                 if postproc_list is None:
                     postproc_list = []
@@ -1733,7 +1725,7 @@ def save_type(pickler, obj, postproc_list=None):
             _save_with_postproc(pickler, (_create_type, (
                 type(obj), obj.__name__, obj.__bases__, _dict
             )), obj=obj, postproc_list=postproc_list)
-            logger.trace(pickler, "# %s", _t)
+            logger.trace(pickler, "# T2")
         else:
             logger.trace(pickler, "T4: %s", obj)
             if incorrectly_named:
