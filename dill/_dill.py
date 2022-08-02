@@ -465,7 +465,8 @@ class Pickler(StockPickler):
         # and pickle._Pickler._batch_setitems().
         #
         # Copyright (c) 2001-2022 Python Software Foundation; All Rights Reserved
-        # Changes summary: use SETITEM for all pickle protocols and
+        # License Agreement: https://opensource.org/licenses/Python-2.0
+        # Summary of changes: use SETITEM for all pickle protocols and
         #   conditionally pass an extra argument to a custom implementation of
         #   the method 'save'.
         if not self._refonfail:
