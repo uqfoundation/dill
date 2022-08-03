@@ -419,7 +419,15 @@ class Pickler(StockPickler):
     dump.__doc__ = StockPickler.dump.__doc__
 
     def save(self, obj, save_persistent_id=True, *, name=None):
-        """If self._refonfail is True, try to save object by reference if pickling fails."""
+        # This method overrides StockPickler.save() and is called for every
+        # object pickled.  When 'refonfail' is True, it tries to save the object
+        # by reference if pickling it fails with a common pickling error, as
+        # defined by the constant UNPICKLEABLE_ERRORS.  If that also fails, then
+        # the exception is risen and, if this was called indirectly from another
+        # Pickler.save() call, the parent objects will try to be saved by
+        # reference recursively, until it succeeds or the exception propagates
+        # beyond the topmost save() call.  The extra 'name' argument is passed
+        # to StockPickler.save_global().
         if not self._refonfail:
             super().save(obj, save_persistent_id)
             return
@@ -430,7 +438,7 @@ class Pickler(StockPickler):
         memo_size = len(self.memo)
         try:
             super().save(obj, save_persistent_id)
-        except UNPICKLEABLE_ERRORS + (AttributeError,) as error_stack:
+        except (AttributeError, *UNPICKLEABLE_ERRORS) as error_stack:
             # AttributeError may happen in the save_global() call from a child object.
             if (type(error_stack) == AttributeError
                     and "no attribute '__name__'" not in error_stack.args[0]):
@@ -441,6 +449,7 @@ class Pickler(StockPickler):
             # Roll back memo.
             for _ in range(len(self.memo) - memo_size):
                 self.memo.popitem()  # LIFO order is guaranteed since 3.7
+            # Try to save object by reference.
             try:
                 if isinstance(obj, ModuleType) and \
                         (_is_builtin_module(obj) or obj is sys.modules['dill']):
@@ -457,21 +466,22 @@ class Pickler(StockPickler):
                          type(obj).__name__, id(obj), obj=obj)
 
     def _save_module_dict(self, obj):
+        """Save a module's dictionary.
+
+        If an object doesn't have a '__name__' attribute, pass the object's name
+        in the module's namespace to save(), so that it can be used with
+        save_global() to increase the chances of finding the object for saving
+        it by reference in the event of a failed serialization.
         """
-        Use object name in the module namespace as a last resource to try to
-        save it by reference when pickling fails.
-        """
-        # Modified from Python Standard Library's pickle._Pickler.save_dict()
-        # and pickle._Pickler._batch_setitems().
-        #
-        # Copyright (c) 2001-2022 Python Software Foundation; All Rights Reserved
-        # License Agreement: https://opensource.org/licenses/Python-2.0
-        # Summary of changes: use SETITEM for all pickle protocols and
-        #   conditionally pass an extra argument to a custom implementation of
-        #   the method 'save'.
         if not self._refonfail:
             super().save_dict(obj)
             return
+        # Modified from Python Standard Library's pickle._Pickler.save_dict()
+        #   and pickle._Pickler._batch_setitems().  Summary of changes: use
+        #   'SETITEM' for all pickle protocols and conditionally pass an extra
+        #   argument to a custom implementation of the method 'save'.
+        # Copyright (c) 2001-2022 Python Software Foundation; All Rights Reserved
+        # License Agreement: https://opensource.org/licenses/Python-2.0
         if self.bin:
             self.write(EMPTY_DICT)
         else:   # proto 0 -- can't use EMPTY_DICT
