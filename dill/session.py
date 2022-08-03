@@ -84,11 +84,13 @@ class _PeekableReader:
 def _open(file, mode, *, peekable=False):
     """return a context manager with an opened file-like object"""
     import io
-    attr = 'write' if 'w' in mode else 'read'
-    was_open = hasattr(file, attr)
+    readonly = ('r' in mode and '+' not in mode)
+    if peekable and not readonly:
+        raise ValueError("the 'peekable' option is invalid for writable files")
+    was_open = hasattr(file, 'read' if readonly else 'write')
     if not was_open:
         file = open(file, mode)
-    if attr == 'read' and peekable and not hasattr(file, 'peek'):
+    if readonly and peekable and not hasattr(file, 'peek'):
         # Try our best to return the stream as an object with a peek() method.
         if hasattr(file, 'tell') and hasattr(file, 'seek'):
             file = _PeekableReader(file)
