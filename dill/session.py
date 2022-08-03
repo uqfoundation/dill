@@ -229,7 +229,7 @@ def dump_module(
             be saved by reference.  If this also fails, saving their parent
             objects by reference will be attempted recursively.  In the worst
             case scenario, the module itself may be saved by reference.  Note:
-            The file-like object must be seekable and truncable with this
+            The file-like object must be seekable and truncatable with this
             option set.
         **kwds: extra keyword arguments passed to :py:class:`Pickler()`.
 
