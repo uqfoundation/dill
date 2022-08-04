@@ -366,6 +366,7 @@ class Pickler(StockPickler):
         self._recurse = settings['recurse'] if _recurse is None else _recurse
         self._postproc = OrderedDict()
         self._file = file
+        self._globals_cache = {}
 
     def dump(self, obj): #NOTE: if settings change, need to update attributes
         # register if the object is a numpy ufunc
@@ -1792,17 +1793,14 @@ def save_function(pickler, obj):
         _postproc = getattr(pickler, '_postproc', None)
         _main_modified = getattr(pickler, '_main_modified', None)
         _original_main = getattr(pickler, '_original_main', __builtin__)#'None'
+        _globals_cache = getattr(pickler, '_globals_cache', None)
         postproc_list = []
+
+        globs = None
         if _recurse:
             # recurse to get all globals referred to by obj
             from .detect import globalvars
             globs_copy = globalvars(obj, recurse=True, builtin=True)
-
-            # Add the name of the module to the globs dictionary to prevent
-            # the duplication of the dictionary. Pickle the unpopulated
-            # globals dictionary and set the remaining items after the function
-            # is created to correctly handle recursion.
-            globs = {'__name__': obj.__module__}
         else:
             globs_copy = obj.__globals__
 
@@ -1815,6 +1813,18 @@ def save_function(pickler, obj):
             elif globs_copy is not None and obj.__module__ is not None and \
                     getattr(_import_module(obj.__module__, True), '__dict__', None) is globs_copy:
                 globs = globs_copy
+
+        if globs is None:
+            # Add the name of the module to the globs dictionary and prevent
+            # the duplication of the dictionary. Pickle the unpopulated
+            # globals dictionary and set the remaining items after the function
+            # is created to correctly handle recursion.
+            if _globals_cache is not None and obj.__globals__ is not None:
+                if id(obj.__globals__) not in _globals_cache:
+                    globs = {'__name__': obj.__module__}
+                    _globals_cache[id(obj.__globals__)] = globs
+                else:
+                    globs = _globals_cache[id(obj.__globals__)]
             else:
                 globs = {'__name__': obj.__module__}
 
