@@ -241,7 +241,7 @@ CONTENTS_FMODE = 1
 #: Pickles the entire file (handle and contents), preserving mode and position.
 FILE_FMODE = 2
 
-# Exceptions commonly raised by unpicklable objects in the Standard Library.
+# Exceptions commonly raised by unpickleable objects in the Standard Library.
 UNPICKLEABLE_ERRORS = (PicklingError, TypeError, ValueError, NotImplementedError)
 
 ### Shorthands (modified from python2.5/lib/pickle.py)
@@ -438,13 +438,25 @@ class Pickler(StockPickler):
         # Store initial state.
         position = self._file_tell()
         memo_size = len(self.memo)
+        saved_as_global = False
         try:
             super().save(obj, save_persistent_id)
         except (AttributeError, *UNPICKLEABLE_ERRORS) as error_stack:
             # AttributeError may happen in the save_global() call from a child object.
-            if (type(error_stack) == AttributeError
-                    and "no attribute '__name__'" not in error_stack.args[0]):
+            if type(error_stack) == AttributeError \
+                    and "no attribute '__name__'" not in error_stack.args[0]:
                 raise
+            if self._session and obj is self._main:
+                warnings.warn(
+                    "module %r being saved by reference due to unpickleable"
+                    " objects in its namespace" % self._main.__name__,
+                    PicklingWarning,
+                    stacklevel=5,
+                )
+            message = (
+                "# X: fallback to save as global: <%s object at %#012x>"
+                % (type(obj).__name__, id(obj))
+            )
             # Roll back the stream.
             self._file_seek(position)
             self._file_truncate()
@@ -452,20 +464,27 @@ class Pickler(StockPickler):
             for _ in range(len(self.memo) - memo_size):
                 self.memo.popitem()  # LIFO order is guaranteed since 3.7
             # Try to save object by reference.
+            if isinstance(obj, ModuleType) and \
+                    (_is_builtin_module(obj) or obj is sys.modules['dill']):
+                self.save_reduce(_import_module, (obj.__name__,), obj=obj)
+                logger.trace(self, message, obj=obj)
+                return
+            if self._session:
+                if name is None and not (hasattr(obj, '__name__') or hasattr(obj, '__qualname__')):
+                    name = self._id_to_name.get(id(obj))
+                if name is not None and self._main.__name__ not in {'__main__', '__main_mp__'}:
+                    self.save_reduce(getattr, (self._main, name), obj=obj)
+                    logger.trace(self, message, obj=obj)
+                    return
             try:
-                if isinstance(obj, ModuleType) and \
-                        (_is_builtin_module(obj) or obj is sys.modules['dill']):
-                    self.save_reduce(_import_module, (obj.__name__,), obj=obj)
-                else:
-                    self.save_global(obj, name)
+                self.save_global(obj, name)
+                logger.trace(self, message, obj=obj)
             except (AttributeError, PicklingError) as error:
                 if getattr(self, '_trace_stack', None) and id(obj) == self._trace_stack[-1]:
                     # Roll back trace state.
                     self._trace_stack.pop()
                     self._size_stack.pop()
                 raise error from error_stack
-            logger.trace(self, "# X: fallback to save_global: <%s object at %#012x>",
-                         type(obj).__name__, id(obj), obj=obj)
 
     def _save_module_dict(self, obj):
         """Save a module's dictionary.
@@ -562,7 +581,7 @@ def use_diff(on=True):
     Reduces size of pickles by only including object which have changed.
 
     Decreases pickle size but increases CPU time needed.
-    Also helps avoid some unpicklable objects.
+    Also helps avoid some unpickleable objects.
     MUST be called at start of script, otherwise changes will not be recorded.
     """
     global _use_diff, diff

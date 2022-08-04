@@ -21,10 +21,6 @@ settings = {
     'fmode' : 0, #HANDLE_FMODE
     'recurse' : False,
     'ignore' : False,
-    'dump_module' : {
-        'refimported': False,
-        'refonfail' : False,
-    },
 }
 
 del DEFAULT_PROTOCOL

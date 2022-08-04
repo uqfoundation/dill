@@ -57,6 +57,11 @@ import tempfile
 
 TEMPDIR = pathlib.PurePath(tempfile.gettempdir())
 
+settings = {
+    'refimported': False,
+    'refonfail' : True,
+}
+
 class _PeekableReader:
     """lightweight readable stream wrapper that implements peek()"""
     def __init__(self, stream):
@@ -225,12 +230,13 @@ def dump_module(
             similar but independent from ``dill.settings[`byref`]``, as
             ``refimported`` refers to virtually all imported objects, while
             ``byref`` only affects select objects.
-        refonfail: if `True`, objects that fail to pickle by value will try to
-            be saved by reference.  If this also fails, saving their parent
-            objects by reference will be attempted recursively.  In the worst
-            case scenario, the module itself may be saved by reference.  Note:
-            The file-like object must be seekable and truncatable with this
-            option set.
+        refonfail: if `True` (the default), objects that fail to pickle by value
+            will try to be saved by reference.  If this also fails, saving their
+            parent objects by reference will be attempted recursively.  In the
+            worst case scenario, the module itself may be saved by reference,
+            with a warning.  Note: this option disables framing for pickle
+            protocol >= 4.  Turning this off may improve unpickling speed, but
+            may cause a module to fail pickling.
         **kwds: extra keyword arguments passed to :py:class:`Pickler()`.
 
     Raises:
@@ -305,12 +311,12 @@ def dump_module(
     refimported = kwds.pop('byref', refimported)
     module = kwds.pop('main', module)
 
-    from .settings import settings
-    protocol = settings['protocol']
+    from .settings import settings as dill_settings
+    protocol = dill_settings['protocol']
     if refimported is None:
-        refimported = settings['dump_module']['refimported']
+        refimported = settings['refimported']
     if refonfail is None:
-        refonfail = settings['dump_module']['refonfail']
+        refonfail = settings['refonfail']
     main = module
     if main is None:
         main = _main_module
@@ -339,6 +345,7 @@ def dump_module(
             if pickler._file_seek is None or pickler._file_truncate is None:
                 raise TypeError("file must have 'tell', 'seek' and 'truncate'"
                                 " attributes if the 'refonfail' option is set.")
+            pickler._id_to_name = {id(v): k for k, v in main.__dict__.items()}
         pickler.dump(main)
     return
 
@@ -367,8 +374,8 @@ def _identify_module(file, main=None):
         module_name = arg
         if not (
             next(opcodes)[0] in ('TUPLE1', 'TUPLE') and
-            next(opcodes)[0] == 'REDUCE' and
-            next(opcodes)[0] in ('EMPTY_DICT', 'DICT')
+            next(opcodes)[0] == 'REDUCE' #and
+            #next(opcodes)[0] in ('EMPTY_DICT', 'DICT')
         ):
             raise ValueError
         return module_name
