@@ -438,7 +438,6 @@ class Pickler(StockPickler):
         # Store initial state.
         position = self._file_tell()
         memo_size = len(self.memo)
-        saved_as_global = False
         try:
             super().save(obj, save_persistent_id)
         except (AttributeError, *UNPICKLEABLE_ERRORS) as error_stack:

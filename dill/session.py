@@ -298,9 +298,9 @@ def dump_module(
           >>> import dill
           >>> import os
           >>> os.altsep = '\\'
-          >>> dill.dump_module('os_session.pkl', module=os)
+          >>> dill.dump_module('os_session.pkl', module=os, refonfail=False)
           PicklingError: ...
-          >>> dill.dump_module('os_session.pkl', module=os, refonfail=True)
+          >>> dill.dump_module('os_session.pkl', module=os, refonfail=True) # the default
 
         - Restore the state of the saved modules:
 
@@ -410,7 +410,7 @@ def _identify_module(file, main=None):
         raise UnpicklingError("unable to identify module") from error
 
 def is_pickled_module(filename, importable: bool = True) -> bool:
-    """Check if a file is a module state pickle file.
+    """Check if a file is a pickle file readable by :py:func:`load_module`.
 
     Parameters:
         filename: a path-like object or a readable stream.
