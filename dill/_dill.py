@@ -188,16 +188,18 @@ from socket import socket as SocketType
 #FIXME: additionally calls ForkingPickler.register several times
 from multiprocessing.reduction import _reduce_socket as reduce_socket
 try:
-    __IPYTHON__ is True # is ipython
+    IS_IPYTHON = __IPYTHON__  # is True
     ExitType = None     # IPython.core.autocall.ExitAutocall
     singletontypes = ['exit', 'quit', 'get_ipython']
 except NameError:
+    IS_IPYTHON = False
     try: ExitType = type(exit) # apparently 'exit' can be removed
     except NameError: ExitType = None
     singletontypes = []
 
 import inspect
 import dataclasses
+import typing
 
 from pickle import GLOBAL
 
@@ -843,6 +845,13 @@ def _create_ftype(ftypeobj, func, args, kwds):
         args = ()
     return ftypeobj(func, *args, **kwds)
 
+def _create_typing_tuple(argz, *args): #NOTE: workaround python/cpython#94245
+    if not argz:
+        return typing.Tuple[()].copy_with(())
+    if argz == ((),):
+        return typing.Tuple[()]
+    return typing.Tuple[argz]
+
 def _create_lock(locked, *args): #XXX: ignores 'blocking'
     from threading import Lock
     lock = Lock()
@@ -1084,13 +1093,6 @@ def _getattr(objclass, name, repr_str):
 def _get_attr(self, name):
     # stop recursive pickling
     return getattr(self, name, None) or getattr(__builtin__, name)
-
-def _dict_from_dictproxy(dictproxy):
-    _dict = dictproxy.copy() # convert dictproxy to dict
-    _dict.pop('__dict__', None)
-    _dict.pop('__weakref__', None)
-    _dict.pop('__prepare__', None)
-    return _dict
 
 def _import_module(import_name, safe=False):
     try:
@@ -1360,6 +1362,23 @@ def save_classobj(pickler, obj): #FIXME: enable pickler._byref
         name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
         StockPickler.save_global(pickler, obj, name=name)
         logger.trace(pickler, "# C2")
+    return
+
+@register(typing._GenericAlias)
+def save_generic_alias(pickler, obj):
+    args = obj.__args__
+    if type(obj.__reduce__()) is str:
+        logger.trace(pickler, "Ga0: %s", obj)
+        StockPickler.save_global(pickler, obj, name=obj.__reduce__())
+        logger.trace(pickler, "# Ga0")
+    elif obj.__origin__ is tuple and (not args or args == ((),)):
+        logger.trace(pickler, "Ga1: %s", obj)
+        pickler.save_reduce(_create_typing_tuple, (args,), obj=obj)
+        logger.trace(pickler, "# Ga1")
+    else:
+        logger.trace(pickler, "Ga2: %s", obj)
+        StockPickler.save_reduce(pickler, *obj.__reduce__(), obj=obj)
+        logger.trace(pickler, "# Ga2")
     return
 
 @register(LockType)
@@ -1772,20 +1791,19 @@ def save_type(pickler, obj, postproc_list=None):
         obj_recursive = id(obj) in getattr(pickler, '_postproc', ())
         incorrectly_named = not _locate_function(obj, pickler)
         if not _byref and not obj_recursive and incorrectly_named: # not a function, but the name was held over
-            if issubclass(type(obj), type):
-                # thanks to Tom Stepleton pointing out pickler._session unneeded
-                _t = 'T2'
-                logger.trace(pickler, "%s: %s", _t, obj)
-                _dict = _dict_from_dictproxy(obj.__dict__)
-            else:
-                _t = 'T3'
-                logger.trace(pickler, "%s: %s", _t, obj)
-                _dict = obj.__dict__
+            # thanks to Tom Stepleton pointing out pickler._session unneeded
+            logger.trace(pickler, "T2: %s", obj)
+            _dict = obj.__dict__.copy() # convert dictproxy to dict
            #print (_dict)
            #print ("%s\n%s" % (type(obj), obj.__name__))
            #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
-            for name in _dict.get("__slots__", []):
+            slots = _dict.get('__slots__', ())
+            if type(slots) == str: slots = (slots,) # __slots__ accepts a single string
+            for name in slots:
                 del _dict[name]
+            _dict.pop('__dict__', None)
+            _dict.pop('__weakref__', None)
+            _dict.pop('__prepare__', None)
             if obj_name != obj.__name__:
                 if postproc_list is None:
                     postproc_list = []
@@ -1793,7 +1811,7 @@ def save_type(pickler, obj, postproc_list=None):
             _save_with_postproc(pickler, (_create_type, (
                 type(obj), obj.__name__, obj.__bases__, _dict
             )), obj=obj, postproc_list=postproc_list)
-            logger.trace(pickler, "# %s", _t)
+            logger.trace(pickler, "# T2")
         else:
             logger.trace(pickler, "T4: %s", obj)
             if incorrectly_named:
