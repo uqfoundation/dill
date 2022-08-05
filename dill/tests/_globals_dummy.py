@@ -3,8 +3,8 @@
 x = 3
 
 def h():
-   print(x)
+   return x
 
 def g():
-   h()
+   return h()
 

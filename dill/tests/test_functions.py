@@ -132,6 +132,7 @@ def test_code_object():
         except Exception as error:
             raise Exception("failed to construct code object with format version {}".format(version)) from error
 
+
 def test_shared_globals():
 	import dill, _globals_dummy as f, sys
 
@@ -140,6 +141,7 @@ def test_shared_globals():
 		assert f.g.__globals__ is f.h.__globals__
 		assert g.__globals__ is h.__globals__
 		assert f.g.__globals__ is g.__globals__
+		assert g() == h() == 3
 		
 		del sys.modules['_globals_dummy']
 
@@ -147,10 +149,14 @@ def test_shared_globals():
 		assert f.g.__globals__ is f.h.__globals__
 		assert g.__globals__ is h.__globals__
 		assert f.g.__globals__ is not g.__globals__
+		assert g() == h() == 3
+		g1, g, g2 = dill.copy((f.__dict__, f.g, f.g.__globals__), recurse=recurse)
+		assert g1 is g.__globals__
+		assert g1 is g2
 		
 		sys.modules['_globals_dummy'] = f
 
-    
+
 if __name__ == '__main__':
     test_functions()
     test_issue_510()
