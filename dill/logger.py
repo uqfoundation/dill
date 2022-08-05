@@ -50,7 +50,7 @@ import logging
 import math
 import os
 from functools import partial
-from typing import NoReturn, TextIO, Union
+from typing import TextIO, Union
 
 import dill
 from ._utils import _format_bytes_size
@@ -130,22 +130,26 @@ class TraceAdapter(logging.LoggerAdapter):
         if not dill._dill.is_dill(pickler, child=False):
             return
         if self.isEnabledFor(logging.INFO):
-            pickler._trace_depth = 1
+            pickler._trace_stack = []
             pickler._size_stack = []
         else:
-            pickler._trace_depth = None
-    def trace(self, pickler, msg, *args, **kwargs):
-        if not hasattr(pickler, '_trace_depth'):
+            pickler._trace_stack = None
+    def trace(self, pickler, msg, *args, obj=None, **kwargs):
+        if not hasattr(pickler, '_trace_stack'):
             logger.info(msg, *args, **kwargs)
             return
-        if pickler._trace_depth is None:
+        if pickler._trace_stack is None:
             return
         extra = kwargs.get('extra', {})
         pushed_obj = msg.startswith('#')
+        if not pushed_obj:
+            if obj is None:
+                obj = args[-1]
+            pickler._trace_stack.append(id(obj))
         size = None
         try:
             # Streams are not required to be tellable.
-            size = pickler._file.tell()
+            size = pickler._file_tell()
             frame = pickler.framer.current_frame
             try:
                 size += frame.tell()
@@ -160,13 +164,11 @@ class TraceAdapter(logging.LoggerAdapter):
             else:
                 size -= pickler._size_stack.pop()
                 extra['size'] = size
-        if pushed_obj:
-            pickler._trace_depth -= 1
-        extra['depth'] = pickler._trace_depth
+        extra['depth'] = len(pickler._trace_stack)
         kwargs['extra'] = extra
         self.info(msg, *args, **kwargs)
-        if not pushed_obj:
-            pickler._trace_depth += 1
+        if pushed_obj:
+            pickler._trace_stack.pop()
 
 class TraceFormatter(logging.Formatter):
     """
@@ -207,11 +209,12 @@ class TraceFormatter(logging.Formatter):
         return super().format(record)
 
 logger = logging.getLogger('dill')
+logger.propagate = False
 adapter = TraceAdapter(logger)
-stderr_handler = logging.StreamHandler()
+stderr_handler = logging._StderrHandler()
 adapter.addHandler(stderr_handler)
 
-def trace(arg: Union[bool, TextIO, str, os.PathLike] = None, *, mode: str = 'a') -> NoReturn:
+def trace(arg: Union[bool, TextIO, str, os.PathLike] = None, *, mode: str = 'a') -> None:
     """print a trace through the stack when pickling; useful for debugging
 
     With a single boolean argument, enable or disable the tracing.

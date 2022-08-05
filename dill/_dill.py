@@ -39,6 +39,7 @@ OLD310 = (sys.hexversion < 0x30a0000)
 #XXX: get types from .objtypes ?
 import builtins as __builtin__
 from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
+from pickle import DICT, EMPTY_DICT, GLOBAL, MARK, SETITEM
 from _thread import LockType
 from _thread import RLock as RLockType
 #from io import IOBase
@@ -58,6 +59,7 @@ import __main__ as _main_module
 import marshal
 import gc
 # import zlib
+import dataclasses
 from weakref import ReferenceType, ProxyType, CallableProxyType
 from collections import OrderedDict
 from functools import partial
@@ -91,51 +93,24 @@ def __hook__():
     from numpy import dtype as NumpyDType
     return True
 if NumpyArrayType: # then has numpy
-    def ndarraysubclassinstance(obj):
-        if type(obj) in (TypeType, ClassType):
-            return False # all classes return False
-        try: # check if is ndarray, and elif is subclass of ndarray
-            cls = getattr(obj, '__class__', None)
-            if cls is None: return False
-            elif cls is TypeType: return False
-            elif 'numpy.ndarray' not in str(getattr(cls, 'mro', int.mro)()):
-                return False
-        except ReferenceError: return False # handle 'R3' weakref in 3.x
-        except TypeError: return False
+    def ndarraysubclassinstance(obj_type):
+        if all((c.__module__, c.__name__) != ('numpy', 'ndarray') for c in obj_type.__mro__):
+            return False
         # anything below here is a numpy array (or subclass) instance
         __hook__() # import numpy (so the following works!!!)
         # verify that __reduce__ has not been overridden
-        NumpyInstance = NumpyArrayType((0,),'int8')
-        if id(obj.__reduce_ex__) == id(NumpyInstance.__reduce_ex__) and \
-           id(obj.__reduce__) == id(NumpyInstance.__reduce__): return True
-        return False
-    def numpyufunc(obj):
-        if type(obj) in (TypeType, ClassType):
-            return False # all classes return False
-        try: # check if is ufunc
-            cls = getattr(obj, '__class__', None)
-            if cls is None: return False
-            elif cls is TypeType: return False
-            if 'numpy.ufunc' not in str(getattr(cls, 'mro', int.mro)()):
-                return False
-        except ReferenceError: return False # handle 'R3' weakref in 3.x
-        except TypeError: return False
-        # anything below here is a numpy ufunc
+        if obj_type.__reduce_ex__ is not NumpyArrayType.__reduce_ex__ \
+                or obj_type.__reduce__ is not NumpyArrayType.__reduce__:
+            return False
         return True
-    def numpydtype(obj):
-        if type(obj) in (TypeType, ClassType):
-            return False # all classes return False
-        try: # check if is dtype
-            cls = getattr(obj, '__class__', None)
-            if cls is None: return False
-            elif cls is TypeType: return False
-            if 'numpy.dtype' not in str(getattr(obj, 'mro', int.mro)()):
-                return False
-        except ReferenceError: return False # handle 'R3' weakref in 3.x
-        except TypeError: return False
+    def numpyufunc(obj_type):
+        return any((c.__module__, c.__name__) == ('numpy', 'ufunc') for c in obj_type.__mro__)
+    def numpydtype(obj_type):
+        if all((c.__module__, c.__name__) != ('numpy', 'dtype') for c in obj_type.__mro__):
+            return False
         # anything below here is a numpy dtype
         __hook__() # import numpy (so the following works!!!)
-        return type(obj) is type(NumpyDType) # handles subclasses
+        return obj_type is type(NumpyDType) # handles subclasses
 else:
     def ndarraysubclassinstance(obj): return False
     def numpyufunc(obj): return False
@@ -196,9 +171,7 @@ except NameError:
     singletontypes = []
 
 import inspect
-import dataclasses
-
-from pickle import GLOBAL
+import typing
 
 
 ### Shims for different versions of Python and dill
@@ -237,6 +210,9 @@ HANDLE_FMODE = 0
 CONTENTS_FMODE = 1
 #: Pickles the entire file (handle and contents), preserving mode and position.
 FILE_FMODE = 2
+
+# Exceptions commonly raised by unpickleable objects in the Standard Library.
+UNPICKLEABLE_ERRORS = (PicklingError, TypeError, ValueError, NotImplementedError)
 
 ### Shorthands (modified from python2.5/lib/pickle.py)
 def copy(obj, *args, **kwds):
@@ -357,6 +333,8 @@ def _getopt(settings, key, arg=None, *, kwds=None):
 class Pickler(StockPickler):
     """python's Pickler extended to interpreter sessions"""
     dispatch = MetaCatchingDict(StockPickler.dispatch.copy())
+    _refimported = False
+    _refonfail = False
     _session = False
     _first_pass = False
     _original_main = None
@@ -371,56 +349,157 @@ class Pickler(StockPickler):
         self._recurse = _getopt(settings, 'recurse', kwds=kwds)
         self._strictio = False #_getopt(settings, 'strictio', kwds=kwds)
         self._postproc = OrderedDict()
-        self._file = file
-        StockPickler.__init__(self, file, *args, **kwds)
+        self._file_tell = getattr(file, 'tell', None)  # for logger and refonfail
+        super().__init__(file, *args, **kwds)
 
-    def dump(self, obj): #NOTE: if settings change, need to update attributes
+    def save(self, obj, save_persistent_id=True):
         # register if the object is a numpy ufunc
         # thanks to Paul Kienzle for pointing out ufuncs didn't pickle
-        if NumpyUfuncType and numpyufunc(obj):
-            @register(type(obj))
-            def save_numpy_ufunc(pickler, obj):
-                logger.trace(pickler, "Nu: %s", obj)
-                name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
-                StockPickler.save_global(pickler, obj, name=name)
-                logger.trace(pickler, "# Nu")
-                return
-            # NOTE: the above 'save' performs like:
-            #   import copy_reg
-            #   def udump(f): return f.__name__
-            #   def uload(name): return getattr(numpy, name)
-            #   copy_reg.pickle(NumpyUfuncType, udump, uload)
-        # register if the object is a numpy dtype
-        if NumpyDType and numpydtype(obj):
-            @register(type(obj))
-            def save_numpy_dtype(pickler, obj):
-                logger.trace(pickler, "Dt: %s", obj)
-                pickler.save_reduce(_create_dtypemeta, (obj.type,), obj=obj)
-                logger.trace(pickler, "# Dt")
-                return
-            # NOTE: the above 'save' performs like:
-            #   import copy_reg
-            #   def uload(name): return type(NumpyDType(name))
-            #   def udump(f): return uload, (f.type,)
-            #   copy_reg.pickle(NumpyDTypeType, udump, uload)
-        # register if the object is a subclassed numpy array instance
-        if NumpyArrayType and ndarraysubclassinstance(obj):
-            @register(type(obj))
-            def save_numpy_array(pickler, obj):
-                logger.trace(pickler, "Nu: (%s, %s)", obj.shape, obj.dtype)
-                npdict = getattr(obj, '__dict__', None)
-                f, args, state = obj.__reduce__()
-                pickler.save_reduce(_create_array, (f,args,state,npdict), obj=obj)
-                logger.trace(pickler, "# Nu")
-                return
+        obj_type = type(obj)
+        if NumpyArrayType and not (obj_type is type or obj_type in Pickler.dispatch):
+            if NumpyUfuncType and numpyufunc(obj_type):
+                @register(obj_type)
+                def save_numpy_ufunc(pickler, obj):
+                    logger.trace(pickler, "Nu: %s", obj)
+                    name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
+                    StockPickler.save_global(pickler, obj, name=name)
+                    logger.trace(pickler, "# Nu")
+                    return
+                # NOTE: the above 'save' performs like:
+                #   import copy_reg
+                #   def udump(f): return f.__name__
+                #   def uload(name): return getattr(numpy, name)
+                #   copy_reg.pickle(NumpyUfuncType, udump, uload)
+            # register if the object is a numpy dtype
+            if NumpyDType and numpydtype(obj_type):
+                @register(obj_type)
+                def save_numpy_dtype(pickler, obj):
+                    logger.trace(pickler, "Dt: %s", obj)
+                    pickler.save_reduce(_create_dtypemeta, (obj.type,), obj=obj)
+                    logger.trace(pickler, "# Dt")
+                    return
+                # NOTE: the above 'save' performs like:
+                #   import copy_reg
+                #   def uload(name): return type(NumpyDType(name))
+                #   def udump(f): return uload, (f.type,)
+                #   copy_reg.pickle(NumpyDTypeType, udump, uload)
+            # register if the object is a subclassed numpy array instance
+            if NumpyArrayType and ndarraysubclassinstance(obj_type):
+                @register(obj_type)
+                def save_numpy_array(pickler, obj):
+                    logger.trace(pickler, "Nu: (%s, %s)", obj.shape, obj.dtype, obj=obj)
+                    npdict = getattr(obj, '__dict__', None)
+                    f, args, state = obj.__reduce__()
+                    pickler.save_reduce(_create_array, (f,args,state,npdict), obj=obj)
+                    logger.trace(pickler, "# Nu")
+                    return
         # end hack
         if GENERATOR_FAIL and type(obj) == GeneratorType:
             msg = "Can't pickle %s: attribute lookup builtins.generator failed" % GeneratorType
             raise PicklingError(msg)
+        StockPickler.save(self, obj, save_persistent_id)
+
+    save.__doc__ = StockPickler.save.__doc__
+
+    def dump(self, obj): #NOTE: if settings change, need to update attributes
         logger.trace_setup(self)
         StockPickler.dump(self, obj)
-
     dump.__doc__ = StockPickler.dump.__doc__
+
+    def save(self, obj, save_persistent_id=True, *, name=None):
+        # This method overrides StockPickler.save() and is called for every
+        # object pickled.  When 'refonfail' is True, it tries to save the object
+        # by reference if pickling it fails with a common pickling error, as
+        # defined by the constant UNPICKLEABLE_ERRORS.  If that also fails, then
+        # the exception is risen and, if this was called indirectly from another
+        # Pickler.save() call, the parent objects will try to be saved by
+        # reference recursively, until it succeeds or the exception propagates
+        # beyond the topmost save() call.  The extra 'name' argument is passed
+        # to StockPickler.save_global().
+        if not self._refonfail:
+            super().save(obj, save_persistent_id)
+            return
+        # Disable framing (right after the framer.init_framing() call at dump()).
+        self.framer.current_frame = None
+        # Store initial state.
+        position = self._file_tell()
+        memo_size = len(self.memo)
+        try:
+            super().save(obj, save_persistent_id)
+        except (AttributeError, *UNPICKLEABLE_ERRORS) as error_stack:
+            # AttributeError may happen in the save_global() call from a child object.
+            if type(error_stack) == AttributeError \
+                    and "no attribute '__name__'" not in error_stack.args[0]:
+                raise
+            if self._session and obj is self._main:
+                warnings.warn(
+                    "module %r being saved by reference due to unpickleable"
+                    " objects in its namespace" % self._main.__name__,
+                    PicklingWarning,
+                    stacklevel=5,
+                )
+            message = (
+                "# X: fallback to save as global: <%s object at %#012x>"
+                % (type(obj).__name__, id(obj))
+            )
+            # Roll back the stream.
+            self._file_seek(position)
+            self._file_truncate()
+            # Roll back memo.
+            for _ in range(len(self.memo) - memo_size):
+                self.memo.popitem()  # LIFO order is guaranteed since 3.7
+            # Try to save object by reference.
+            if isinstance(obj, ModuleType) and \
+                    (_is_builtin_module(obj) or obj is sys.modules['dill']):
+                self.save_reduce(_import_module, (obj.__name__,), obj=obj)
+                logger.trace(self, message, obj=obj)
+                return
+            if self._session:
+                if name is None and not (hasattr(obj, '__name__') or hasattr(obj, '__qualname__')):
+                    name = self._id_to_name.get(id(obj))
+                if name is not None and self._main.__name__ not in {'__main__', '__main_mp__'}:
+                    self.save_reduce(getattr, (self._main, name), obj=obj)
+                    logger.trace(self, message, obj=obj)
+                    return
+            try:
+                self.save_global(obj, name)
+                logger.trace(self, message, obj=obj)
+            except (AttributeError, PicklingError) as error:
+                if getattr(self, '_trace_stack', None) and id(obj) == self._trace_stack[-1]:
+                    # Roll back trace state.
+                    self._trace_stack.pop()
+                    self._size_stack.pop()
+                raise error from error_stack
+
+    def _save_module_dict(self, obj):
+        """Save a module's dictionary.
+
+        If an object doesn't have a '__name__' attribute, pass the object's name
+        in the module's namespace to save(), so that it can be used with
+        save_global() to increase the chances of finding the object for saving
+        it by reference in the event of a failed serialization.
+        """
+        if not self._refonfail:
+            super().save_dict(obj)
+            return
+        # Modified from Python Standard Library's pickle._Pickler.save_dict()
+        #   and pickle._Pickler._batch_setitems().  Summary of changes: use
+        #   'SETITEM' for all pickle protocols and conditionally pass an extra
+        #   argument to a custom implementation of the method 'save'.
+        # Copyright (c) 2001-2022 Python Software Foundation; All Rights Reserved
+        # License Agreement: https://opensource.org/licenses/Python-2.0
+        if self.bin:
+            self.write(EMPTY_DICT)
+        else:   # proto 0 -- can't use EMPTY_DICT
+            self.write(MARK + DICT)
+        self.memoize(obj)
+        for k, v in obj.items():
+            self.save(k)
+            if hasattr(v, '__name__') or hasattr(v, '__qualname__'):
+                self.save(v)
+            else:
+                self.save(v, name=k)
+            self.write(SETITEM)
 
 class Unpickler(StockUnpickler):
     """python's Unpickler extended to interpreter sessions and more types"""
@@ -486,7 +565,7 @@ def use_diff(on=True):
     Reduces size of pickles by only including object which have changed.
 
     Decreases pickle size but increases CPU time needed.
-    Also helps avoid some unpicklable objects.
+    Also helps avoid some unpickleable objects.
     MUST be called at start of script, otherwise changes will not be recorded.
     """
     global _use_diff, diff
@@ -769,6 +848,13 @@ def _create_ftype(ftypeobj, func, args, kwds):
         args = ()
     return ftypeobj(func, *args, **kwds)
 
+def _create_typing_tuple(argz, *args): #NOTE: workaround python/cpython#94245
+    if not argz:
+        return typing.Tuple[()].copy_with(())
+    if argz == ((),):
+        return typing.Tuple[()]
+    return typing.Tuple[argz]
+
 def _create_lock(locked, *args): #XXX: ignores 'blocking'
     from threading import Lock
     lock = Lock()
@@ -1011,13 +1097,6 @@ def _get_attr(self, name):
     # stop recursive pickling
     return getattr(self, name, None) or getattr(__builtin__, name)
 
-def _dict_from_dictproxy(dictproxy):
-    _dict = dictproxy.copy() # convert dictproxy to dict
-    _dict.pop('__dict__', None)
-    _dict.pop('__weakref__', None)
-    _dict.pop('__prepare__', None)
-    return _dict
-
 def _import_module(import_name, safe=False):
     try:
         if import_name.startswith('__runtime__.'):
@@ -1189,26 +1268,30 @@ def _repr_dict(obj):
 
 @register(dict)
 def save_module_dict(pickler, obj):
-    if is_dill(pickler, child=False) and obj == pickler._main.__dict__ and \
+    pickler_is_dill = is_dill(pickler, child=False)
+    if pickler_is_dill and obj == pickler._main.__dict__ and \
             not (pickler._session and pickler._first_pass):
-        logger.trace(pickler, "D1: %s", _repr_dict(obj)) # obj
+        logger.trace(pickler, "D1: %s", _repr_dict(obj), obj=obj)
         pickler.write(bytes('c__builtin__\n__main__\n', 'UTF-8'))
         logger.trace(pickler, "# D1")
-    elif (not is_dill(pickler, child=False)) and (obj == _main_module.__dict__):
-        logger.trace(pickler, "D3: %s", _repr_dict(obj)) # obj
+    elif (not pickler_is_dill) and (obj == _main_module.__dict__):
+        logger.trace(pickler, "D3: %s", _repr_dict(obj), obj=obj)
         pickler.write(bytes('c__main__\n__dict__\n', 'UTF-8'))  #XXX: works in general?
         logger.trace(pickler, "# D3")
     elif '__name__' in obj and obj != _main_module.__dict__ \
             and type(obj['__name__']) is str \
             and obj is getattr(_import_module(obj['__name__'],True), '__dict__', None):
-        logger.trace(pickler, "D4: %s", _repr_dict(obj)) # obj
+        logger.trace(pickler, "D4: %s", _repr_dict(obj), obj=obj)
         pickler.write(bytes('c%s\n__dict__\n' % obj['__name__'], 'UTF-8'))
         logger.trace(pickler, "# D4")
+    elif pickler_is_dill and pickler._session and pickler._first_pass:
+        # we only care about session the first pass thru
+        pickler._first_pass = False
+        logger.trace(pickler, "D5: %s", _repr_dict(obj), obj=obj)
+        pickler._save_module_dict(obj)
+        logger.trace(pickler, "# D5")
     else:
-        logger.trace(pickler, "D2: %s", _repr_dict(obj)) # obj
-        if is_dill(pickler, child=False) and pickler._session:
-            # we only care about session the first pass thru
-            pickler._first_pass = False
+        logger.trace(pickler, "D2: %s", _repr_dict(obj), obj=obj)
         StockPickler.save_dict(pickler, obj)
         logger.trace(pickler, "# D2")
     return
@@ -1282,6 +1365,23 @@ def save_classobj(pickler, obj): #FIXME: enable pickler._byref
         name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
         StockPickler.save_global(pickler, obj, name=name)
         logger.trace(pickler, "# C2")
+    return
+
+@register(typing._GenericAlias)
+def save_generic_alias(pickler, obj):
+    args = obj.__args__
+    if type(obj.__reduce__()) is str:
+        logger.trace(pickler, "Ga0: %s", obj)
+        StockPickler.save_global(pickler, obj, name=obj.__reduce__())
+        logger.trace(pickler, "# Ga0")
+    elif obj.__origin__ is tuple and (not args or args == ((),)):
+        logger.trace(pickler, "Ga1: %s", obj)
+        pickler.save_reduce(_create_typing_tuple, (args,), obj=obj)
+        logger.trace(pickler, "# Ga1")
+    else:
+        logger.trace(pickler, "Ga2: %s", obj)
+        StockPickler.save_reduce(pickler, *obj.__reduce__(), obj=obj)
+        logger.trace(pickler, "# Ga2")
     return
 
 @register(LockType)
@@ -1507,7 +1607,7 @@ def save_cell(pickler, obj):
 if MAPPING_PROXY_TRICK:
     @register(DictProxyType)
     def save_dictproxy(pickler, obj):
-        logger.trace(pickler, "Mp: %s", _repr_dict(obj)) # obj
+        logger.trace(pickler, "Mp: %s", _repr_dict(obj), obj=obj)
         mapping = obj | _dictproxy_helper_instance
         pickler.save_reduce(DictProxyType, (mapping,), obj=obj)
         logger.trace(pickler, "# Mp")
@@ -1515,7 +1615,7 @@ if MAPPING_PROXY_TRICK:
 else:
     @register(DictProxyType)
     def save_dictproxy(pickler, obj):
-        logger.trace(pickler, "Mp: %s", _repr_dict(obj)) # obj
+        logger.trace(pickler, "Mp: %s", _repr_dict(obj), obj=obj)
         pickler.save_reduce(DictProxyType, (obj.copy(),), obj=obj)
         logger.trace(pickler, "# Mp")
         return
@@ -1585,18 +1685,11 @@ def save_weakref(pickler, obj):
 @register(ProxyType)
 @register(CallableProxyType)
 def save_weakproxy(pickler, obj):
+    # Must do string substitution here and use %r to avoid ReferenceError.
+    logger.trace(pickler, "R2: %r" % obj, obj=obj)
     refobj = _locate_object(_proxy_helper(obj))
-    try:
-        _t = "R2"
-        logger.trace(pickler, "%s: %s", _t, obj)
-    except ReferenceError:
-        _t = "R3"
-        logger.trace(pickler, "%s: %s", _t, sys.exc_info()[1])
-   #callable = bool(getattr(refobj, '__call__', None))
-    if type(obj) is CallableProxyType: callable = True
-    else: callable = False
-    pickler.save_reduce(_create_weakproxy, (refobj, callable), obj=obj)
-    logger.trace(pickler, "# %s", _t)
+    pickler.save_reduce(_create_weakproxy, (refobj, callable(obj)), obj=obj)
+    logger.trace(pickler, "# R2")
     return
 
 def _is_builtin_module(module):
@@ -1622,7 +1715,7 @@ def save_module(pickler, obj):
                 pass
             else:
                 logger.trace(pickler, "M2: %s with diff", obj)
-                logger.trace(pickler, "Diff: %s", changed.keys())
+                logger.info("Diff: %s", changed.keys())
                 pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
                                     state=changed)
                 logger.trace(pickler, "# M2")
@@ -1694,20 +1787,19 @@ def save_type(pickler, obj, postproc_list=None):
         obj_recursive = id(obj) in getattr(pickler, '_postproc', ())
         incorrectly_named = not _locate_function(obj, pickler)
         if not _byref and not obj_recursive and incorrectly_named: # not a function, but the name was held over
-            if issubclass(type(obj), type):
-                # thanks to Tom Stepleton pointing out pickler._session unneeded
-                _t = 'T2'
-                logger.trace(pickler, "%s: %s", _t, obj)
-                _dict = _dict_from_dictproxy(obj.__dict__)
-            else:
-                _t = 'T3'
-                logger.trace(pickler, "%s: %s", _t, obj)
-                _dict = obj.__dict__
+            # thanks to Tom Stepleton pointing out pickler._session unneeded
+            logger.trace(pickler, "T2: %s", obj)
+            _dict = obj.__dict__.copy() # convert dictproxy to dict
            #print (_dict)
            #print ("%s\n%s" % (type(obj), obj.__name__))
            #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
-            for name in _dict.get("__slots__", []):
+            slots = _dict.get('__slots__', ())
+            if type(slots) == str: slots = (slots,) # __slots__ accepts a single string
+            for name in slots:
                 del _dict[name]
+            _dict.pop('__dict__', None)
+            _dict.pop('__weakref__', None)
+            _dict.pop('__prepare__', None)
             if obj_name != obj.__name__:
                 if postproc_list is None:
                     postproc_list = []
@@ -1715,7 +1807,7 @@ def save_type(pickler, obj, postproc_list=None):
             _save_with_postproc(pickler, (_create_type, (
                 type(obj), obj.__name__, obj.__bases__, _dict
             )), obj=obj, postproc_list=postproc_list)
-            logger.trace(pickler, "# %s", _t)
+            logger.trace(pickler, "# T2")
         else:
             logger.trace(pickler, "T4: %s", obj)
             if incorrectly_named:
@@ -1965,14 +2057,14 @@ def pickles(obj,exact=False,safe=False,**kwds):
     """
     if safe: exceptions = (Exception,) # RuntimeError, ValueError
     else:
-        exceptions = (TypeError, AssertionError, NotImplementedError, PicklingError, UnpicklingError)
+        exceptions = UNPICKLEABLE_ERRORS + (AssertionError, UnpicklingError)
     try:
         pik = copy(obj, **kwds)
         #FIXME: should check types match first, then check content if "exact"
         try:
             #FIXME: should be "(pik == obj).all()" for numpy comparison, though that'll fail if shapes differ
             result = bool(pik.all() == obj.all())
-        except AttributeError:
+        except (AttributeError, TypeError):
             warnings.filterwarnings('ignore')
             result = pik == obj
             warnings.resetwarnings()
