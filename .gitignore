@@ -5,4 +5,4 @@
 /docs/build
 /build
 /README
-/dill/info.py
+/dill/__info__.py

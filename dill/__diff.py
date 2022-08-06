@@ -10,18 +10,15 @@
 Module to show if an object has changed since it was memorised
 """
 
+import builtins
 import os
 import sys
 import types
 try:
     import numpy
     HAS_NUMPY = True
-except:
-    HAS_NUMPY = False
-try:
-    import builtins
 except ImportError:
-    import __builtin__ as builtins
+    HAS_NUMPY = False
 
 # pypy doesn't use reference counting
 getrefcount = getattr(sys, 'getrefcount', lambda x:0)
@@ -44,10 +41,7 @@ def get_attrs(obj):
     if type(obj) in builtins_types \
        or type(obj) is type and obj in builtins_types:
         return
-    try:
-        return obj.__dict__
-    except:
-        return
+    return getattr(obj, '__dict__', None)
 
 
 def get_seq(obj, cache={str: False, frozenset: False, list: True, set: True,
@@ -235,6 +229,6 @@ if hasattr(builtins, "_"):
 
 # memorise all already imported modules. This implies that this must be
 # imported first for any changes to be recorded
-for mod in sys.modules.values():
+for mod in list(sys.modules.values()):
     memorise(mod)
 release_gone()

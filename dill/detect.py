@@ -11,10 +11,9 @@ Methods for detecting objects leading to pickling failures.
 
 import dis
 from inspect import ismethod, isfunction, istraceback, isframe, iscode
-from .pointers import parent, reference, at, parents, children
 
-from ._dill import _trace as trace
-from ._dill import PY3
+from .pointers import parent, reference, at, parents, children
+from .logger import trace
 
 __all__ = ['baditems','badobjects','badtypes','code','errors','freevars',
            'getmodule','globalvars','nestedcode','nestedglobals','outermost',
@@ -25,9 +24,7 @@ def getmodule(object, _filename=None, force=False):
     from inspect import getmodule as getmod
     module = getmod(object, _filename)
     if module or not force: return module
-    if PY3: builtins = 'builtins'
-    else: builtins = '__builtin__'
-    builtins = __import__(builtins)
+    import builtins
     from .source import getname
     name = getname(object, force=True)
     return builtins if name in vars(builtins).keys() else None
@@ -37,26 +34,17 @@ def outermost(func): # is analogous to getsource(func,enclosing=True)
 
     NOTE: this is the object-equivalent of getsource(func, enclosing=True)
     """
-    if PY3:
-        if ismethod(func):
-            _globals = func.__func__.__globals__ or {}
-        elif isfunction(func):
-            _globals = func.__globals__ or {}
-        else:
-            return #XXX: or raise? no matches
-        _globals = _globals.items()
+    if ismethod(func):
+        _globals = func.__func__.__globals__ or {}
+    elif isfunction(func):
+        _globals = func.__globals__ or {}
     else:
-        if ismethod(func):
-            _globals = func.im_func.func_globals or {}
-        elif isfunction(func):
-            _globals = func.func_globals or {}
-        else:
-            return #XXX: or raise? no matches
-        _globals = _globals.iteritems()
+        return #XXX: or raise? no matches
+    _globals = _globals.items()
     # get the enclosing source
     from .source import getsourcelines
     try: lines,lnum = getsourcelines(func, enclosing=True)
-    except: #TypeError, IOError
+    except Exception: #TypeError, IOError
         lines,lnum = [],None
     code = ''.join(lines)
     # get all possible names,objects that are named in the enclosing source
@@ -65,7 +53,7 @@ def outermost(func): # is analogous to getsource(func,enclosing=True)
     for name,obj in _locals: #XXX: don't really need 'name'
         try:
             if getsourcelines(obj) == (lines,lnum): return obj
-        except: #TypeError, IOError
+        except Exception: #TypeError, IOError
             pass
     return #XXX: or raise? no matches
 
@@ -83,18 +71,12 @@ def nestedcode(func, recurse=True): #XXX: or return dict of {co_name: co} ?
     return list(nested)
 
 def code(func):
-    '''get the code object for the given function or method
+    """get the code object for the given function or method
 
     NOTE: use dill.source.getsource(CODEOBJ) to get the source code
-    '''
-    if PY3:
-        im_func = '__func__'
-        func_code = '__code__'
-    else:
-        im_func = 'im_func'
-        func_code = 'func_code'
-    if ismethod(func): func = getattr(func, im_func)
-    if isfunction(func): func = getattr(func, func_code)
+    """
+    if ismethod(func): func = func.__func__
+    if isfunction(func): func = func.__code__
     if istraceback(func): func = func.tb_frame
     if isframe(func): func = func.f_code
     if iscode(func): return func
@@ -109,13 +91,6 @@ def referrednested(func, recurse=True): #XXX: return dict of {__name__: obj} ?
     If possible, python builds code objects, but delays building functions
     until func() is called.
     """
-    if PY3:
-        att1 = '__code__'
-        att0 = '__func__'
-    else:
-        att1 = 'func_code' # functions
-        att0 = 'im_func'   # methods
-
     import gc
     funcs = set()
     # get the code objects, and try to track down by referrence
@@ -123,16 +98,16 @@ def referrednested(func, recurse=True): #XXX: return dict of {__name__: obj} ?
         # look for function objects that refer to the code object
         for obj in gc.get_referrers(co):
             # get methods
-            _ = getattr(obj, att0, None) # ismethod
-            if getattr(_, att1, None) is co: funcs.add(obj)
+            _ = getattr(obj, '__func__', None) # ismethod
+            if getattr(_, '__code__', None) is co: funcs.add(obj)
             # get functions
-            elif getattr(obj, att1, None) is co: funcs.add(obj)
+            elif getattr(obj, '__code__', None) is co: funcs.add(obj)
             # get frame objects
             elif getattr(obj, 'f_code', None) is co: funcs.add(obj)
             # get code objects
             elif hasattr(obj, 'co_code') and obj is co: funcs.add(obj)
-#     frameobjs => func.func_code.co_varnames not in func.func_code.co_cellvars
-#     funcobjs => func.func_code.co_cellvars not in func.func_code.co_varnames
+#     frameobjs => func.__code__.co_varnames not in func.__code__.co_cellvars
+#     funcobjs => func.__code__.co_cellvars not in func.__code__.co_varnames
 #     frameobjs are not found, however funcobjs are...
 #     (see: test_mixins.quad ... and test_mixins.wtf)
 #     after execution, code objects get compiled, and then may be found by gc
@@ -143,28 +118,20 @@ def freevars(func):
     """get objects defined in enclosing code that are referred to by func
 
     returns a dict of {name:object}"""
-    if PY3:
-        im_func = '__func__'
-        func_code = '__code__'
-        func_closure = '__closure__'
-    else:
-        im_func = 'im_func'
-        func_code = 'func_code'
-        func_closure = 'func_closure'
-    if ismethod(func): func = getattr(func, im_func)
+    if ismethod(func): func = func.__func__
     if isfunction(func):
-        closures = getattr(func, func_closure) or ()
-        func = getattr(func, func_code).co_freevars # get freevars
+        closures = func.__closure__ or ()
+        func = func.__code__.co_freevars # get freevars
     else:
         return {}
 
     def get_cell_contents():
-        for (name,c) in zip(func,closures):
+        for name, c in zip(func, closures):
             try:
                 cell_contents = c.cell_contents
-            except:
+            except ValueError: # cell is empty
                 continue
-            yield (name,c.cell_contents)
+            yield name, c.cell_contents
 
     return dict(get_cell_contents())
 
@@ -175,7 +142,7 @@ def nestedglobals(func, recurse=True):
     if func is None: return list()
     import sys
     from .temp import capture
-    CAN_NULL = sys.hexversion >= 51052711 #NULL may be prepended >= 3.11a7
+    CAN_NULL = sys.hexversion >= 0x30b00a7 # NULL may be prepended >= 3.11a7
     names = set()
     with capture('stdout') as out:
         dis.dis(func) #XXX: dis.dis(None) disassembles last traceback
@@ -199,37 +166,27 @@ def globalvars(func, recurse=True, builtin=False):
     """get objects defined in global scope that are referred to by func
 
     return a dict of {name:object}"""
-    if PY3:
-        im_func = '__func__'
-        func_code = '__code__'
-        func_globals = '__globals__'
-        func_closure = '__closure__'
-    else:
-        im_func = 'im_func'
-        func_code = 'func_code'
-        func_globals = 'func_globals'
-        func_closure = 'func_closure'
-    if ismethod(func): func = getattr(func, im_func)
+    if ismethod(func): func = func.__func__
     if isfunction(func):
         globs = vars(getmodule(sum)).copy() if builtin else {}
         # get references from within closure
         orig_func, func = func, set()
-        for obj in getattr(orig_func, func_closure) or {}:
+        for obj in orig_func.__closure__ or {}:
             try:
                 cell_contents = obj.cell_contents
-            except:
+            except ValueError: # cell is empty
                 pass
             else:
                 _vars = globalvars(cell_contents, recurse, builtin) or {}
                 func.update(_vars) #XXX: (above) be wary of infinte recursion?
                 globs.update(_vars)
         # get globals
-        globs.update(getattr(orig_func, func_globals) or {})
+        globs.update(orig_func.__globals__ or {})
         # get names of references
         if not recurse:
-            func.update(getattr(orig_func, func_code).co_names)
+            func.update(orig_func.__code__.co_names)
         else:
-            func.update(nestedglobals(getattr(orig_func, func_code)))
+            func.update(nestedglobals(orig_func.__code__))
             # find globals for all entries of func
             for key in func.copy(): #XXX: unnecessary...?
                 nested_func = globs.get(key)
@@ -254,7 +211,7 @@ def globalvars(func, recurse=True, builtin=False):
                 func.update(globalvars(nested_func, True, builtin))
     else:
         return {}
-    #NOTE: if name not in func_globals, then we skip it...
+    #NOTE: if name not in __globals__, then we skip it...
     return dict((name,globs[name]) for name in func if name in globs)
 
 

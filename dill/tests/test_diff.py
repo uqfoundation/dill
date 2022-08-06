@@ -55,18 +55,15 @@ def test_diff():
     assert changed[1]
 
     if not IS_PYPY:
-        try:
-            import abc
-            # make sure the "_abc_invaldation_counter" doesn't make test fail
-            diff.memorise(abc.ABCMeta, force=True)
-            assert not diff.has_changed(abc)
-            abc.ABCMeta.zzz = 1
-            assert diff.has_changed(abc)
-            changed = diff.whats_changed(abc)
-            assert list(changed[0].keys()) == ["ABCMeta"]
-            assert not changed[1]
-        except ImportError:
-            pass
+        import abc
+        # make sure the "_abc_invaldation_counter" doesn't make test fail
+        diff.memorise(abc.ABCMeta, force=True)
+        assert not diff.has_changed(abc)
+        abc.ABCMeta.zzz = 1
+        assert diff.has_changed(abc)
+        changed = diff.whats_changed(abc)
+        assert list(changed[0].keys()) == ["ABCMeta"]
+        assert not changed[1]
 
     '''
     import Queue

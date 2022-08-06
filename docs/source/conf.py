@@ -58,19 +58,20 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'dill'
+project = 'dill'
 year = datetime.now().year
-copyright = u'%d, The Uncertainty Quantification Foundation' % year
-author = u'Mike McKerns'
+copyright = '%d, The Uncertainty Quantification Foundation' % year
+author = 'Mike McKerns'
 
 # extension config
 github_project_url = "https://github.com/uqfoundation/dill"
-autoclass_content= 'both'
+autoclass_content = 'both'
+autodoc_typehints = 'description'
 napoleon_include_init_with_doc = True
 napoleon_include_private_with_doc = False
 napoleon_include_special_with_doc = True
-napoleon_use_param = False
 napoleon_use_ivar = True
+napoleon_use_param = True
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -191,8 +192,8 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'dill.tex', u'dill Documentation',
-     u'Mike McKerns', 'manual'),
+    (master_doc, 'dill.tex', 'dill Documentation',
+     'Mike McKerns', 'manual'),
 ]
 
 
@@ -201,7 +202,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'dill', u'dill Documentation',
+    (master_doc, 'dill', 'dill Documentation',
      [author], 1)
 ]
 
@@ -212,7 +213,7 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'dill', u'dill Documentation',
+    (master_doc, 'dill', 'dill Documentation',
      author, 'dill', 'Serialize all of python.',
      'Miscellaneous'),
 ]

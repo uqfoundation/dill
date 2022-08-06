@@ -3,8 +3,8 @@ include README*
 include MANIFEST.in
 include pyproject.toml
 include tox.ini
+include version.py
 include scripts/*
-include tests/*py
 recursive-include docs *
 include .*
 prune .git

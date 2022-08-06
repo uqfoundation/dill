@@ -1,13 +1,16 @@
 #!/usr/bin/env python
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
-# Copyright (c) 2008-2016 California Institute of Technology.
-# Copyright (c) 2016-2021 The Uncertainty Quantification Foundation.
+# Author: Anirudh Vegesana (avegesan@cs.stanford.edu)
+# Copyright (c) 2021-2022 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 import dill
-from dill._dill import OLD310, MAPPING_PROXY_TRICK
+from dill._dill import OLD310, MAPPING_PROXY_TRICK, DictProxyType
+
+def test_dictproxy():
+    assert dill.copy(DictProxyType({'a': 2}))
 
 def test_dictviews():
     x = {'a': 1}
@@ -31,5 +34,6 @@ def test_dictproxy_trick():
         assert dict(seperate_views[1]) == new_x
 
 if __name__ == '__main__':
+    test_dictproxy()
     test_dictviews()
     test_dictproxy_trick()

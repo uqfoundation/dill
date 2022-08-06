@@ -4,20 +4,13 @@ test dill's ability to pickle abstract base class objects
 """
 import dill
 import abc
+from abc import ABC
 
 from types import FunctionType
 
 dill.settings['recurse'] = True
 
-if dill._dill.PY3:
-    ABC = abc.ABC
-else:
-    ABC = object
-
 class OneTwoThree(ABC):
-    if not dill._dill.PY3:
-        __metaclass__ = abc.ABCMeta
-
     @abc.abstractmethod
     def foo(self):
         """A method"""
@@ -91,9 +84,6 @@ def test_abc_local():
     Test using locally scoped ABC class
     """
     class LocalABC(ABC):
-        if not dill._dill.PY3:
-            __metaclass__ = abc.ABCMeta
-
         @abc.abstractmethod
         def foo(self):
             pass
@@ -129,8 +119,7 @@ def test_abc_local():
 
     labc2, pik = dill.copy((labc, Real()))
     assert 'Real' == type(pik).__name__
-    if dill._dill.PY3:
-        assert '.Real' in type(pik).__qualname__
+    assert '.Real' in type(pik).__qualname__
     assert type(pik) is not Real
     assert labc2 is not LocalABC
     assert labc2 is not labc

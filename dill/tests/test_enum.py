@@ -1,14 +1,6 @@
-try:
-    import enum
-    from enum import Enum, IntEnum, EnumMeta, Flag, IntFlag, unique, auto
-except:
-    try:
-        import enum34
-        from enum34 import Enum, IntEnum, EnumMeta, Flag, IntFlag, unique, auto
-    except:
-        Enum = None
-
 import abc
+import enum
+from enum import Enum, IntEnum, EnumMeta, Flag, IntFlag, unique, auto
 
 import dill
 import sys
@@ -82,19 +74,12 @@ def test_enums():
                     pass
             return abstract_enum_cls
 
-    if dill._dill.PY3:
-        l = locals()
-        exec("""class StrEnum(str, abc.ABC, Enum, metaclass=ABCEnumMeta):
-            'accepts only string values'
-            def invisible(self):
-                return "did you see me?" """, None, l)
-        StrEnum = l['StrEnum']
-    else:
-        class StrEnum(str, abc.ABC, Enum):
-            __metaclass__ = ABCEnumMeta
-            'accepts only string values'
-            def invisible(self):
-                return "did you see me?"
+    l = locals()
+    exec("""class StrEnum(str, abc.ABC, Enum, metaclass=ABCEnumMeta):
+        'accepts only string values'
+        def invisible(self):
+            return "did you see me?" """, None, l)
+    StrEnum = l['StrEnum']
 
     class Name(StrEnum):
         BDFL = 'Guido van Rossum'
@@ -173,5 +158,4 @@ def test_enums():
     # assert list(map(int, Color_)) == [1, 2, 3]
 
 if __name__ == '__main__':
-    if Enum:
-        test_enums()
+    test_enums()

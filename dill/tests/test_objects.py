@@ -57,6 +57,7 @@ def test_objects():
        #pickles(member, exact=True)
         pickles(member, exact=False)
 
-
 if __name__ == '__main__':
+    import warnings
+    warnings.simplefilter('ignore')
     test_objects()

@@ -9,10 +9,7 @@
 global settings for Pickler
 """
 
-try:
-    from pickle import DEFAULT_PROTOCOL
-except ImportError:
-    from pickle import HIGHEST_PROTOCOL as DEFAULT_PROTOCOL
+from pickle import DEFAULT_PROTOCOL
 
 settings = {
    #'main' : None,

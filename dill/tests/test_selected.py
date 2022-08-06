@@ -19,7 +19,7 @@ def test_dict_contents():
   for i,j in c.items():
    #try:
     ok = dill.pickles(j)
-   #except:
+   #except Exception:
    #  print ("FAIL: %s with %s" % (i, dill.detect.errors(j)))
     if verbose: print ("%s: %s, %s" % (ok, type(j), j))
     assert ok
@@ -29,7 +29,7 @@ def _g(x): yield x;
 
 def _f():
   try: raise
-  except:
+  except Exception:
     from sys import exc_info
     e, er, tb = exc_info()
     return er, tb
@@ -42,6 +42,13 @@ from dill import objects
 from dill import load_types
 load_types(pickleable=True,unpickleable=False)
 _newclass = objects['ClassObjectType']
+# some clean-up #FIXME: should happen internal to dill
+objects['TemporaryFileType'].close()
+objects['TextWrapperType'].close()
+objects['BufferedRandomType'].close()
+objects['BufferedReaderType'].close()
+objects['BufferedWriterType'].close()
+objects['FileType'].close()
 del objects
 
 # getset_descriptor for new-style classes (fails on '_method', if not __main__)
@@ -76,7 +83,7 @@ def test_frame_related():
   g = _g(1)
   f = g.gi_frame
   e,t = _f()
-  _is = lambda ok: not ok if dill._dill.IS_PYPY2 else ok
+  _is = lambda ok: ok
   ok = dill.pickles(f)
   if verbose: print ("%s: %s, %s" % (ok, type(f), f))
   assert not ok
@@ -91,9 +98,28 @@ def test_frame_related():
   assert ok
   if verbose: print ("")
 
+def test_typing():
+  import typing
+  x = typing.Any
+  assert x == dill.copy(x)
+  x = typing.Dict[int, str]
+  assert x == dill.copy(x)
+  x = typing.List[int]
+  assert x == dill.copy(x)
+  x = typing.Tuple[int, str]
+  assert x == dill.copy(x)
+  x = typing.Tuple[int]
+  assert x == dill.copy(x)
+  x = typing.Tuple[()]
+  assert x == dill.copy(x)
+  x = typing.Tuple[()].copy_with(())
+  assert x == dill.copy(x)
+  return
+
 
 if __name__ == '__main__':
   test_frame_related()
   test_dict_contents()
   test_class()
   test_class_descriptors()
+  test_typing()
