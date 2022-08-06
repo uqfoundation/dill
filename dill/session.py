@@ -308,7 +308,7 @@ def _identify_module(file, main=None):
 
 def load_module(
     filename = str(TEMPDIR/'session.pkl'),
-    module: Union[ModuleType, str] = None,
+    module: Optional[Union[ModuleType, str]] = None,
     **kwds
 ) -> Optional[ModuleType]:
     """Update the selected module (default is :py:mod:`__main__`) with
