@@ -1983,7 +1983,7 @@ def pickles(obj,exact=False,safe=False,**kwds):
         try:
             #FIXME: should be "(pik == obj).all()" for numpy comparison, though that'll fail if shapes differ
             result = bool(pik.all() == obj.all())
-        except AttributeError:
+        except (AttributeError, TypeError):
             warnings.filterwarnings('ignore')
             result = pik == obj
             warnings.resetwarnings()
