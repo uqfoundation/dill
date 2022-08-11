@@ -209,8 +209,9 @@ class TraceFormatter(logging.Formatter):
         return super().format(record)
 
 logger = logging.getLogger('dill')
+logger.propagate = False
 adapter = TraceAdapter(logger)
-stderr_handler = logging.StreamHandler()
+stderr_handler = logging._StderrHandler()
 adapter.addHandler(stderr_handler)
 
 def trace(arg: Union[bool, TextIO, str, os.PathLike] = None, *, mode: str = 'a') -> NoReturn:
