@@ -91,51 +91,39 @@ def __hook__():
     from numpy import dtype as NumpyDType
     return True
 if NumpyArrayType: # then has numpy
-    def ndarraysubclassinstance(obj):
-        if type(obj) in (TypeType, ClassType):
-            return False # all classes return False
-        try: # check if is ndarray, and elif is subclass of ndarray
-            cls = getattr(obj, '__class__', None)
-            if cls is None: return False
-            elif cls is TypeType: return False
-            elif 'numpy.ndarray' not in str(getattr(cls, 'mro', int.mro)()):
+    def ndarraysubclassinstance(obj_type):
+        try: # check if is ndarray or subclass of ndarray
+            if all((c.__module__, c.__name__) != ('numpy', 'ndarray') for c in obj_type.__mro__):
                 return False
-        except ReferenceError: return False # handle 'R3' weakref in 3.x
-        except TypeError: return False
+        except (ReferenceError, TypeError): # TypeError is (was) for what?
+            # handle 'R3' weakref in 3.x
+            return False
         # anything below here is a numpy array (or subclass) instance
         __hook__() # import numpy (so the following works!!!)
         # verify that __reduce__ has not been overridden
-        NumpyInstance = NumpyArrayType((0,),'int8')
-        if id(obj.__reduce_ex__) == id(NumpyInstance.__reduce_ex__) and \
-           id(obj.__reduce__) == id(NumpyInstance.__reduce__): return True
-        return False
-    def numpyufunc(obj):
-        if type(obj) in (TypeType, ClassType):
-            return False # all classes return False
+        if obj_type.__reduce_ex__ is not NumpyArrayType.__reduce_ex__ \
+                or obj_type.__reduce__ is not NumpyArrayType.__reduce__:
+            return False
+        return True
+    def numpyufunc(obj_type):
         try: # check if is ufunc
-            cls = getattr(obj, '__class__', None)
-            if cls is None: return False
-            elif cls is TypeType: return False
-            if 'numpy.ufunc' not in str(getattr(cls, 'mro', int.mro)()):
+            if all((c.__module__, c.__name__) != ('numpy', 'ufunc') for c in obj_type.__mro__):
                 return False
-        except ReferenceError: return False # handle 'R3' weakref in 3.x
-        except TypeError: return False
+        except (ReferenceError, TypeError): # TypeError is (was) for what?
+            # handle 'R3' weakref in 3.x
+            return False
         # anything below here is a numpy ufunc
         return True
-    def numpydtype(obj):
-        if type(obj) in (TypeType, ClassType):
-            return False # all classes return False
+    def numpydtype(obj_type):
         try: # check if is dtype
-            cls = getattr(obj, '__class__', None)
-            if cls is None: return False
-            elif cls is TypeType: return False
-            if 'numpy.dtype' not in str(getattr(obj, 'mro', int.mro)()):
+            if all((c.__module__, c.__name__) != ('numpy', 'dtype') for c in obj_type.__mro__):
                 return False
-        except ReferenceError: return False # handle 'R3' weakref in 3.x
-        except TypeError: return False
+        except (ReferenceError, TypeError): # TypeError is (was) for what?
+            # handle 'R3' weakref in 3.x
+            return False
         # anything below here is a numpy dtype
         __hook__() # import numpy (so the following works!!!)
-        return type(obj) is type(NumpyDType) # handles subclasses
+        return obj_type is type(NumpyDType) # handles subclasses
 else:
     def ndarraysubclassinstance(obj): return False
     def numpyufunc(obj): return False
@@ -370,42 +358,44 @@ class Pickler(StockPickler):
     def save(self, obj, save_persistent_id=True):
         # register if the object is a numpy ufunc
         # thanks to Paul Kienzle for pointing out ufuncs didn't pickle
-        if NumpyUfuncType and numpyufunc(obj):
-            @register(type(obj))
-            def save_numpy_ufunc(pickler, obj):
-                logger.trace(pickler, "Nu: %s", obj)
-                name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
-                StockPickler.save_global(pickler, obj, name=name)
-                logger.trace(pickler, "# Nu")
-                return
-            # NOTE: the above 'save' performs like:
-            #   import copy_reg
-            #   def udump(f): return f.__name__
-            #   def uload(name): return getattr(numpy, name)
-            #   copy_reg.pickle(NumpyUfuncType, udump, uload)
-        # register if the object is a numpy dtype
-        if NumpyDType and numpydtype(obj):
-            @register(type(obj))
-            def save_numpy_dtype(pickler, obj):
-                logger.trace(pickler, "Dt: %s", obj)
-                pickler.save_reduce(_create_dtypemeta, (obj.type,), obj=obj)
-                logger.trace(pickler, "# Dt")
-                return
-            # NOTE: the above 'save' performs like:
-            #   import copy_reg
-            #   def uload(name): return type(NumpyDType(name))
-            #   def udump(f): return uload, (f.type,)
-            #   copy_reg.pickle(NumpyDTypeType, udump, uload)
-        # register if the object is a subclassed numpy array instance
-        if NumpyArrayType and ndarraysubclassinstance(obj):
-            @register(type(obj))
-            def save_numpy_array(pickler, obj):
-                logger.trace(pickler, "Nu: (%s, %s)", obj.shape, obj.dtype)
-                npdict = getattr(obj, '__dict__', None)
-                f, args, state = obj.__reduce__()
-                pickler.save_reduce(_create_array, (f,args,state,npdict), obj=obj)
-                logger.trace(pickler, "# Nu")
-                return
+        obj_type = type(obj)
+        if NumpyArrayType and not (obj_type is type or obj_type in Pickler.dispatch):
+            if NumpyUfuncType and numpyufunc(obj_type):
+                @register(obj_type)
+                def save_numpy_ufunc(pickler, obj):
+                    logger.trace(pickler, "Nu: %s", obj)
+                    name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
+                    StockPickler.save_global(pickler, obj, name=name)
+                    logger.trace(pickler, "# Nu")
+                    return
+                # NOTE: the above 'save' performs like:
+                #   import copy_reg
+                #   def udump(f): return f.__name__
+                #   def uload(name): return getattr(numpy, name)
+                #   copy_reg.pickle(NumpyUfuncType, udump, uload)
+            # register if the object is a numpy dtype
+            if NumpyDType and numpydtype(obj_type):
+                @register(obj_type)
+                def save_numpy_dtype(pickler, obj):
+                    logger.trace(pickler, "Dt: %s", obj)
+                    pickler.save_reduce(_create_dtypemeta, (obj.type,), obj=obj)
+                    logger.trace(pickler, "# Dt")
+                    return
+                # NOTE: the above 'save' performs like:
+                #   import copy_reg
+                #   def uload(name): return type(NumpyDType(name))
+                #   def udump(f): return uload, (f.type,)
+                #   copy_reg.pickle(NumpyDTypeType, udump, uload)
+            # register if the object is a subclassed numpy array instance
+            if NumpyArrayType and ndarraysubclassinstance(obj_type):
+                @register(obj_type)
+                def save_numpy_array(pickler, obj):
+                    logger.trace(pickler, "Nu: (%s, %s)", obj.shape, obj.dtype)
+                    npdict = getattr(obj, '__dict__', None)
+                    f, args, state = obj.__reduce__()
+                    pickler.save_reduce(_create_array, (f,args,state,npdict), obj=obj)
+                    logger.trace(pickler, "# Nu")
+                    return
         # end hack
         if GENERATOR_FAIL and type(obj) == GeneratorType:
             msg = "Can't pickle %s: attribute lookup builtins.generator failed" % GeneratorType
