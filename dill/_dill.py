@@ -367,7 +367,7 @@ class Pickler(StockPickler):
         self._postproc = OrderedDict()
         self._file = file
 
-    def dump(self, obj): #NOTE: if settings change, need to update attributes
+    def save(self, obj, save_persistent_id=True):
         # register if the object is a numpy ufunc
         # thanks to Paul Kienzle for pointing out ufuncs didn't pickle
         if NumpyUfuncType and numpyufunc(obj):
@@ -410,6 +410,11 @@ class Pickler(StockPickler):
         if GENERATOR_FAIL and type(obj) == GeneratorType:
             msg = "Can't pickle %s: attribute lookup builtins.generator failed" % GeneratorType
             raise PicklingError(msg)
+        StockPickler.save(self, obj, save_persistent_id)
+
+    save.__doc__ = StockPickler.save.__doc__
+
+    def dump(self, obj): #NOTE: if settings change, need to update attributes
         logger.trace_setup(self)
         StockPickler.dump(self, obj)
 
