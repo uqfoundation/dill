@@ -128,8 +128,8 @@ def test_dtype():
         import numpy as np
 
         dti = np.dtype('int')
-        assert np.dtype == dill.loads(dill.dumps(np.dtype))
-        assert dti == dill.loads(dill.dumps(dti))
+        assert np.dtype == dill.copy(np.dtype)
+        assert dti == dill.copy(dti)
     except ImportError: pass
 
 
@@ -139,8 +139,7 @@ def test_array_nested():
 
         x = np.array([1])
         y = (x,)
-        dill.dumps(x)
-        assert y == dill.loads(dill.dumps(y))
+        assert y == dill.copy(y)
 
     except ImportError: pass
 
