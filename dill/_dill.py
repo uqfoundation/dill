@@ -92,11 +92,7 @@ def __hook__():
     return True
 if NumpyArrayType: # then has numpy
     def ndarraysubclassinstance(obj_type):
-        try: # check if is ndarray or subclass of ndarray
-            if all((c.__module__, c.__name__) != ('numpy', 'ndarray') for c in obj_type.__mro__):
-                return False
-        except (ReferenceError, TypeError): # TypeError is (was) for what?
-            # handle 'R3' weakref in 3.x
+        if all((c.__module__, c.__name__) != ('numpy', 'ndarray') for c in obj_type.__mro__):
             return False
         # anything below here is a numpy array (or subclass) instance
         __hook__() # import numpy (so the following works!!!)
@@ -106,20 +102,9 @@ if NumpyArrayType: # then has numpy
             return False
         return True
     def numpyufunc(obj_type):
-        try: # check if is ufunc
-            if all((c.__module__, c.__name__) != ('numpy', 'ufunc') for c in obj_type.__mro__):
-                return False
-        except (ReferenceError, TypeError): # TypeError is (was) for what?
-            # handle 'R3' weakref in 3.x
-            return False
-        # anything below here is a numpy ufunc
-        return True
+        return any((c.__module__, c.__name__) == ('numpy', 'ufunc') for c in obj_type.__mro__)
     def numpydtype(obj_type):
-        try: # check if is dtype
-            if all((c.__module__, c.__name__) != ('numpy', 'dtype') for c in obj_type.__mro__):
-                return False
-        except (ReferenceError, TypeError): # TypeError is (was) for what?
-            # handle 'R3' weakref in 3.x
+        if all((c.__module__, c.__name__) != ('numpy', 'dtype') for c in obj_type.__mro__):
             return False
         # anything below here is a numpy dtype
         __hook__() # import numpy (so the following works!!!)
@@ -1591,18 +1576,11 @@ def save_weakref(pickler, obj):
 @register(ProxyType)
 @register(CallableProxyType)
 def save_weakproxy(pickler, obj):
+    # Must do string substitution here and use %r to avoid ReferenceError.
+    logger.trace(pickler, "R2: %r" % obj)
     refobj = _locate_object(_proxy_helper(obj))
-    try:
-        _t = "R2"
-        logger.trace(pickler, "%s: %s", _t, obj)
-    except ReferenceError:
-        _t = "R3"
-        logger.trace(pickler, "%s: %s", _t, sys.exc_info()[1])
-   #callable = bool(getattr(refobj, '__call__', None))
-    if type(obj) is CallableProxyType: callable = True
-    else: callable = False
-    pickler.save_reduce(_create_weakproxy, (refobj, callable), obj=obj)
-    logger.trace(pickler, "# %s", _t)
+    pickler.save_reduce(_create_weakproxy, (refobj, callable(obj)), obj=obj)
+    logger.trace(pickler, "# R2")
     return
 
 def _is_builtin_module(module):
