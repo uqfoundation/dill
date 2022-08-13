@@ -100,6 +100,7 @@ if NumpyArrayType: # then has numpy
             elif cls is TypeType: return False
             elif 'numpy.ndarray' not in str(getattr(cls, 'mro', int.mro)()):
                 return False
+        except OSError: return False # ctypes.LibraryLoader
         except ReferenceError: return False # handle 'R3' weakref in 3.x
         except TypeError: return False
         # anything below here is a numpy array (or subclass) instance
@@ -118,6 +119,7 @@ if NumpyArrayType: # then has numpy
             elif cls is TypeType: return False
             if 'numpy.ufunc' not in str(getattr(cls, 'mro', int.mro)()):
                 return False
+        except OSError: return False # ctypes.LibraryLoader
         except ReferenceError: return False # handle 'R3' weakref in 3.x
         except TypeError: return False
         # anything below here is a numpy ufunc
@@ -131,6 +133,7 @@ if NumpyArrayType: # then has numpy
             elif cls is TypeType: return False
             if 'numpy.dtype' not in str(getattr(obj, 'mro', int.mro)()):
                 return False
+        except OSError: return False # ctypes.LibraryLoader
         except ReferenceError: return False # handle 'R3' weakref in 3.x
         except TypeError: return False
         # anything below here is a numpy dtype
