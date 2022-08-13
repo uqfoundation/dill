@@ -129,7 +129,7 @@ def _restore_modules(unpickler, main_module):
 #NOTE: 06/03/15 renamed main_module to main
 def dump_module(
     filename = str(TEMPDIR/'session.pkl'),
-    module: Union[ModuleType, str] = None,
+    module: Optional[Union[ModuleType, str]] = None,
     refimported: bool = False,
     **kwds
 ) -> None:
