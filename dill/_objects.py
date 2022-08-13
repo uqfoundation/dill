@@ -188,10 +188,8 @@ if HAS_CTYPES:
     z['CFloatType'] = ctypes.c_float()
     z['CDoubleType'] = ctypes.c_double()
     z['CSizeTType'] = ctypes.c_size_t()
-    z = (sys.platform[:3] == 'win' or sys.platform[:6] == 'darwin') # non-'nux
-    z = a if (sys.hexversion >= 0x30b00b3 and not z) else x
-    z['CLibraryLoaderType'] = ctypes.cdll
     del z
+    a['CLibraryLoaderType'] = ctypes.cdll
     a['StructureType'] = _Struct
     # if not IS_PYPY:
     #     a['BigEndianStructureType'] = ctypes.BigEndianStructure()

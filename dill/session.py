@@ -234,10 +234,10 @@ def _restore_modules(unpickler, main_module):
 
 def dump_module(
     filename = str(TEMPDIR/'session.pkl'),
-    module: Union[ModuleType, str] = None,
+    module: Optional[Union[ModuleType, str]] = None,
     *,
-    refimported: bool = None,
-    refonfail: bool = None,
+    refimported: Optional[bool] = None,
+    refonfail: Optional[bool] = None,
     **kwds
 ) -> None:
     R"""Pickle the current state of :py:mod:`__main__` or another module to a file.
@@ -433,7 +433,7 @@ def is_pickled_module(filename, importable: bool = True) -> bool:
 
 def load_module(
     filename = str(TEMPDIR/'session.pkl'),
-    module: Union[ModuleType, str] = None,
+    module: Optional[Union[ModuleType, str]] = None,
     **kwds
 ) -> Optional[ModuleType]:
     """Update the selected module (default is :py:mod:`__main__`) with
