@@ -326,8 +326,11 @@ class UnpicklingWarning(PickleWarning, UnpicklingError):
 class Pickler(StockPickler):
     """python's Pickler extended to interpreter sessions"""
     dispatch = MetaCatchingDict(StockPickler.dispatch.copy())
-    _refonfail = False
+    _refimported = False
+    _refonfail = False  # True in session.settings
     _session = False
+    _first_pass = False
+    _original_main = None
     from .settings import settings
 
     def __init__(self, file, *args, **kwds):
@@ -346,12 +349,23 @@ class Pickler(StockPickler):
         self._postproc = OrderedDict()
         self._file_tell = getattr(file, 'tell', None)  # for logger and refonfail
 
-    def save(self, obj, save_persistent_id=True):
-        # register if the object is a numpy ufunc
-        # thanks to Paul Kienzle for pointing out ufuncs didn't pickle
+    def save(self, obj, save_persistent_id=True, *, name=None):
+        # This method overrides StockPickler.save() and is called for every
+        # object pickled.  When 'refonfail' is True, it tries to save the object
+        # by reference if pickling it fails with a common pickling error, as
+        # defined by the constant UNPICKLEABLE_ERRORS.  If that also fails, then
+        # the exception is risen and, if this was called indirectly from another
+        # Pickler.save() call, the parent objects will try to be saved by
+        # reference recursively, until it succeeds or the exception propagates
+        # beyond the topmost save() call.  The extra 'name' argument is passed
+        # to StockPickler.save_global().
+
+        # numpy hack
         obj_type = type(obj)
         if NumpyArrayType and not (obj_type is type or obj_type in Pickler.dispatch):
-            if NumpyUfuncType and numpyufunc(obj_type):
+            # register if the object is a numpy ufunc
+            # thanks to Paul Kienzle for pointing out ufuncs didn't pickle
+            if numpyufunc(obj_type):
                 @register(obj_type)
                 def save_numpy_ufunc(pickler, obj):
                     logger.trace(pickler, "Nu: %s", obj)
@@ -365,7 +379,7 @@ class Pickler(StockPickler):
                 #   def uload(name): return getattr(numpy, name)
                 #   copy_reg.pickle(NumpyUfuncType, udump, uload)
             # register if the object is a numpy dtype
-            if NumpyDType and numpydtype(obj_type):
+            if numpydtype(obj_type):
                 @register(obj_type)
                 def save_numpy_dtype(pickler, obj):
                     logger.trace(pickler, "Dt: %s", obj)
@@ -378,7 +392,7 @@ class Pickler(StockPickler):
                 #   def udump(f): return uload, (f.type,)
                 #   copy_reg.pickle(NumpyDTypeType, udump, uload)
             # register if the object is a subclassed numpy array instance
-            if NumpyArrayType and ndarraysubclassinstance(obj_type):
+            if ndarraysubclassinstance(obj_type):
                 @register(obj_type)
                 def save_numpy_array(pickler, obj):
                     logger.trace(pickler, "Nu: (%s, %s)", obj.shape, obj.dtype, obj=obj)
@@ -387,32 +401,17 @@ class Pickler(StockPickler):
                     pickler.save_reduce(_create_array, (f,args,state,npdict), obj=obj)
                     logger.trace(pickler, "# Nu")
                     return
-        # end hack
-        if GENERATOR_FAIL and type(obj) == GeneratorType:
+        # end numpy hack
+
+        if GENERATOR_FAIL and obj_type is GeneratorType:
             msg = "Can't pickle %s: attribute lookup builtins.generator failed" % GeneratorType
             raise PicklingError(msg)
-        StockPickler.save(self, obj, save_persistent_id)
 
-    save.__doc__ = StockPickler.save.__doc__
-
-    def dump(self, obj): #NOTE: if settings change, need to update attributes
-        logger.trace_setup(self)
-        StockPickler.dump(self, obj)
-    dump.__doc__ = StockPickler.dump.__doc__
-
-    def save(self, obj, save_persistent_id=True, *, name=None):
-        # This method overrides StockPickler.save() and is called for every
-        # object pickled.  When 'refonfail' is True, it tries to save the object
-        # by reference if pickling it fails with a common pickling error, as
-        # defined by the constant UNPICKLEABLE_ERRORS.  If that also fails, then
-        # the exception is risen and, if this was called indirectly from another
-        # Pickler.save() call, the parent objects will try to be saved by
-        # reference recursively, until it succeeds or the exception propagates
-        # beyond the topmost save() call.  The extra 'name' argument is passed
-        # to StockPickler.save_global().
         if not self._refonfail:
             super().save(obj, save_persistent_id)
             return
+
+        # Save with 'refonfail'.
         # Disable framing (right after the framer.init_framing() call at dump()).
         self.framer.current_frame = None
         # Store initial state.
@@ -464,36 +463,13 @@ class Pickler(StockPickler):
                     self._trace_stack.pop()
                     self._size_stack.pop()
                 raise error from error_stack
+        return
+    save.__doc__ = StockPickler.save.__doc__
 
-    def _save_module_dict(self, obj):
-        """Save a module's dictionary.
-
-        If an object doesn't have a '__name__' attribute, pass the object's name
-        in the module's namespace to save(), so that it can be used with
-        save_global() to increase the chances of finding the object for saving
-        it by reference in the event of a failed serialization.
-        """
-        if not self._refonfail:
-            super().save_dict(obj)
-            return
-        # Modified from Python Standard Library's pickle._Pickler.save_dict()
-        #   and pickle._Pickler._batch_setitems().  Summary of changes: use
-        #   'SETITEM' for all pickle protocols and conditionally pass an extra
-        #   argument to a custom implementation of the method 'save'.
-        # Copyright (c) 2001-2022 Python Software Foundation; All Rights Reserved
-        # License Agreement: https://opensource.org/licenses/Python-2.0
-        if self.bin:
-            self.write(EMPTY_DICT)
-        else:   # proto 0 -- can't use EMPTY_DICT
-            self.write(MARK + DICT)
-        self.memoize(obj)
-        for k, v in obj.items():
-            self.save(k)
-            if hasattr(v, '__name__') or hasattr(v, '__qualname__'):
-                self.save(v)
-            else:
-                self.save(v, name=k)
-            self.write(SETITEM)
+    def dump(self, obj): #NOTE: if settings change, need to update attributes
+        logger.trace_setup(self)
+        StockPickler.dump(self, obj)
+    dump.__doc__ = StockPickler.dump.__doc__
 
 class Unpickler(StockUnpickler):
     """python's Unpickler extended to interpreter sessions and more types"""
@@ -1279,16 +1255,39 @@ def save_module_dict(pickler, obj):
         logger.trace(pickler, "D4: %s", _repr_dict(obj), obj=obj)
         pickler.write(bytes('c%s\n__dict__\n' % obj['__name__'], 'UTF-8'))
         logger.trace(pickler, "# D4")
-    elif pickler_is_dill and pickler._session and pickler._first_pass:
+    elif not (pickler_is_dill and pickler._session and pickler._first_pass and pickler._refonfail):
         # we only care about session the first pass thru
-        pickler._first_pass = False
-        logger.trace(pickler, "D5: %s", _repr_dict(obj), obj=obj)
-        pickler._save_module_dict(obj)
-        logger.trace(pickler, "# D5")
-    else:
+        if pickler_is_dill and pickler._first_pass:
+            pickler._first_pass = False
         logger.trace(pickler, "D2: %s", _repr_dict(obj), obj=obj)
         StockPickler.save_dict(pickler, obj)
         logger.trace(pickler, "# D2")
+    else:
+        # If an object doesn't have a '__name__' attribute, pass the object's name
+        # in the module's namespace to save(), so that it can be used with
+        # save_global() to increase the chances of finding the object for saving
+        # it by reference in the event of a failed serialization.
+        pickler._first_pass = False
+        logger.trace(pickler, "D5: %s", _repr_dict(obj), obj=obj)
+        # Modified from Python Standard Library's pickle._Pickler.save_dict()
+        #   and pickle._Pickler._batch_setitems().  Summary of changes: use
+        #   'SETITEM' for all pickle protocols and conditionally pass an extra
+        #   argument to a custom implementation of the method 'save'.
+        # Copyright (c) 2001-2022 Python Software Foundation; All Rights Reserved
+        # License Agreement: https://opensource.org/licenses/Python-2.0
+        if pickler.bin:
+            pickler.write(EMPTY_DICT)
+        else:   # proto 0 -- can't use EMPTY_DICT
+            pickler.write(MARK + DICT)
+        pickler.memoize(obj)
+        for k, v in obj.items():
+            pickler.save(k)
+            if hasattr(v, '__name__') or hasattr(v, '__qualname__'):
+                pickler.save(v)
+            else:
+                pickler.save(v, name=k)
+            pickler.write(SETITEM)
+        logger.trace(pickler, "# D5")
     return
 
 

@@ -366,7 +366,6 @@ def dump_module(
             pickler._refonfail = True  # False by default
             pickler._file_seek = file.seek
             pickler._file_truncate = file.truncate
-            pickler._id_to_name = {id(v): k for k, v in main.__dict__.items()}
         pickler.dump(main)
     return
 
