@@ -72,7 +72,7 @@ autodoc_default_options = {
     'private-members': True,
     'special-members': True,
     'show-inheritance': True,
-    'exclude-members': '__dict__, __module__, __slots__, __weakref__',
+    'exclude-members': '__dict__, __module__, __slots__',
 }
 autodoc_typehints = 'description'
 napoleon_include_init_with_doc = True

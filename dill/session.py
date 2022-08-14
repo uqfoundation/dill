@@ -15,18 +15,18 @@ objects are pickleable, the complete state of a module.  For imported modules
 that are pickled, `dill` assumes that they are importable when unpickling.
 
 Contrary of using :py:func:`dill.dump` and :py:func:`dill.load` to save and load
-a module object, :py:func:`dill.dump_module` always try to pickle the module by
-value (including built-in modules).  Also, options like
+a module object, :py:func:`dill.dump_module` always tries to pickle the module
+by value (including built-in modules).  Also, options like
 ``dill.settings['byref']`` and ``dill.settings['recurse']`` don't affect its
 behavior.
 
 However, if a module contains references to objects originating from other
 modules, that would prevent it from pickling or drastically increase its disk
-size, they can be saved by reference instead of by value using the option
+size, they can be saved by reference instead of by value, using the option
 ``refimported``.
 
 With :py:func:`dump_module`, namespace filters may be used to restrict the list
-of variables pickled to a subset of those in the module, based on their names or
+of pickled variables to a subset of those in the module, based on their names or
 values.  Also, using :py:func:`load_module_asdict` allows one to load the
 variables from different saved states of the same module into dictionaries.
 """
@@ -261,8 +261,8 @@ def dump_module(
             parent objects by reference will be attempted recursively.  In the
             worst case scenario, the module itself may be saved by reference,
             with a warning.  Note: this option disables framing for pickle
-            protocol >= 4.  Turning this off may improve unpickling speed, but
-            may cause a module to fail pickling.
+            protocol >= 4.  Turning it off may improve unpickling speed, but may
+            cause a module to fail pickling.
         **kwds: extra keyword arguments passed to :py:class:`Pickler()`.
 
     Raises:
@@ -470,7 +470,7 @@ def load_module(
     value. Each case and behavior is exemplified below:
 
         1. `module`: ``None`` --- This call loads a previously saved state of
-        the module ``math`` and returns this at the end:
+        the module ``math`` and returns it (the module object) at the end:
 
             >>> import dill
             >>> # load module -> restore state -> return module
@@ -478,7 +478,7 @@ def load_module(
             <module 'math' (built-in)>
 
         2. `module`: ``str`` --- Passing the module name does the same as above,
-        but also verifies that the module loaded, restored and returned is
+        but also verifies that the module being loaded, restored and returned is
         indeed ``math``:
 
             >>> import dill
@@ -489,7 +489,7 @@ def load_module(
             ValueError: can't update module 'cmath' with the saved state of module 'math'
 
         3. `module`: ``ModuleType`` --- Passing the module itself instead of its
-        name have the additional effect of supressing the return value (and the
+        name has the additional effect of suppressing the return value (and the
         module is already loaded at this point):
 
             >>> import dill
@@ -715,22 +715,22 @@ def load_module_asdict(
         raise TypeError("'module' is an invalid keyword argument for load_module_asdict()")
     with _open(filename, 'rb', peekable=True) as file:
         main_name = _identify_module(file)
-        old_main = sys.modules.get(main_name)
+        original_main = sys.modules.get(main_name)
         main = ModuleType(main_name)
         if update:
-            if old_main is None:
-                old_main = _import_module(main_name)
-            main.__dict__.update(old_main.__dict__)
+            if original_main is None:
+                original_main = _import_module(main_name)
+            main.__dict__.update(original_main.__dict__)
         else:
             main.__builtins__ = __builtin__
         try:
             sys.modules[main_name] = main
             load_module(file, **kwds)
         finally:
-            if old_main is None:
+            if original_main is None:
                 del sys.modules[main_name]
             else:
-                sys.modules[main_name] = old_main
+                sys.modules[main_name] = original_main
     main.__session__ = str(filename)
     return main.__dict__
 
