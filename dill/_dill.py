@@ -39,8 +39,7 @@ OLD310 = (sys.hexversion < 0x30a0000)
 #XXX: get types from .objtypes ?
 import builtins as __builtin__
 from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
-from pickle import DICT, EMPTY_DICT, MARK, SETITEM
-from struct import pack
+from pickle import DICT, EMPTY_DICT, GLOBAL, MARK, SETITEM
 from _thread import LockType
 from _thread import RLock as RLockType
 #from io import IOBase
@@ -173,8 +172,6 @@ except NameError:
 import inspect
 import dataclasses
 import typing
-
-from pickle import GLOBAL
 
 
 ### Shims for different versions of Python and dill
