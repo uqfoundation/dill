@@ -94,12 +94,12 @@ def read_settings(filename) -> None:
 
     Accepted option values for general settings:
 
-      - boolean options (case insensitive): yes, no, on, off, true, false
+      - boolean options (case insensitive): False, True
       - `protocol`: DEFAULT_PROTOCOL, HIGHEST_PROTOCOL, 0, 1, 2, 3, ...
       - `fmode`: HANDLE_FMODE, 0, CONTENTS_FMODE, 1, FILE_FMODE, 2
 
-    .. IMPORTANT: The demo config file below is used in test_settings.py
-    .. Lexer 'pacmanconf' generates better highlighting than 'ini'.
+    Example of a settings file:
+
     .. code-block:: pacmanconf
 
         [dill]
@@ -132,7 +132,7 @@ def read_settings(filename) -> None:
         #include =
 
         [filters.another.module]
-        # Filter rules specifit to the module 'another.module'
+        # Filter rules specific to the module 'another.module'
         ## Empty filter sets disable filtering for this module.
         exclude =
         include =
