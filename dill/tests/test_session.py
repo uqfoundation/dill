@@ -22,7 +22,7 @@ session_file = os.path.join(os.path.dirname(__file__), 'session-refimported-%s.p
 #  Child process  #
 ###################
 
-def _error_line(error, obj, refimported):
+def _error_line(obj, refimported):
     import traceback
     line = traceback.format_exc().splitlines()[-2].replace('[obj]', '['+repr(obj)+']')
     return "while testing (with refimported=%s):  %s" % (refimported, line.lstrip())
@@ -54,7 +54,7 @@ if __name__ == '__main__' and len(sys.argv) >= 3 and sys.argv[1] == '--child':
             assert __main__.complex_log is cmath.log
 
         except AssertionError as error:
-            error.args = (_error_line(error, obj, refimported),)
+            error.args = (_error_line(obj, refimported),)
             raise
 
     test_modules(refimported)
@@ -145,7 +145,7 @@ def _test_objects(main, globals_copy, refimported):
         assert selfref is __main__
 
     except AssertionError as error:
-        error.args = (_error_line(error, obj, refimported),)
+        error.args = (_error_line(obj, refimported),)
         raise
 
 def test_session_main(refimported):

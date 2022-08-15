@@ -40,7 +40,7 @@ __all__ = [
 ]
 
 import logging
-logger = logging.getLogger('dill.session')
+logger = logging.getLogger(__name__)
 
 import contextlib
 import io
@@ -339,6 +339,7 @@ def dump_module(
           >>> import math
           >>> foo.sin = math.sin
           >>> dill.dump_module('foo_session.pkl', module=foo, refimported=True)
+          FIXME: here be dragons
 
         - Save the state of a module with unpickleable objects:
 
@@ -393,6 +394,7 @@ def dump_module(
     from .settings import settings as dill_settings
     protocol = dill_settings['protocol']
     refimported = _getopt(settings, 'refimported', refimported)
+    refonfail = _getopt(settings, 'refonfail', refonfail)
     base_rules = _getopt(settings, 'filters', base_rules)
     if not isinstance(base_rules, ModuleFilters):
         base_rules = ModuleFilters(base_rules)
@@ -431,6 +433,7 @@ def dump_module(
             pickler._refonfail = True  # False by default
             pickler._file_seek = file.seek
             pickler._file_truncate = file.truncate
+            pickler._id_to_name = {id(v): k for k, v in main.__dict__.items()}
         pickler.dump(main)
     return
 
@@ -942,6 +945,13 @@ class ModuleFilters(FilterRules):
             return mod_rules
         else:
             return mod_rules[submodules]
+    def __eq__(self, other):
+        if isinstance(other, ModuleFilters):
+            return super().__eq__(other) and self._module == other._module
+        elif isinstance(other, FilterRules):
+            return super().__eq__(other)
+        else:
+            return NotImplemented
     def get(self, name: str, default: ModuleFilters = None):
         try:
             return self[name]
@@ -959,13 +969,19 @@ class ModuleFilters(FilterRules):
             return self._parent.get_filters(rule_type)
 
 
-## Default settings ##
+## Session settings ##
 
 settings = {
     'refimported': False,
     'refonfail': True,
     'filters': ModuleFilters(rules=()),
 }
+
+# For read_settings():
+from .settings import DEFAULT_SETTINGS
+DEFAULT_SETTINGS[__name__] = settings.copy()
+del DEFAULT_SETTINGS[__name__]['filters']
+del DEFAULT_SETTINGS
 
 
 ## Session filter factories ##

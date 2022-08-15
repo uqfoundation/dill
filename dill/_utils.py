@@ -48,19 +48,19 @@ Filter = Union[str, Pattern[str], int, type, Callable]
 Rule = Tuple[RuleType, Union[Filter, Iterable[Filter]]]
 
 class NamedObject:
-    """Simple container class for a variable name and value."""
+    """Simple container for a variable's name and value used by filter functions."""
     __slots__ = 'name', 'value'
-    def __init__(self, name_value):
+    def __init__(self, name_value: Tuple[str, Any]):
         self.name, self.value = name_value
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         """
         Prevent simple bugs from writing `lambda obj: obj == 'literal'` instead
         of `lambda obj: obj.value == 'literal' in a filter definition.`
         """
-        if type(other) != NamedObject:
+        if type(other) is not NamedObject:
             raise TypeError("'==' not supported between instances of 'NamedObject' and %r" %
                     type(other).__name__)
-        return super().__eq__(other)
+        return self.value is other.value and self.name == other.name
 
 def _iter(filters):
     if isinstance(filters, str):
@@ -78,9 +78,11 @@ class FilterSet(MutableSet):
     ids: Set[int] = field(default_factory=set)
     types: Set[type] = field(default_factory=set)
     funcs: Set[Callable] = field(default_factory=set)
+
     _fields = None
     _rtypemap = None
     _typename_regex = re.compile(r'\w+(?=Type$)|\w+$', re.IGNORECASE)
+
     def _match_type(self, filter: Filter) -> Tuple[filter, str]:
         filter_type = type(filter)
         if filter_type == str:
@@ -103,6 +105,7 @@ class FilterSet(MutableSet):
         else:
             raise ValueError("invalid filter: %r" % filter)
         return filter, getattr(self, field)
+
     # Mandatory MutableSet methods.
     @classmethod
     def _from_iterable(cls, it):
@@ -122,6 +125,7 @@ class FilterSet(MutableSet):
     def discard(self, filter):
         filter, filter_set = self._match_type(filter)
         filter_set.discard(filter)
+
     # Overwrite generic methods (optimization).
     def remove(self, filter):
         filter, filter_set = self._match_type(filter)
@@ -144,6 +148,7 @@ class FilterSet(MutableSet):
             for filter in filters:
                 self.add(filter)
         return self
+
     # Extra methods.
     def update(self, filters):
         self |= filters
@@ -158,6 +163,7 @@ class FilterSet(MutableSet):
         if cls._rtypemap is None:
             cls._rtypemap = {cls._get_typekey(k): v for k, v in _dill._reverse_typemap.items()}
         return cls._rtypemap[cls._get_typekey(typename)]
+
 FilterSet._fields = tuple(field.name for field in fields(FilterSet))
 
 class _FilterSetDescriptor:
@@ -254,11 +260,13 @@ class FilterRules:
     __slots__ = '_exclude', '_include'
     exclude = _FilterSetDescriptor()
     include = _FilterSetDescriptor()
+
     def __init__(self, rules: Union[Iterable[Rule], FilterRules] = None):
         self._exclude = FilterSet()
         self._include = FilterSet()
         if rules is not None:
             self.update(rules)
+
     def __repr__(self):
         desc = ["<FilterRules:"]
         for attr in ('exclude', 'include'):
@@ -278,6 +286,17 @@ class FilterRules:
             desc += ["NOT SET"]
         sep = "\n  " if sum(len(x) for x in desc) > 78 else " "
         return sep.join(desc) + ">"
+
+    def __eq__(self, other):
+        if not isinstance(other, FilterRules):
+            return NotImplemented
+        MISSING = object()
+        self_exclude = getattr(self, 'exclude', MISSING)
+        self_include = getattr(self, 'include', MISSING)
+        other_exclude = getattr(other, 'exclude', MISSING)
+        other_include = getattr(other, 'include', MISSING)
+        return self_exclude == other_exclude and self_include == other_include
+
     # Proxy add(), discard(), remove() and clear() to FilterSets.
     def __proxy__(self, method, filter, *, rule_type=RuleType.EXCLUDE):
         if not isinstance(rule_type, RuleType):
@@ -287,9 +306,11 @@ class FilterRules:
     add = partialmethod(__proxy__, 'add')
     discard = partialmethod(__proxy__, 'discard')
     remove = partialmethod(__proxy__, 'remove')
+
     def clear(self):
         self.exclude.clear()
         self.include.clear()
+
     def update(self, rules: Union[Iterable[Rule], FilterRules]):
         """Update both FilterSets from a list of (RuleType, Filter) rules."""
         if isinstance(rules, FilterRules):

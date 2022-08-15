@@ -9,7 +9,7 @@
 global settings for Pickler
 """
 
-__all__ = ['settings', 'read_settings']
+__all__ = ['settings', 'read_settings', 'reset_settings']
 
 from pickle import DEFAULT_PROTOCOL, HIGHEST_PROTOCOL
 
@@ -21,21 +21,14 @@ settings = {
     'fmode' : 0, #HANDLE_FMODE
     'recurse' : False,
     'ignore' : False,
-    'dump_module' : {
-        'filters' : None, #ModuleFilters(rules=())  # set in dill.session
-        'refimported' : False,
-    },
 }
 
 ### Config file reader (INI format) ###
 
 DEFAULT_SETTINGS = {
     'dill': settings.copy(),
-    'dill.dump_module': settings['dump_module'].copy()
+    'dill.session': None,  # set in dill.session
 }
-del DEFAULT_SETTINGS['dill']['dump_module']
-del DEFAULT_SETTINGS['dill.dump_module']['filters']
-
 FMODES = dict(HANDLE_FMODE=0, CONTENTS_FMODE=1, FILE_FMODE=2)
 STANDARD_PROTOCOLS = dict(DEFAULT_PROTOCOL=DEFAULT_PROTOCOL, HIGHEST_PROTOCOL=HIGHEST_PROTOCOL)
 
@@ -105,6 +98,7 @@ def read_settings(filename) -> None:
       - `protocol`: DEFAULT_PROTOCOL, HIGHEST_PROTOCOL, 0, 1, 2, 3, ...
       - `fmode`: HANDLE_FMODE, 0, CONTENTS_FMODE, 1, FILE_FMODE, 2
 
+    .. IMPORTANT: The demo config file below is used in test_settings.py
     .. Lexer 'pacmanconf' generates better highlighting than 'ini'.
     .. code-block:: pacmanconf
 
@@ -114,10 +108,10 @@ def read_settings(filename) -> None:
         protocol = HIGHEST_PROTOCOL
         byref = yes
 
-        [dill.dump_module]
+        [dill.session]
         # Settings for dill.dump_module()
-        ## Stored in dill.settings['dump_module'].
-        refimported = yes
+        ## Stored in dill.session.settings.
+        refonfail = no
 
         [filters]
         # Default exclude/include filters for dill.dump_module()
@@ -152,7 +146,7 @@ def read_settings(filename) -> None:
     """
     import configparser
     from dill import DEFAULT_PROTOCOL, HANDLE_FMODE
-    from dill.session import ModuleFilters
+    from dill.session import ModuleFilters, settings as session_settings
 
     cp = configparser.ConfigParser(
             dict_type=dict,  # internal, in place of OrderedDict
@@ -174,12 +168,10 @@ def read_settings(filename) -> None:
     new_settings['fmode'] = int(FMODES.get(fmode, fmode))
     new_settings['protocol'] = int(STANDARD_PROTOCOLS.get(protocol, protocol))
 
-    # dump_module() settings.
-    new_settings['dump_module'] = {
-        'refimported': cp.getboolean('dill.dump_module', 'refimported'),
-        'filters': ModuleFilters(rules=()),
-    }
-    filters = new_settings['dump_module']['filters']
+    # Session settings (for dump_module).
+    section = cp['dill.session']
+    new_session_settings = {k: section.getboolean(k) for k in DEFAULT_SETTINGS['dill.session']}
+    filters = new_session_settings['filters'] = ModuleFilters(rules=())
     if 'filters' in cp:
         # Default filters.
         _read_filters(cp['filters'], filters)
@@ -194,3 +186,14 @@ def read_settings(filename) -> None:
     # Update settings dictionary.
     settings.clear()
     settings.update(new_settings)
+    session_settings.clear()
+    session_settings.update(new_session_settings)
+
+def reset_settings() -> None:
+    "Reset all the dill settings to its default values."
+    from dill.session import ModuleFilters, settings as session_settings
+    settings.clear()
+    settings.update(DEFAULT_SETTINGS['dill'])
+    session_settings.clear()
+    session_settings.update(DEFAULT_SETTINGS['dill.session'])
+    session_settings['filters'] = ModuleFilters(rules=())
