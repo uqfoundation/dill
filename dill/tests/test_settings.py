@@ -65,6 +65,9 @@ def test_read_settings():
     assert len(filters['another.module'].exclude) == len(filters['another.module'].include) == 0
 
 def test_reset_settings():
+    dill.settings['byref'] = 'anything'
+    session_settings['refimported'] = 'something else'
+    session_settings['filters'].add('a_name')
     dill.reset_settings()
     assert dill.settings == DEFAULT_SETTINGS['dill']
     settings_copy = session_settings.copy()
@@ -166,6 +169,7 @@ def test_settings():
             raise("saving 'sys' without 'refonfail' should have failed")
 
 if __name__ == '__main__':
-    test_read_settings()
+    if not dill._dill.IS_PYPY:
+        test_read_settings()
     test_reset_settings()
     test_settings()
