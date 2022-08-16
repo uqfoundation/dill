@@ -42,12 +42,9 @@ __all__ = [
 import logging
 logger = logging.getLogger(__name__)
 
-import contextlib
-import io
 import re
 import sys
 import warnings
-from contextlib import AbstractContextManager, nullcontext, suppress
 
 from dill import _dill, Pickler, Unpickler, UnpicklingError
 from ._dill import (
@@ -55,92 +52,16 @@ from ._dill import (
     _getopt, _import_module, _is_builtin_module, _is_imported_module,
     _main_module, _reverse_typemap, __builtin__,
 )
-from ._utils import FilterRules, FilterSet, size_filter, EXCLUDE, INCLUDE
+from ._utils import FilterRules, FilterSet, _open, size_filter, EXCLUDE, INCLUDE
 
 # Type hints.
 from typing import Iterable, Optional, Union
-from ._utils import Filter, FilterFunction, NamedObject, RuleType
+from ._utils import Filter, FilterFunction, NamedObject, Rule, RuleType
 
 import pathlib
 import tempfile
 
 TEMPDIR = pathlib.PurePath(tempfile.gettempdir())
-
-class _PeekableReader(AbstractContextManager):
-    """lightweight readable stream wrapper that implements peek()"""
-    def __init__(self, stream, closing=True):
-        self.stream = stream
-        self.closing = closing
-    def __exit__(self, *exc_info):
-        if self.closing:
-            self.stream.close()
-    def read(self, n):
-        return self.stream.read(n)
-    def readline(self):
-        return self.stream.readline()
-    def tell(self):
-        return self.stream.tell()
-    def close(self):
-        return self.stream.close()
-    def peek(self, n):
-        stream = self.stream
-        try:
-            if hasattr(stream, 'flush'):
-                stream.flush()
-            position = stream.tell()
-            stream.seek(position)  # assert seek() works before reading
-            chunk = stream.read(n)
-            stream.seek(position)
-            return chunk
-        except (AttributeError, OSError):
-            raise NotImplementedError("stream is not peekable: %r", stream) from None
-
-class _TruncatableWriter(io.BytesIO, AbstractContextManager):
-    """works as an unlimited buffer, writes to file on close"""
-    def __init__(self, stream, closing=True, *args, **kwds):
-        super().__init__(*args, **kwds)
-        self.stream = stream
-        self.closing = closing
-    def __exit__(self, *exc_info):
-        self.close()
-    def close(self):
-        self.stream.write(self.getvalue())
-        with suppress(AttributeError):
-            self.stream.flush()
-        super().close()
-        if self.closing:
-            self.stream.close()
-
-def _open(file, mode, *, peekable=False, truncatable=False):
-    """return a context manager with an opened file-like object"""
-    readonly = ('r' in mode and '+' not in mode)
-    if not readonly and peekable:
-        raise ValueError("the 'peekable' option is invalid for writable files")
-    if readonly and truncatable:
-        raise ValueError("the 'truncatable' option is invalid for read-only files")
-    should_close = not hasattr(file, 'read' if readonly else 'write')
-    if should_close:
-        file = open(file, mode)
-    # Wrap stream in a helper class if necessary.
-    if peekable and not hasattr(file, 'peek'):
-        # Try our best to return it as an object with a peek() method.
-        if hasattr(file, 'tell') and hasattr(file, 'seek'):
-            file = _PeekableReader(file, closing=should_close)
-        else:
-            try:
-                file = io.BufferedReader(file)
-            except Exception:
-                # It won't be peekable, but will fail gracefully in _identify_module().
-                file = _PeekableReader(file, closing=should_close)
-    elif truncatable and (
-        not hasattr(file, 'truncate')
-        or (hasattr(file, 'seekable') and not file.seekable())
-    ):
-        file = _TruncatableWriter(file, closing=should_close)
-    if should_close or isinstance(file, (_PeekableReader, _TruncatableWriter)):
-        return file
-    else:
-        return nullcontext(file)
 
 def _module_map():
     """get map of imported modules"""
@@ -420,7 +341,7 @@ def dump_module(
         if getattr(main, '__loader__', None) is None and _is_imported_module(original_main):
             # Trick _is_imported_module() to force saving this as an imported module.
             main.__loader__ = True  # will be discarded by _dill.save_module()
-    with _open(filename, 'wb', truncatable=True) as file:
+    with _open(filename, 'wb', seekable=True) as file:
         pickler = Pickler(file, protocol, **kwds)
         pickler._main = main     #FIXME: dill.settings are disabled
         pickler._byref = False   # disable pickling by name reference
@@ -1058,7 +979,7 @@ def ipython_filter(*, keep_history: str = 'input') -> FilterFunction:
         interactive_vars |= {'_oh', 'Out', '_', '__', '___'}
         history_regex.append(re.compile(r'_\d+'))
 
-    def not_interactive_var(obj):
+    def not_interactive_var(obj: NamedObject) -> bool:
         if any(regex.fullmatch(obj.name) for regex in history_regex):
             return False
         return obj.name not in interactive_vars
