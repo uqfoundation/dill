@@ -14,18 +14,17 @@ from __future__ import annotations
 __all__ = ['FilterRules', 'Filter', 'RuleType', 'size_filter', 'EXCLUDE', 'INCLUDE']
 
 import math
-import random
 import re
 import warnings
 from dataclasses import dataclass, field, fields
-from collections import namedtuple
 from collections.abc import MutableSet
 from enum import Enum
 from functools import partialmethod
 from itertools import chain, filterfalse
-from statistics import mean
-from types import ModuleType
-from typing import Any, Callable, Dict, Iterable, Pattern, Set, Tuple, Union
+from typing import (
+    Any, Callable, Dict, Iterable, Iterator,
+    Optional, Pattern, Set, Tuple, Union,
+)
 
 from dill import _dill
 
@@ -35,17 +34,16 @@ def _format_bytes_size(size: Union[int, float]) -> Tuple[int, str]:
     power_of_2 = math.trunc(size).bit_length() - 1
     magnitude = min(power_of_2 - power_of_2 % 10, 80)  # 2**80 == 1 YiB
     if magnitude:
-        size = ((size >> magnitude-1) + 1) >> 1  # rounding trick: 1535 -> 1K; 1536 -> 2K
-        unit = "%siB" % "KMGTPEZY"[magnitude // 10]
+        # Rounding trick: 1535 (1024 + 511) -> 1K; 1536 -> 2K
+        size = ((size >> magnitude-1) + 1) >> 1
+        unit = "%siB" % "KMGTPEZY"[(magnitude // 10) - 1]
     return size, unit
 
-# Namespace filtering.
+
+## Namespace filtering. ##
 
 RuleType = Enum('RuleType', 'EXCLUDE INCLUDE', module=__name__)
 EXCLUDE, INCLUDE = RuleType.EXCLUDE, RuleType.INCLUDE
-
-Filter = Union[str, Pattern[str], int, type, Callable]
-Rule = Tuple[RuleType, Union[Filter, Iterable[Filter]]]
 
 class NamedObject:
     """Simple container for a variable's name and value used by filter functions."""
@@ -62,6 +60,10 @@ class NamedObject:
                     type(other).__name__)
         return self.value is other.value and self.name == other.name
 
+FilterFunction = Callable[[NamedObject], bool]
+Filter = Union[str, Pattern[str], int, type, FilterFunction]
+Rule = Tuple[RuleType, Union[Filter, Iterable[Filter]]]
+
 def _iter(filters):
     if isinstance(filters, str):
         return None
@@ -77,15 +79,16 @@ class FilterSet(MutableSet):
     regexes: Set[Pattern[str]] = field(default_factory=set)
     ids: Set[int] = field(default_factory=set)
     types: Set[type] = field(default_factory=set)
-    funcs: Set[Callable] = field(default_factory=set)
+    funcs: Set[FilterFunction] = field(default_factory=set)
 
+    # Initialized later.
     _fields = None
     _rtypemap = None
-    _typename_regex = re.compile(r'\w+(?=Type$)|\w+$', re.IGNORECASE)
 
     def _match_type(self, filter: Filter) -> Tuple[filter, str]:
+        """identify the filter's type and convert it to standard internal format"""
         filter_type = type(filter)
-        if filter_type == str:
+        if filter_type is str:
             if filter.isidentifier():
                 field = 'names'
             elif filter.startswith('type:'):
@@ -94,9 +97,9 @@ class FilterSet(MutableSet):
             else:
                 filter = re.compile(filter)
                 field = 'regexes'
-        elif filter_type == re.Pattern:
+        elif filter_type is re.Pattern:
             field = 'regexes'
-        elif filter_type == int:
+        elif filter_type is int:
             field = 'ids'
         elif isinstance(filter, type):
             field = 'types'
@@ -108,55 +111,60 @@ class FilterSet(MutableSet):
 
     # Mandatory MutableSet methods.
     @classmethod
-    def _from_iterable(cls, it):
+    def _from_iterable(cls, it: Iterable[Filter]) -> FilterSet:
         obj = cls()
         obj |= it
         return obj
-    def __contains__(self, filter):
+    def __bool__(self) -> bool:
+        return any(getattr(self, field) for field in self._fields)
+    def __len__(self) -> int:
+        return sum(len(getattr(self, field)) for field in self._fields)
+    def __contains__(self, filter: Filter) -> bool:
         filter, filter_set = self._match_type(filter)
         return filter in filter_set
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Filter]:
         return chain.from_iterable(getattr(self, field) for field in self._fields)
-    def __len__(self):
-        return sum(len(getattr(self, field)) for field in self._fields)
-    def add(self, filter):
+    def add(self, filter: Filter) -> None:
         filter, filter_set = self._match_type(filter)
         filter_set.add(filter)
-    def discard(self, filter):
+    def discard(self, filter: Filter) -> None:
         filter, filter_set = self._match_type(filter)
         filter_set.discard(filter)
 
     # Overwrite generic methods (optimization).
-    def remove(self, filter):
+    def remove(self, filter: Filter) -> None:
         filter, filter_set = self._match_type(filter)
         filter_set.remove(filter)
-    def clear(self):
+    def clear(self) -> None:
         for field in self._fields:
             getattr(self, field).clear()
-    def __or__(self, other):
-        if not isinstance(other, Iterable):
-            return NotImplemented
+    def __or__(self, other: Iterable[Filter]) -> FilterSet:
         obj = self.copy()
         obj |= other
         return obj
     __ror__ = __or__
-    def __ior__(self, filters):
-        if isinstance(filters, FilterSet):
+    def __ior__(self, other: Iterable[Filter]) -> FilterSet:
+        if not isinstance(other, Iterable):
+            return NotImplemented
+        if isinstance(other, FilterSet):
             for field in self._fields:
-                getattr(self, field).update(getattr(filters, field))
+                getattr(self, field).update(getattr(other, field))
         else:
-            for filter in filters:
+            for filter in other:
                 self.add(filter)
         return self
 
     # Extra methods.
-    def update(self, filters):
+    def update(self, filters: Iterable[Filters]) -> None:
         self |= filters
-    def copy(self):
+    def copy(self) -> FilterSet:
         return FilterSet(*(getattr(self, field).copy() for field in self._fields))
+
+    # Convert type name to type.
+    TYPENAME_REGEX = re.compile(r'\w+(?=Type$)|\w+$', re.IGNORECASE)
     @classmethod
     def _get_typekey(cls, typename: str) -> str:
-        return cls._typename_regex.match(typename).group().lower()
+        return cls.TYPENAME_REGEX.match(typename).group().lower()
     @classmethod
     def get_type(cls, typename: str) -> type:
         """retrieve a type registered in ``dill``'s "reverse typemap"'"""
@@ -257,7 +265,7 @@ class FilterRules:
     rules work as an allowlist** instead, and only the variables matched by the
     include filters are kept.
     """
-    __slots__ = '_exclude', '_include'
+    __slots__ = '_exclude', '_include', '__weakref__'
     exclude = _FilterSetDescriptor()
     include = _FilterSetDescriptor()
 
@@ -267,7 +275,9 @@ class FilterRules:
         if rules is not None:
             self.update(rules)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """Compact representation of FilterSet."""
+        COLUMNS = 78
         desc = ["<FilterRules:"]
         for attr in ('exclude', 'include'):
             set_desc = getattr(self, attr, None)
@@ -275,7 +285,7 @@ class FilterRules:
                 continue
             set_desc = repr(set_desc)
             set_desc = re.sub(r'(\w+=set\(\)(, )?)', '', set_desc).replace(', )', ')')
-            if len(set_desc) > 78:
+            if len(set_desc) > COLUMNS:
                 set_desc = ["FilterSet("] + re.findall(r'\w+={.+?}', set_desc)
                 set_desc = ",\n    ".join(set_desc) + "\n  )"
             set_desc = "%s=%s" % (attr, set_desc)
@@ -284,10 +294,10 @@ class FilterRules:
             desc.append(set_desc)
         if len(desc) == 1:
             desc += ["NOT SET"]
-        sep = "\n  " if sum(len(x) for x in desc) > 78 else " "
+        sep = "\n  " if sum(len(x) for x in desc) > COLUMNS else " "
         return sep.join(desc) + ">"
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         if not isinstance(other, FilterRules):
             return NotImplemented
         MISSING = object()
@@ -298,7 +308,13 @@ class FilterRules:
         return self_exclude == other_exclude and self_include == other_include
 
     # Proxy add(), discard(), remove() and clear() to FilterSets.
-    def __proxy__(self, method, filter, *, rule_type=RuleType.EXCLUDE):
+    def __proxy__(self,
+        method: str,
+        filter: Filter,
+        *,
+        rule_type: RuleType = RuleType.EXCLUDE,
+    ) -> None:
+        """Call 'method' over FilterSet specified by 'rule_type'."""
         if not isinstance(rule_type, RuleType):
             raise ValueError("invalid rule type: %r (must be one of %r)" % (rule_type, list(RuleType)))
         filter_set = getattr(self, rule_type.name.lower())
@@ -306,12 +322,11 @@ class FilterRules:
     add = partialmethod(__proxy__, 'add')
     discard = partialmethod(__proxy__, 'discard')
     remove = partialmethod(__proxy__, 'remove')
-
-    def clear(self):
+    def clear(self) -> None:
         self.exclude.clear()
         self.include.clear()
 
-    def update(self, rules: Union[Iterable[Rule], FilterRules]):
+    def update(self, rules: Union[Iterable[Rule], FilterRules]) -> None:
         """Update both FilterSets from a list of (RuleType, Filter) rules."""
         if isinstance(rules, FilterRules):
            for field in FilterSet._fields:
@@ -330,7 +345,10 @@ class FilterRules:
                 else:
                     self.add(filter, rule_type=rule_type)
 
-    def _apply_filters(self, filter_set, objects):
+    def _apply_filters(self,
+        filter_set: FilterSet,
+        objects: Iterable[NamedObject]
+    ) -> Iterator[NamedObject]:
         filters = []
         types_list = tuple(filter_set.types)
         # Apply broader/cheaper filters first.
@@ -355,17 +373,17 @@ class FilterRules:
         namespace_copy = namespace.copy()
         all_objs = [NamedObject(item) for item in namespace_copy.items()]
 
-        if not self.exclude:
-            # Treat this rule set as an allowlist.
-            exclude_objs = all_objs
-        else:
+        if self.exclude:
             include_names = {obj.name for obj in self._apply_filters(self.exclude, all_objs)}
             exclude_objs = [obj for obj in all_objs if obj.name not in include_names]
+        else:
+            # Treat this rule set as an allowlist.
+            exclude_objs = all_objs
         if self.include and exclude_objs:
             exclude_objs = list(self._apply_filters(self.include, exclude_objs))
+
         if not exclude_objs:
             return namespace
-
         if len(exclude_objs) == len(namespace):
             warnings.warn(
                 "the exclude/include rules applied have excluded all %d items" % len(all_objs),
@@ -384,7 +402,10 @@ class FilterRules:
 
 import collections
 import collections.abc
+import random
+from statistics import mean
 from sys import getsizeof
+from types import ModuleType
 
 class size_filter:
     """Create a filter function with a limit for estimated object size.
@@ -403,15 +424,14 @@ class size_filter:
     Note:
         Doesn't work on PyPy. See ``help(sys.getsizeof)``.
     """
-    __slots__ = 'limit', 'recursive'
     # Cover "true" collections from 'builtins', 'collections' and 'collections.abc'.
     COLLECTION_TYPES = (
         list,
         tuple,
         collections.deque,
         collections.UserList,
-        collections.abc.Mapping,
-        collections.abc.Set,
+        collections.abc.Mapping,    # dict, OrderedDict, UserDict, etc.
+        collections.abc.Set,        # set, frozenset
     )
     MINIMUM_SIZE = getsizeof(None, 16)
     MISSING_SLOT = object()
@@ -419,7 +439,7 @@ class size_filter:
     def __init__(self,
         limit: Union[int, float, str],
         recursive: bool = True,
-    ) -> Callable[NamedObject, bool]:
+    ) -> FilterFunction:
         if _dill.IS_PYPY:
             raise NotImplementedError("size_filter() is not implemented for PyPy")
         self.limit = limit
@@ -464,7 +484,7 @@ class size_filter:
                 )
 
     @classmethod
-    def estimate_size(cls, obj: Any, memo: set = None) -> int:
+    def estimate_size(cls, obj: Any, memo: Optional[set] = None) -> int:
         if memo is None:
             memo = set()
         obj_id = id(obj)

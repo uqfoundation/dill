@@ -58,8 +58,8 @@ from ._dill import (
 from ._utils import FilterRules, FilterSet, size_filter, EXCLUDE, INCLUDE
 
 # Type hints.
-from typing import Callable, Iterable, Optional, Union
-from ._utils import Filter, NamedObject, RuleType
+from typing import Iterable, Optional, Union
+from ._utils import Filter, FilterFunction, NamedObject, RuleType
 
 import pathlib
 import tempfile
@@ -239,9 +239,9 @@ def _restore_modules(unpickler, main_module):
 def _filter_vars(main_module, exclude, include, base_rules):
     """apply exclude/include filters from arguments *and* settings"""
     rules = FilterRules()
-    mod_rules = base_rules.get(main_module.__name__, base_rules)
-    rules.exclude |= mod_rules.get_filters(EXCLUDE)
-    rules.include |= mod_rules.get_filters(INCLUDE)
+    mod_filters = base_rules.get(main_module.__name__, base_rules)
+    rules.exclude |= mod_filters.get_filters(EXCLUDE)
+    rules.include |= mod_filters.get_filters(INCLUDE)
     if exclude is not None:
         rules.update([(EXCLUDE, exclude)])
     if include is not None:
@@ -447,9 +447,9 @@ def _identify_module(file, main=None):
     """identify the name of the module stored in the given file-type object"""
     import pickletools
     NEUTRAL = {'PROTO', 'FRAME', 'PUT', 'BINPUT', 'MEMOIZE', 'MARK', 'STACK_GLOBAL'}
-    opcodes = ((opcode.name, arg) for opcode, arg, pos in pickletools.genops(file.peek(256))
-               if opcode.name not in NEUTRAL)
     try:
+        opcodes = ((opcode.name, arg) for opcode, arg, pos in pickletools.genops(file.peek(256))
+                   if opcode.name not in NEUTRAL)
         opcode, arg = next(opcodes)
         if (opcode, arg) == ('SHORT_BINUNICODE', 'dill._dill'):
             # The file uses STACK_GLOBAL instead of GLOBAL.
@@ -470,7 +470,7 @@ def _identify_module(file, main=None):
     except StopIteration:
         raise UnpicklingError("reached STOP without finding module") from None
     except (NotImplementedError, ValueError) as error:
-        # ValueError occours when the end of the chunk is reached (without a STOP).
+        # ValueError also occours when the end of the chunk is reached (without a STOP).
         if isinstance(error, NotImplementedError) and main is not None:
             # The file is not peekable, but we have the argument main.
             return None
@@ -689,12 +689,7 @@ def load_module(
 
     main = module
     with _open(filename, 'rb', peekable=True) as file:
-        #FIXME: dill.settings are disabled
-        unpickler = Unpickler(file, **kwds)
-        unpickler._session = True
-
         # Resolve main.
-        main = module
         pickle_main = _identify_module(file, main)
         if main is None:
             main = pickle_main
@@ -728,6 +723,9 @@ def load_module(
                 )
 
         # Load the module's state.
+        #FIXME: dill.settings are disabled
+        unpickler = Unpickler(file, **kwds)
+        unpickler._session = True
         try:
             if not is_main_imported:
                 # This is for find_class() to be able to locate it.
@@ -753,6 +751,7 @@ load_session.__doc__ = load_module.__doc__
 
 def load_module_asdict(
     filename = str(TEMPDIR/'session.pkl'),
+    *,
     update: bool = False,
     **kwds
 ) -> dict:
@@ -812,6 +811,7 @@ def load_module_asdict(
         main_name = _identify_module(file)
         original_main = sys.modules.get(main_name)
         main = ModuleType(main_name)
+        del main.__doc__, main.__package__, main.__spec__
         if update:
             if original_main is None:
                 original_main = _import_module(main_name)
@@ -899,36 +899,48 @@ class ModuleFilters(FilterRules):
     >>> filters.parent.child.grandchild = [(EXCLUDE, str)] # works fine
     """
     __slots__ = '_module', '_parent', '__dict__'
-    _fields = tuple(x.lstrip('_') for x in FilterRules.__slots__)
+
     def __init__(self,
-        rules: Union[Iterable[Rule], FilterRules] = None,
+        rules: Union[Iterable[Rule], FilterRules, None] = None,
         module: str = 'DEFAULT',
         parent: ModuleFilters = None,
     ):
-        # Don't call super().__init__()
         if rules is not None:
             super().__init__(rules)
+        # else: don't initialize FilterSets.
         if parent is not None and parent._module != 'DEFAULT':
             module = '%s.%s' % (parent._module, module)
+        # Bypass self.__setattr__()
         super().__setattr__('_module', module)
         super().__setattr__('_parent', parent)
-    def __repr__(self):
+
+    def __repr__(self) -> str:
         desc = "DEFAULT" if self._module == 'DEFAULT' else "for %r" % self._module
         return "<ModuleFilters %s:%s" % (desc, super().__repr__().partition(':')[-1])
-    def __setattr__(self, name, value):
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, ModuleFilters):
+            return super().__eq__(other) and self._module == other._module
+        elif isinstance(other, FilterRules):
+            return super().__eq__(other)
+        else:
+            return NotImplemented
+
+    def __setattr__(self, name: str, value: Any) -> None:
         if name in FilterRules.__slots__:
             # Don't interfere with superclass attributes.
             super().__setattr__(name, value)
-        elif name in self._fields:
-            if not any(hasattr(self, x) for x in FilterRules.__slots__):
-                # Initialize other. This is not a placeholder anymore.
+        elif name in ('exclude', 'include'):
+            if not (hasattr(self, 'exclude') or hasattr(self, 'include')):
+                # This was a placeholder node. Initialize 'other'.
                 other = 'include' if name == 'exclude' else 'exclude'
                 super().__setattr__(other, ())
             super().__setattr__(name, value)
         else:
             # Create a child node for submodule 'name'.
-            super().__setattr__(name, ModuleFilters(rules=value, module=name, parent=self))
-    def __setitem__(self, name, value):
+            mod_filters = ModuleFilters(rules=value, module=name, parent=self)
+            super().__setattr__(name, mod_filters)
+    # Proxy __setitem__ and __getitem__ to self.__dict__ through attributes.
+    def __setitem__(self, name: str, value: Union[Iterable[Rule], FilterRules, None]) -> None:
         if '.' not in name:
             setattr(self, name, value)
         else:
@@ -936,34 +948,36 @@ class ModuleFilters(FilterRules):
             if module not in self.__dict__:
                 # Create a placeholder node, like logging.PlaceHolder.
                 setattr(self, module, None)
-            mod_rules = getattr(self, module)
-            mod_rules[submodules] = value
-    def __getitem__(self, name):
+            mod_filters = getattr(self, module)
+            mod_filters[submodules] = value
+    def __getitem__(self, name: str) -> ModuleFilters:
         module, _, submodules = name.partition('.')
-        mod_rules = getattr(self, module)
+        mod_filters = getattr(self, module)
         if not submodules:
-            return mod_rules
+            return mod_filters
         else:
-            return mod_rules[submodules]
-    def __eq__(self, other):
-        if isinstance(other, ModuleFilters):
-            return super().__eq__(other) and self._module == other._module
-        elif isinstance(other, FilterRules):
-            return super().__eq__(other)
-        else:
-            return NotImplemented
-    def get(self, name: str, default: ModuleFilters = None):
+            return mod_filters[submodules]
+
+    def keys(self) -> List[str]:
+        values = self.__dict__.values()
+        # Don't include placeholder nodes.
+        keys = [x._module for x in values if hasattr(x, 'exclude') or hasattr(x, 'include')]
+        for mod_filters in values:
+            keys += mod_filters.keys()
+        keys.sort()
+        return keys
+    def get(self, name: str, default: Optional[ModuleFilters] = None) -> ModuleFilters:
         try:
             return self[name]
         except AttributeError:
             return default
-    def get_filters(self, rule_type: RuleType):
+    def get_filters(self, rule_type: RuleType) -> FilterSet:
+        """Get exclude/include filters. If not set, fall back to parent module's or default filters."""
         if not isinstance(rule_type, RuleType):
             raise ValueError("invalid rule type: %r (must be one of %r)" % (rule_type, list(RuleType)))
         try:
             return getattr(self, rule_type.name.lower())
         except AttributeError:
-            # 'self' is a placeholder, 'exclude' and 'include' are unset.
             if self._parent is None:
                 raise
             return self._parent.get_filters(rule_type)
@@ -986,7 +1000,7 @@ del DEFAULT_SETTINGS
 
 ## Session filter factories ##
 
-def ipython_filter(*, keep_history: str = 'input') -> Callable[NamedObject, bool]:
+def ipython_filter(*, keep_history: str = 'input') -> FilterFunction:
     """Filter factory to exclude IPython hidden variables.
 
     When saving the session with :py:func:`dump_module` in an IPython
@@ -1032,8 +1046,8 @@ def ipython_filter(*, keep_history: str = 'input') -> Callable[NamedObject, bool
     # Code snippet adapted from IPython.core.magics.namespace.who_ls()
     user_ns = ipython_shell.user_ns
     user_ns_hidden = ipython_shell.user_ns_hidden
-    nonmatching = object()  # This can never be in user_ns
-    interactive_vars = {x for x in user_ns if user_ns[x] is not user_ns_hidden.get(x, nonmatching)}
+    NONMATCHING = object()  # This can never be in user_ns
+    interactive_vars = {x for x in user_ns if user_ns[x] is not user_ns_hidden.get(x, NONMATCHING)}
 
     # Input and output history hidden variables.
     history_regex = []

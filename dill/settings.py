@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
+# Author: Leonardo Gama (@leogama)
 # Copyright (c) 2008-2016 California Institute of Technology.
 # Copyright (c) 2016-2022 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
@@ -35,7 +36,7 @@ STANDARD_PROTOCOLS = dict(DEFAULT_PROTOCOL=DEFAULT_PROTOCOL, HIGHEST_PROTOCOL=HI
 del DEFAULT_PROTOCOL, HIGHEST_PROTOCOL
 
 def _split_option(option, strip_quotes=False):
-    """split option text by commas or newlines"""
+    """Split option text by commas *or* newlines."""
     import re
     if not option: return []  # empty value
     option = option.strip(",\n")  # strip leading/trailing commas and empty lines
@@ -48,7 +49,7 @@ def _read_filters(section, module_filters):
     for rule_type in (EXCLUDE, INCLUDE):
         rule = rule_type.name.lower()
         if not any(option.lower().startswith(rule) for option in section):
-            # If no filters, let it fall back to parent module or default filters.
+            # If no filters, let it fall back to parent module's or default filters.
             delattr(module_filters, rule)
             continue
         for option in (rule, '%s.names' % rule, '%s.regexes' % rule):
@@ -66,8 +67,7 @@ def _read_filters(section, module_filters):
                 module_filters.add(filter, rule_type=rule_type)
         if '%s.funcs' % rule in section:
             for code in section['%s.funcs' % rule].strip('\n').splitlines():
-                if code.startswith('(') and code.endswith(')'):
-                    code = code[1:-1]
+                code = code.strip()
                 globals_ = {}
                 if not code.startswith('lambda'):
                     name = code.partition('(')[0]
@@ -145,7 +145,6 @@ def read_settings(filename) -> None:
         For details about the accepted INI format, see :py:mod:`configparser`.
     """
     import configparser
-    from dill import DEFAULT_PROTOCOL, HANDLE_FMODE
     from dill.session import ModuleFilters, settings as session_settings
 
     cp = configparser.ConfigParser(
@@ -162,11 +161,12 @@ def read_settings(filename) -> None:
     # General settings.
     section = cp['dill']
     new_settings = {k: section.getboolean(k)
-            for k, v in DEFAULT_SETTINGS['dill'].items() if type(v) == bool}
-    fmode = section.get('fmode')
-    protocol = section.get('protocol')
-    new_settings['fmode'] = int(FMODES.get(fmode, fmode))
-    new_settings['protocol'] = int(STANDARD_PROTOCOLS.get(protocol, protocol))
+            for k, v in DEFAULT_SETTINGS['dill'].items() if type(v) is bool}
+    for option, named_opts in [('fmode', FMODES), ('protocol', STANDARD_PROTOCOLS)]:
+        try:
+            new_settings[option] = section.getint(option)
+        except ValueError:
+            new_settings[option] = named_opts[section.get(option)]
 
     # Session settings (for dump_module).
     section = cp['dill.session']
@@ -180,7 +180,7 @@ def read_settings(filename) -> None:
             continue
         module = module.partition('.')[-1]
         assert all(x.isidentifier() for x in module.split('.'))
-        filters[module] = ()  # instantiate ModuleFilters and FilterSet's
+        filters[module] = ()  # instantiate ModuleFilters and FilterSets
         _read_filters(section, filters[module])
 
     # Update settings dictionary.
