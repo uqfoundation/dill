@@ -1364,7 +1364,7 @@ def save_module_dict(pickler, obj):
         # we only care about session the first pass thru
         pickler.first_pass = False
         _save_module_dict(pickler, obj)
-        logger.trace(pickler, "# D3")
+        logger.trace(pickler, "# D5")
     elif ('__name__' in obj
             and obj is not _main_module.__dict__
             and type(obj['__name__']) is str
