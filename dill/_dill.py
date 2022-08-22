@@ -232,7 +232,6 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, **kwds)
     """
     from .settings import settings
     protocol = int(_getopt(settings, 'protocol', protocol))
-    kwds = kwds.copy()
     kwds.update(byref=byref, fmode=fmode, recurse=recurse)
     Pickler(file, protocol, **kwds).dump(obj)
     return
@@ -320,14 +319,25 @@ class UnpicklingWarning(PickleWarning, UnpicklingError):
     pass
 
 def _getopt(settings, key, arg=None, *, kwds=None):
+    """Get option from 'kwds' or named 'arg', falling back to settings.
+
+    Examples:
+
+        # With an explict named argument:
+        protocol = int(_getopt(settings, 'protocol', protocol))
+
+        # With a named argument in **kwds:
+        self._byref = _getopt(settings, 'byref', kwds=kwds)
+
+    """
+    # Sanity check, it's a bug in calling code if False.
+    assert kwds is None or arg is None
     if kwds is not None:
         arg = kwds.pop(key, None)
     if arg is not None:
         return arg
-    while '.' in key:
-        prefix, _, key = key.partition('.')
-        settings = settings[prefix]
-    return settings[key]
+    else:
+        return settings[key]
 
 ### Extend the Picklers
 class Pickler(StockPickler):
