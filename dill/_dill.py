@@ -39,7 +39,7 @@ OLD310 = (sys.hexversion < 0x30a0000)
 #XXX: get types from .objtypes ?
 import builtins as __builtin__
 from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
-from pickle import DICT, EMPTY_DICT, GLOBAL, MARK, SETITEM
+from pickle import DICT, EMPTY_DICT, GLOBAL, MARK, POP, SETITEM
 from _thread import LockType
 from _thread import RLock as RLockType
 #from io import IOBase
@@ -1162,7 +1162,7 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
             else:
                 pickler.save_reduce(*reduction)
             # pop None created by calling preprocessing step off stack
-            pickler.write(bytes('0', 'UTF-8'))
+            pickler.write(POP)
 
 #@register(CodeType)
 #def save_code(pickler, obj):
@@ -1340,11 +1340,11 @@ def save_module_dict(pickler, obj):
             and obj is pickler._main.__dict__
             and not (pickler._session and pickler._first_pass)):
         logger.trace(pickler, "D1: %s", _repr_dict(obj), obj=obj)
-        pickler.write(bytes('c__builtin__\n__main__\n', 'UTF-8'))
+        pickler.write(GLOBAL + b'__builtin__\n__main__\n')
         logger.trace(pickler, "# D1")
     elif not is_pickler_dill and obj is _main_module.__dict__:
         logger.trace(pickler, "D3: %s", _repr_dict(obj), obj=obj)
-        pickler.write(bytes('c__main__\n__dict__\n', 'UTF-8'))  #XXX: works in general?
+        pickler.write(GLOBAL + b'__main__\n__dict__\n')  #XXX: works in general?
         logger.trace(pickler, "# D3")
     elif (is_pickler_dill
             and pickler._session
@@ -1360,7 +1360,7 @@ def save_module_dict(pickler, obj):
             and type(obj['__name__']) is str
             and obj is getattr(_import_module(obj['__name__'], safe=True), '__dict__', None)):
         logger.trace(pickler, "D4: %s", _repr_dict(obj), obj=obj)
-        pickler.write(bytes('c%s\n__dict__\n' % obj['__name__'], 'UTF-8'))
+        pickler.write(_global_string(obj['__name__'], '__dict__'))
         logger.trace(pickler, "# D4")
     else:
         logger.trace(pickler, "D2: %s", _repr_dict(obj), obj=obj)
@@ -1654,7 +1654,7 @@ def save_cell(pickler, obj):
         # The result of this function call will be None
         pickler.save_reduce(_shims._delattr, (obj, 'cell_contents'))
         # pop None created by calling _delattr off stack
-        pickler.write(bytes('0', 'UTF-8'))
+        pickler.write(POP)
         logger.trace(pickler, "# Ce3")
         return
     if is_dill(pickler, child=True):
@@ -1902,7 +1902,7 @@ def save_type(pickler, obj, postproc_list=None):
     elif obj is type(None):
         logger.trace(pickler, "T7: %s", obj)
         #XXX: pickler.save_reduce(type, (None,), obj=obj)
-        pickler.write(bytes('c__builtin__\nNoneType\n', 'UTF-8'))
+        pickler.write(GLOBAL + b'__builtin__\nNoneType\n')
         logger.trace(pickler, "# T7")
     elif obj is NotImplementedType:
         logger.trace(pickler, "T7: %s", obj)
@@ -2080,7 +2080,7 @@ def save_function(pickler, obj):
                     # Change the value of the cell
                     pickler.save_reduce(*possible_postproc)
                     # pop None created by calling preprocessing step off stack
-                    pickler.write(bytes('0', 'UTF-8'))
+                    pickler.write(POP)
 
         logger.trace(pickler, "# F1")
     else:
