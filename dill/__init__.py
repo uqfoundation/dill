@@ -37,7 +37,7 @@ from .session import (
 from . import detect, logger, session, source, temp
 
 # get global settings
-from .settings import settings, read_settings, reset_settings
+from .settings import settings
 
 # make sure "trace" is turned off
 logger.trace(False)

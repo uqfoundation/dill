@@ -297,6 +297,7 @@ def test_refonfail_unpickleable():
     global local_mod
     import keyword as builtin_mod
     from dill._dill import _global_string
+    refonfail_default = dill.session.settings['refonfail']
     dill.session.settings['refonfail'] = True
     name = '__test_obj'
     obj = memoryview(b'')
@@ -336,7 +337,7 @@ def test_refonfail_unpickleable():
     assert _global_string('os', name) in dump_with_ref(builtin_mod, os)
     del builtin_mod.__test_obj, local_mod.__test_obj, os.__test_obj
 
-    dill.reset_settings()
+    dill.session.settings['refonfail'] = refonfail_default
 
 def test_load_module_asdict():
     with TestNamespace():

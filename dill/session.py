@@ -887,12 +887,6 @@ settings = {
     'filters': ModuleFilters(rules=()),
 }
 
-# For read_settings():
-from .settings import DEFAULT_SETTINGS
-DEFAULT_SETTINGS[__name__] = settings.copy()
-del DEFAULT_SETTINGS[__name__]['filters']
-del DEFAULT_SETTINGS
-
 
 ## Session filter factories ##
 
