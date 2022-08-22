@@ -447,7 +447,8 @@ class Pickler(StockPickler):
             if self._session and obj is self._main:
                 if not _is_builtin_module(self._main):
                     raise
-                self.save_reduce(_import_module, (obj.__name__,), obj=obj)
+                # Save an empty dict as state to distinguish this from modules saved with dump().
+                self.save_reduce(_import_module, (obj.__name__,), obj=obj, state={})
                 logger.trace(self, message, obj=obj)
                 warnings.warn(
                     "module %r saved by reference due to the unpickleable "
@@ -1796,6 +1797,10 @@ def _weak_cache(func=None, *, defaults=None):
                 return value
     return wrapper
 
+@_weak_cache(defaults={None: False})
+def _is_imported_module(module):
+    return getattr(module, '__loader__', None) is not None or module in sys.modules.values()
+
 PYTHONPATH_PREFIXES = {getattr(sys, attr) for attr in (
         'base_prefix', 'prefix', 'base_exec_prefix', 'exec_prefix',
         'real_prefix',  # for old virtualenv versions
@@ -1805,13 +1810,13 @@ EXTENSION_SUFFIXES = tuple(importlib.machinery.EXTENSION_SUFFIXES)
 if OLD310:
     STDLIB_PREFIX = os.path.dirname(os.path.realpath(os.__file__))
 
-@_weak_cache(defaults={None: True})
+@_weak_cache(defaults={None: True})  #XXX: shouldn't return False for None?
 def _is_builtin_module(module):
     if module.__name__ in ('__main__', '__mp_main__'):
         return False
     mod_path = getattr(module, '__file__', None)
     if not mod_path:
-        return True
+        return _is_imported_module(module)
     # If a module file name starts with prefix, it should be a builtin
     # module, so should always be pickled as a reference.
     mod_path = os.path.realpath(mod_path)
@@ -1833,9 +1838,6 @@ def _is_stdlib_module(module):
         return mod_path.startswith(STDLIB_PREFIX)
     else:
         return first_level in sys.stdlib_module_names
-
-def _is_imported_module(module):
-    return getattr(module, '__loader__', None) is not None or module in sys.modules.values()
 
 def _module_package(module):
     package = getattr(module, '__package__', None)

@@ -357,8 +357,8 @@ def _identify_module(file, main=None):
         module_name = arg
         if not (
             next(opcodes)[0] in ('TUPLE1', 'TUPLE') and
-            next(opcodes)[0] == 'REDUCE' #and
-            #next(opcodes)[0] in ('EMPTY_DICT', 'DICT')
+            next(opcodes)[0] == 'REDUCE' and
+            next(opcodes)[0] in ('EMPTY_DICT', 'DICT')
         ):
             raise ValueError
         return module_name
@@ -372,7 +372,10 @@ def _identify_module(file, main=None):
         raise UnpicklingError("unable to identify module") from error
 
 def is_pickled_module(filename, importable: bool = True) -> bool:
-    """Check if a file is a pickle file readable by :py:func:`load_module`.
+    """Check if a file can be loaded with :py:func:`load_module`.
+
+    Check if the file is a pickle file generated with :py:func:`dump_module`,
+    and thus can be loaded with :py:func:`load_module`.
 
     Parameters:
         filename: a path-like object or a readable stream.
