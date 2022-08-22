@@ -163,12 +163,12 @@ from multiprocessing.reduction import _reduce_socket as reduce_socket
 try:
     IS_IPYTHON = __IPYTHON__  # is True
     ExitType = None     # IPython.core.autocall.ExitAutocall
-    ipython_singletons = ('exit', 'quit', 'get_ipython')
+    IPYTHON_SINGLETONS = ('exit', 'quit', 'get_ipython')
 except NameError:
     IS_IPYTHON = False
     try: ExitType = type(exit) # apparently 'exit' can be removed
     except NameError: ExitType = None
-    ipython_singletons = ()
+    IPYTHON_SINGLETONS = ()
 
 import inspect
 import typing
@@ -1862,7 +1862,7 @@ def save_module(pickler, obj):
             main_dict = obj.__dict__.copy()
             for item in ('__builtins__', '__loader__'):
                 main_dict.pop(item, None)
-            for item in ipython_singletons:
+            for item in IPYTHON_SINGLETONS:
                 if getattr(item, '__module__', '').startswith('IPython'):
                     main_dict.pop(item, None)
             if is_session_main:
