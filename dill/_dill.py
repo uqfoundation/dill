@@ -359,7 +359,7 @@ class Pickler(StockPickler):
         self._strictio = False #_getopt(settings, 'strictio', kwds=kwds)
         self._postproc = OrderedDict()
         self._file_tell = getattr(file, 'tell', None)  # for logger and refonfail
-        super().__init__(file, *args, **kwds)
+        StockPickler.__init__(self, file, *args, **kwds)
 
     def save(self, obj, save_persistent_id=True):
         # This method overrides StockPickler.save() and is called for every
@@ -420,7 +420,7 @@ class Pickler(StockPickler):
             raise PicklingError(msg)
 
         if not self._refonfail:
-            super().save(obj, save_persistent_id)
+            StockPickler.save(self, obj, save_persistent_id)
             return
 
         ## Save with 'refonfail' ##
@@ -431,7 +431,7 @@ class Pickler(StockPickler):
         position = self._file_tell()
         memo_size = len(self.memo)
         try:
-            super().save(obj, save_persistent_id)
+            StockPickler.save(obj, save_persistent_id)
         except UNPICKLEABLE_ERRORS as error_stack:
             message = (
                 "# X: fallback to save as global: <%s object at %#012x>"
