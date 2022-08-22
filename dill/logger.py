@@ -129,7 +129,7 @@ class TraceAdapter(logging.LoggerAdapter):
         # Called by Pickler.dump().
         if not dill._dill.is_dill(pickler, child=False):
             return
-        if self.isEnabledFor(logging.INFO):
+        elif self.isEnabledFor(logging.INFO):
             pickler._trace_stack = []
             pickler._size_stack = []
         else:
@@ -138,7 +138,7 @@ class TraceAdapter(logging.LoggerAdapter):
         if not hasattr(pickler, '_trace_stack'):
             logger.info(msg, *args, **kwargs)
             return
-        if pickler._trace_stack is None:
+        elif pickler._trace_stack is None:
             return
         extra = kwargs.get('extra', {})
         pushed_obj = msg.startswith('#')
@@ -169,6 +169,10 @@ class TraceAdapter(logging.LoggerAdapter):
         self.info(msg, *args, **kwargs)
         if pushed_obj:
             pickler._trace_stack.pop()
+    def roll_back(self, pickler, obj):
+        if pickler._trace_stack and id(obj) == pickler._trace_stack[-1]:
+            pickler._trace_stack.pop()
+            pickler._size_stack.pop()
 
 class TraceFormatter(logging.Formatter):
     """

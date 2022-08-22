@@ -50,7 +50,7 @@ from dill import _dill, Pickler, Unpickler, UnpicklingError
 from ._dill import (
     BuiltinMethodType, FunctionType, MethodType, ModuleType, TypeType,
     _getopt, _import_module, _is_builtin_module, _is_imported_module,
-    _main_module, _reverse_typemap, __builtin__,
+    _lookup_module, _main_module, _module_map, _reverse_typemap, __builtin__,
 )
 from ._utils import FilterRules, FilterSet, _open, size_filter, EXCLUDE, INCLUDE
 
@@ -63,25 +63,6 @@ import tempfile
 
 TEMPDIR = pathlib.PurePath(tempfile.gettempdir())
 
-def _module_map():
-    """get map of imported modules"""
-    from collections import defaultdict
-    from types import SimpleNamespace
-    modmap = SimpleNamespace(
-        by_name=defaultdict(list),
-        by_id=defaultdict(list),
-        top_level={},  # top-level modules
-    )
-    for modname, module in sys.modules.items():
-        if modname in ('__main__', '__mp_main__') or not isinstance(module, ModuleType):
-            continue
-        if '.' not in modname:
-            modmap.top_level[id(module)] = modname
-        for objname, modobj in module.__dict__.items():
-            modmap.by_name[objname].append((modobj, modname))
-            modmap.by_id[id(modobj)].append((modobj, objname, modname))
-    return modmap
-
 # Unique objects (with no duplicates) that may be imported with "import as".
 IMPORTED_AS_TYPES = (ModuleType, TypeType, FunctionType, MethodType, BuiltinMethodType)
 if 'PyCapsuleType' in _reverse_typemap:
@@ -93,42 +74,31 @@ IMPORTED_AS_MODULES = [re.compile(x) for x in (
     r'concurrent\.futures(\.\w+)?', r'multiprocessing(\.\w+)?'
 )]
 
-def _lookup_module(modmap, name, obj, main_module):
-    """lookup name or id of obj if module is imported"""
-    for modobj, modname in modmap.by_name[name]:
-        if modobj is obj and sys.modules[modname] is not main_module:
-            return modname, name
-    __module__ = getattr(obj, '__module__', None)
-    if isinstance(obj, IMPORTED_AS_TYPES) or (__module__ is not None
-            and any(regex.fullmatch(__module__) for regex in IMPORTED_AS_MODULES)):
-        for modobj, objname, modname in modmap.by_id[id(obj)]:
-            if sys.modules[modname] is not main_module:
-                return modname, objname
-    return None, None
-
 BUILTIN_CONSTANTS = (None, False, True, NotImplemented)
 
-def _stash_modules(main_module, original_main):
+def _stash_modules(main_module):
     """pop imported variables to be saved by reference in the __dill_imported* attributes"""
-    modmap = _module_map()
+    modmap = _module_map(main_module)
     newmod = ModuleType(main_module.__name__)
-
+    original = {}
     imported = []
     imported_as = []
     imported_top_level = []  # keep separated for backward compatibility
-    original = {}
+
     for name, obj in main_module.__dict__.items():
-        # Self-references.
-        if obj is main_module:
-            original[name] = newmod
-        elif obj is main_module.__dict__:
-            original[name] = newmod.__dict__
         # Avoid incorrectly matching a singleton value in another package (e.g. __doc__ == None).
-        elif (any(obj is constant for constant in BUILTIN_CONSTANTS)  # must compare by identity
-                or isinstance(obj, ModuleType) and _is_builtin_module(obj)):  # always saved by ref
+        if (any(obj is constant for constant in BUILTIN_CONSTANTS)  # must compare by identity
+                or isinstance(obj, ModuleType) and _is_builtin_module(obj)  # always saved by ref
+                or obj is main_module or obj is main_module.__dict__):
             original[name] = obj
         else:
-            source_module, objname = _lookup_module(modmap, name, obj, main_module=original_main)
+            modname = getattr(obj, '__module__', None)
+            lookup_by_id = (
+                isinstance(obj, IMPORTED_AS_TYPES)
+                or modname is not None
+                    and any(regex.fullmatch(modname) for regex in IMPORTED_AS_MODULES)
+            )
+            source_module, objname, _ = _lookup_module(modmap, name, obj, lookup_by_id)
             if source_module is not None:
                 if objname == name:
                     imported.append((source_module, name))
@@ -145,9 +115,9 @@ def _stash_modules(main_module, original_main):
         newmod.__dill_imported = imported
         newmod.__dill_imported_as = imported_as
         newmod.__dill_imported_top_level = imported_top_level
-        return newmod
+        return newmod, modmap
     else:
-        return main_module
+        return main_module, modmap
 
 def _restore_modules(unpickler, main_module):
     for modname, name in main_module.__dict__.pop('__dill_imported', ()):
@@ -180,12 +150,24 @@ def _filter_vars(main_module, exclude, include, base_rules):
 
     newmod = ModuleType(main_module.__name__)
     newmod.__dict__.update(namespace)
-    for name, obj in namespace.items():
-        if obj is main_module:
-            setattr(newmod, name, newmod)
-        elif obj is main_module.__dict__:
-            setattr(newmod, name, newmod.__dict__)
     return newmod
+
+def _fix_module_namespace(main, original_main):
+    # Self-references.
+    for name, obj in main.__dict__.items():
+        if obj is original_main:
+            setattr(main, name, main)
+        elif obj is original_main.__dict__:
+            setattr(main, name, main.__dict__)
+    # Some empty attributes like __doc__ may have been added by ModuleType().
+    added_names = set(main.__dict__)
+    added_names.difference_update(original_main.__dict__)
+    added_names.difference_update('__dill_imported%s' % s for s in ('', '_as', '_top_level'))
+    for name in added_names:
+        delattr(main, name)
+    # Trick _is_imported_module(), forcing main to be saved as an imported module.
+    if getattr(main, '__loader__', None) is None and _is_imported_module(original_main):
+        main.__loader__ = True  # will be discarded by _dill.save_module()
 
 def dump_module(
     filename = str(TEMPDIR/'session.pkl'),
@@ -330,17 +312,7 @@ def dump_module(
     original_main = main
     main = _filter_vars(main, exclude, include, base_rules)
     if refimported:
-        main = _stash_modules(main, original_main)
-    if main is not original_main:
-        # Some empty attributes like __doc__ may have been added by ModuleType().
-        added_names = set(main.__dict__)
-        added_names.difference_update(original_main.__dict__)
-        added_names.difference_update('__dill_imported%s' % s for s in ('', '_as', '_top_level'))
-        for name in added_names:
-            delattr(main, name)
-        if getattr(main, '__loader__', None) is None and _is_imported_module(original_main):
-            # Trick _is_imported_module() to force saving this as an imported module.
-            main.__loader__ = True  # will be discarded by _dill.save_module()
+        main, modmap = _stash_modules(main)
     with _open(filename, 'wb', seekable=True) as file:
         pickler = Pickler(file, protocol, **kwds)
         pickler._main = main     #FIXME: dill.settings are disabled
@@ -350,11 +322,14 @@ def dump_module(
         pickler._first_pass = True
         if main is not original_main:
             pickler._original_main = original_main
+            _fix_module_namespace(main, original_main)
         if refonfail:
             pickler._refonfail = True  # False by default
             pickler._file_seek = file.seek
             pickler._file_truncate = file.truncate
-            pickler._id_to_name = {id(v): k for k, v in main.__dict__.items()}
+            if refimported:
+                # Cache modmap for refonfail.
+                pickler._modmap = modmap
         pickler.dump(main)
     return
 
@@ -991,7 +966,7 @@ def ipython_filter(*, keep_history: str = 'input') -> FilterFunction:
 
 # Internal exports for backward compatibility with dill v0.3.5.1
 for name in (
-    '_lookup_module', '_module_map', '_restore_modules', '_stash_modules',
+    '_restore_modules', '_stash_modules',
     'dump_session', 'load_session' # backward compatibility functions
 ):
     setattr(_dill, name, globals()[name])

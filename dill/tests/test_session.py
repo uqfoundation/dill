@@ -93,6 +93,7 @@ class CalendarSubclass(Calendar):
         return [day_name[i] for i in self.iterweekdays()]
 cal = CalendarSubclass()
 selfref = __main__
+self_dict = __main__.__dict__
 
 # Setup global namespace for session saving tests.
 class TestNamespace:
@@ -122,7 +123,7 @@ atexit.register(_clean_up_cache, local_mod)
 def _test_objects(main, globals_copy, refimported):
     try:
         main_dict = __main__.__dict__
-        global Person, person, Calendar, CalendarSubclass, cal, selfref
+        global Person, person, Calendar, CalendarSubclass, cal, selfref, self_dict
 
         for obj in ('json', 'url', 'local_mod', 'sax', 'dom'):
             assert globals()[obj].__name__ == globals_copy[obj].__name__
@@ -143,6 +144,7 @@ def _test_objects(main, globals_copy, refimported):
         assert cal.weekdays() == globals_copy['cal'].weekdays()
 
         assert selfref is __main__
+        assert self_dict is __main__.__dict__
 
     except AssertionError as error:
         error.args = (_error_line(obj, refimported),)
@@ -198,7 +200,7 @@ def test_runtime_module():
     runtime = ModuleType(modname)
     runtime.x = 42
 
-    mod = dill.session._stash_modules(runtime, runtime)
+    mod, _ = dill.session._stash_modules(runtime)
     if mod is not runtime:
         print("There are objects to save by referenece that shouldn't be:",
               mod.__dill_imported, mod.__dill_imported_as, mod.__dill_imported_top_level,
@@ -226,6 +228,47 @@ def test_runtime_module():
     assert runtime.x == 42
     assert runtime not in sys.modules.values()
 
+def test_lookup_module():
+    assert not dill._dill._is_builtin_module(local_mod) and local_mod.__package__ == ''
+
+    def lookup(mod, name, obj, lookup_by_name=True):
+        from dill._dill import _lookup_module, _module_map
+        return _lookup_module(_module_map(mod), name, obj, lookup_by_name)
+
+    name = '__test_obj'
+    obj = object()
+    setattr(dill, name, obj)
+    assert lookup(dill, name, obj) == (None, None, None)
+
+    # 4th level: non-installed module
+    setattr(local_mod, name, obj)
+    sys.modules[local_mod.__name__] = sys.modules.pop(local_mod.__name__) # put at the end
+    assert lookup(dill, name, obj) == (local_mod.__name__, name, False) # not installed
+    try:
+        import pox
+        # 3rd level: installed third-party module
+        setattr(pox, name, obj)
+        sys.modules['pox'] = sys.modules.pop('pox')
+        assert lookup(dill, name, obj) == ('pox', name, True)
+    except ModuleNotFoundError:
+        pass
+    # 2nd level: module of same package
+    setattr(dill.session, name, obj)
+    sys.modules['dill.session'] = sys.modules.pop('dill.session')
+    assert lookup(dill, name, obj) == ('dill.session', name, True)
+    # 1st level: stdlib module
+    setattr(os, name, obj)
+    sys.modules['os'] = sys.modules.pop('os')
+    assert lookup(dill, name, obj) == ('os', name, True)
+
+    # Lookup by id.
+    name2 = name + '2'
+    setattr(dill, name2, obj)
+    assert lookup(dill, name2, obj) == ('os', name, True)
+    assert lookup(dill, name2, obj, lookup_by_name=False) == (None, None, None)
+    setattr(local_mod, name2, obj)
+    assert lookup(dill, name2, obj) == (local_mod.__name__, name2, False)
+
 def test_refimported_imported_as():
     import collections
     import concurrent.futures
@@ -249,6 +292,51 @@ def test_refimported_imported_as():
         ('typing', 'AsyncContextManager', 'AsyncCM'),
         ('dill', 'executor', 'thread_exec'),
     }
+
+def test_refonfail_unpickleable():
+    global local_mod
+    import keyword as builtin_mod
+    from dill._dill import _global_string
+    dill.session.settings['refonfail'] = True
+    name = '__test_obj'
+    obj = memoryview(b'')
+    assert dill._dill._is_builtin_module(builtin_mod)
+    assert not dill._dill._is_builtin_module(local_mod)
+    # assert not dill.pickles(obj)
+    try:
+        dill.dumps(obj)
+    except dill._dill.UNPICKLEABLE_ERRORS:
+        pass
+    else:
+        raise Exception("test object should be unpickleable")
+
+    def dump_with_ref(mod, other_mod):
+        setattr(other_mod, name, obj)
+        buf = BytesIO()
+        dill.dump_module(buf, mod)
+        return buf.getvalue()
+
+    # "user" modules
+    _local_mod = local_mod
+    del local_mod  # remove from __main__'s namespace
+    try:
+        dump_with_ref(__main__, __main__)
+    except dill.PicklingError:
+        pass  # success
+    else:
+        raise Exception("saving with a reference to the module itself should fail for '__main__'")
+    assert _global_string(_local_mod.__name__, name) in dump_with_ref(__main__, _local_mod)
+    assert _global_string('os', name) in dump_with_ref(__main__, os)
+    local_mod = _local_mod
+    del _local_mod, __main__.__test_obj, local_mod.__test_obj, os.__test_obj
+
+    # "builtin" or "installed" modules
+    assert _global_string(builtin_mod.__name__, name) in dump_with_ref(builtin_mod, builtin_mod)
+    assert _global_string(builtin_mod.__name__, name) in dump_with_ref(builtin_mod, local_mod)
+    assert _global_string('os', name) in dump_with_ref(builtin_mod, os)
+    del builtin_mod.__test_obj, local_mod.__test_obj, os.__test_obj
+
+    dill.reset_settings()
 
 def test_load_module_asdict():
     with TestNamespace():
@@ -303,6 +391,8 @@ if __name__ == '__main__':
     test_session_main(refimported=True)
     test_session_other()
     test_runtime_module()
+    test_lookup_module()
     test_refimported_imported_as()
+    test_refonfail_unpickleable()
     test_load_module_asdict()
     test_ipython_filter()
