@@ -190,9 +190,8 @@ def dump_module(
     Only a subset of the module's variables may be saved if exclusion/inclusion
     filters are specified.  Filters apply to every variable name or value and
     determine if they should be saved or not.  They can be set in
-    ``dill.settings['dump_module']['filters']`` or passed directly to the
-    ``exclude`` and ``include`` parameters.  See :py:class:`ModuleFilters` for
-    details.
+    ``dill.session.settings['filters']`` or passed directly to the ``exclude``
+    and ``include`` parameters.  See :py:class:`ModuleFilters` for details.
 
     Parameters:
         filename: a path-like object or a writable stream.
@@ -733,10 +732,10 @@ class ModuleFilters(FilterRules):
     exclusion/inclusion filters for specific modules and submodules.  See the
     base class documentation to learn more about how to create and use filters.
 
-    This is the type of ``dill.settings['dump_module']['filters']``:
+    This is the type of ``dill.session.settings['filters']``:
 
     >>> import dill
-    >>> filters = dill.settings['dump_module']['filters']
+    >>> filters = dill.session.settings['filters']
     >>> filters
     <ModuleFilters DEFAULT: exclude=FilterSet(), include=FilterSet()>
 
