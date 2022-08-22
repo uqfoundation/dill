@@ -106,13 +106,24 @@ class TraceAdapter(logging.LoggerAdapter):
     creates extra values to be added in the LogRecord from it, then calls
     'info()'.
 
-    Usage of logger with 'trace()' method:
+    Examples:
 
-    >>> from dill.logger import adapter as logger  #NOTE: not dill.logger.logger
-    >>> ...
-    >>> def save_atype(pickler, obj):
-    >>>     logger.trace(pickler, "Message with %s and %r etc. placeholders", 'text', obj)
-    >>>     ...
+    In the first call to `trace()`, before pickling an object, it must be passed
+    to `trace()` as the last positional argument or as the keyword argument
+    `obj`.  Note how, in the second example, the object is not passed as a
+    positional argument, and therefore won't be substituted in the message:
+
+        >>> from dill.logger import adapter as logger  #NOTE: not dill.logger.logger
+        >>> ...
+        >>> def save_atype(pickler, obj):
+        >>>     logger.trace(pickler, "X: Message with %s and %r placeholders", 'text', obj)
+        >>>     ...
+        >>>     logger.trace(pickler, "# X")
+        >>> def save_weakproxy(pickler, obj)
+        >>>     trace_message = "W: This works even with a broken weakproxy: %r" % obj
+        >>>     logger.trace(pickler, trace_message, obj=obj)
+        >>>     ...
+        >>>     logger.trace(pickler, "# W")
     """
     def __init__(self, logger):
         self.logger = logger
@@ -143,6 +154,12 @@ class TraceAdapter(logging.LoggerAdapter):
         extra = kwargs.get('extra', {})
         pushed_obj = msg.startswith('#')
         if not pushed_obj:
+            if obj is None and (not args or type(args[-1]) is str):
+                raise TypeError(
+                    "the pickled object must be passed as the last positional "
+                    "argument (being substituted in the message) or as the "
+                    "'obj' keyword argument."
+                )
             if obj is None:
                 obj = args[-1]
             pickler._trace_stack.append(id(obj))

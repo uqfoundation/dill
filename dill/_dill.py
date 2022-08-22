@@ -431,7 +431,7 @@ class Pickler(StockPickler):
         position = self._file_tell()
         memo_size = len(self.memo)
         try:
-            StockPickler.save(obj, save_persistent_id)
+            StockPickler.save(self, obj, save_persistent_id)
         except UNPICKLEABLE_ERRORS as error_stack:
             message = (
                 "# X: fallback to save as global: <%s object at %#012x>"
