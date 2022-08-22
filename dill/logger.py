@@ -53,6 +53,7 @@ from functools import partial
 from typing import TextIO, Union
 
 import dill
+from ._utils import _format_bytes_size
 
 # Tree drawing characters: Unicode to ASCII map.
 ASCII_MAP = str.maketrans({"│": "|", "├": "|", "┬": "+", "└": "`"})
@@ -105,13 +106,24 @@ class TraceAdapter(logging.LoggerAdapter):
     creates extra values to be added in the LogRecord from it, then calls
     'info()'.
 
-    Usage of logger with 'trace()' method:
+    Examples:
 
-    >>> from dill.logger import adapter as logger  #NOTE: not dill.logger.logger
-    >>> ...
-    >>> def save_atype(pickler, obj):
-    >>>     logger.trace(pickler, "Message with %s and %r etc. placeholders", 'text', obj)
-    >>>     ...
+    In the first call to `trace()`, before pickling an object, it must be passed
+    to `trace()` as the last positional argument or as the keyword argument
+    `obj`.  Note how, in the second example, the object is not passed as a
+    positional argument, and therefore won't be substituted in the message:
+
+        >>> from dill.logger import adapter as logger  #NOTE: not dill.logger.logger
+        >>> ...
+        >>> def save_atype(pickler, obj):
+        >>>     logger.trace(pickler, "X: Message with %s and %r placeholders", 'text', obj)
+        >>>     ...
+        >>>     logger.trace(pickler, "# X")
+        >>> def save_weakproxy(pickler, obj)
+        >>>     trace_message = "W: This works even with a broken weakproxy: %r" % obj
+        >>>     logger.trace(pickler, trace_message, obj=obj)
+        >>>     ...
+        >>>     logger.trace(pickler, "# W")
     """
     def __init__(self, logger):
         self.logger = logger
@@ -128,23 +140,33 @@ class TraceAdapter(logging.LoggerAdapter):
         # Called by Pickler.dump().
         if not dill._dill.is_dill(pickler, child=False):
             return
-        if self.isEnabledFor(logging.INFO):
-            pickler._trace_depth = 1
+        elif self.isEnabledFor(logging.INFO):
+            pickler._trace_stack = []
             pickler._size_stack = []
         else:
-            pickler._trace_depth = None
-    def trace(self, pickler, msg, *args, **kwargs):
-        if not hasattr(pickler, '_trace_depth'):
+            pickler._trace_stack = None
+    def trace(self, pickler, msg, *args, obj=None, **kwargs):
+        if not hasattr(pickler, '_trace_stack'):
             logger.info(msg, *args, **kwargs)
             return
-        if pickler._trace_depth is None:
+        elif pickler._trace_stack is None:
             return
         extra = kwargs.get('extra', {})
         pushed_obj = msg.startswith('#')
+        if not pushed_obj:
+            if obj is None and (not args or type(args[-1]) is str):
+                raise TypeError(
+                    "the pickled object must be passed as the last positional "
+                    "argument (being substituted in the message) or as the "
+                    "'obj' keyword argument."
+                )
+            if obj is None:
+                obj = args[-1]
+            pickler._trace_stack.append(id(obj))
         size = None
         try:
             # Streams are not required to be tellable.
-            size = pickler._file.tell()
+            size = pickler._file_tell()
             frame = pickler.framer.current_frame
             try:
                 size += frame.tell()
@@ -159,13 +181,15 @@ class TraceAdapter(logging.LoggerAdapter):
             else:
                 size -= pickler._size_stack.pop()
                 extra['size'] = size
-        if pushed_obj:
-            pickler._trace_depth -= 1
-        extra['depth'] = pickler._trace_depth
+        extra['depth'] = len(pickler._trace_stack)
         kwargs['extra'] = extra
         self.info(msg, *args, **kwargs)
-        if not pushed_obj:
-            pickler._trace_depth += 1
+        if pushed_obj:
+            pickler._trace_stack.pop()
+    def roll_back(self, pickler, obj):
+        if pickler._trace_stack and id(obj) == pickler._trace_stack[-1]:
+            pickler._trace_stack.pop()
+            pickler._size_stack.pop()
 
 class TraceFormatter(logging.Formatter):
     """
@@ -201,10 +225,7 @@ class TraceFormatter(logging.Formatter):
                 prefix = prefix.translate(ASCII_MAP) + "-"
             fields['prefix'] = prefix + " "
         if hasattr(record, 'size'):
-            # Show object size in human-redable form.
-            power = int(math.log(record.size, 2)) // 10
-            size = record.size >> power*10
-            fields['suffix'] = " [%d %sB]" % (size, "KMGTP"[power] + "i" if power else "")
+            fields['suffix'] = " [%d %s]" % _format_bytes_size(record.size)
         vars(record).update(fields)
         return super().format(record)
 

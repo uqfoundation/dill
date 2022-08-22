@@ -16,9 +16,9 @@ Test against "all" python types (Std. Lib. CH 1-15 @ 2.7) by mmckerns.
 Test against CH16+ Std. Lib. ... TBD.
 """
 __all__ = [
-    'Pickler','Unpickler',
-    'check','copy','dump','dumps','load','loads','pickle','pickles','register',
-    'DEFAULT_PROTOCOL','HIGHEST_PROTOCOL','CONTENTS_FMODE','FILE_FMODE','HANDLE_FMODE',
+    'dump','dumps','load','loads','copy',
+    'Pickler','Unpickler','register','pickle','pickles','check',
+    'DEFAULT_PROTOCOL','HIGHEST_PROTOCOL','HANDLE_FMODE','CONTENTS_FMODE','FILE_FMODE',
     'PickleError','PickleWarning','PicklingError','PicklingWarning','UnpicklingError',
     'UnpicklingWarning',
 ]
@@ -39,6 +39,7 @@ OLD310 = (sys.hexversion < 0x30a0000)
 #XXX: get types from .objtypes ?
 import builtins as __builtin__
 from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
+from pickle import DICT, EMPTY_DICT, GLOBAL, MARK, POP, SETITEM
 from _thread import LockType
 from _thread import RLock as RLockType
 #from io import IOBase
@@ -58,13 +59,14 @@ import __main__ as _main_module
 import marshal
 import gc
 # import zlib
+import dataclasses
+import weakref
 from weakref import ReferenceType, ProxyType, CallableProxyType
 from collections import OrderedDict
-from functools import partial
+from functools import partial, wraps
 from operator import itemgetter, attrgetter
 GENERATOR_FAIL = False
 import importlib.machinery
-EXTENSION_SUFFIXES = tuple(importlib.machinery.EXTENSION_SUFFIXES)
 try:
     import ctypes
     HAS_CTYPES = True
@@ -161,18 +163,15 @@ from multiprocessing.reduction import _reduce_socket as reduce_socket
 try:
     IS_IPYTHON = __IPYTHON__  # is True
     ExitType = None     # IPython.core.autocall.ExitAutocall
-    singletontypes = ['exit', 'quit', 'get_ipython']
+    IPYTHON_SINGLETONS = ('exit', 'quit', 'get_ipython')
 except NameError:
     IS_IPYTHON = False
     try: ExitType = type(exit) # apparently 'exit' can be removed
     except NameError: ExitType = None
-    singletontypes = []
+    IPYTHON_SINGLETONS = ()
 
 import inspect
-import dataclasses
 import typing
-
-from pickle import GLOBAL
 
 
 ### Shims for different versions of Python and dill
@@ -212,6 +211,9 @@ CONTENTS_FMODE = 1
 #: Pickles the entire file (handle and contents), preserving mode and position.
 FILE_FMODE = 2
 
+# Exceptions commonly raised by unpickleable objects in the Standard Library.
+UNPICKLEABLE_ERRORS = (PicklingError, TypeError, ValueError, NotImplementedError)
+
 ### Shorthands (modified from python2.5/lib/pickle.py)
 def copy(obj, *args, **kwds):
     """
@@ -229,10 +231,9 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, **kwds)
     See :func:`dumps` for keyword arguments.
     """
     from .settings import settings
-    protocol = settings['protocol'] if protocol is None else int(protocol)
-    _kwds = kwds.copy()
-    _kwds.update(dict(byref=byref, fmode=fmode, recurse=recurse))
-    Pickler(file, protocol, **_kwds).dump(obj)
+    protocol = int(_getopt(settings, 'protocol', protocol))
+    kwds.update(byref=byref, fmode=fmode, recurse=recurse)
+    Pickler(file, protocol, **kwds).dump(obj)
     return
 
 def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
@@ -317,35 +318,66 @@ class PicklingWarning(PickleWarning, PicklingError):
 class UnpicklingWarning(PickleWarning, UnpicklingError):
     pass
 
+def _getopt(settings, key, arg=None, *, kwds=None):
+    """Get option from 'kwds' or named 'arg', falling back to settings.
+
+    Examples:
+
+        # With an explict named argument:
+        protocol = int(_getopt(settings, 'protocol', protocol))
+
+        # With a named argument in **kwds:
+        self._byref = _getopt(settings, 'byref', kwds=kwds)
+
+    """
+    # Sanity check, it's a bug in calling code if False.
+    assert kwds is None or arg is None
+    if kwds is not None:
+        arg = kwds.pop(key, None)
+    if arg is not None:
+        return arg
+    else:
+        return settings[key]
+
 ### Extend the Picklers
 class Pickler(StockPickler):
     """python's Pickler extended to interpreter sessions"""
     dispatch = MetaCatchingDict(StockPickler.dispatch.copy())
+    _refimported = False
+    _refonfail = False  # True in session.settings
     _session = False
+    _first_pass = False
     from .settings import settings
 
     def __init__(self, file, *args, **kwds):
         settings = Pickler.settings
-        _byref = kwds.pop('byref', None)
-       #_strictio = kwds.pop('strictio', None)
-        _fmode = kwds.pop('fmode', None)
-        _recurse = kwds.pop('recurse', None)
-        StockPickler.__init__(self, file, *args, **kwds)
         self._main = _main_module
         self._diff_cache = {}
-        self._byref = settings['byref'] if _byref is None else _byref
-        self._strictio = False #_strictio
-        self._fmode = settings['fmode'] if _fmode is None else _fmode
-        self._recurse = settings['recurse'] if _recurse is None else _recurse
+        self._byref = _getopt(settings, 'byref', kwds=kwds)
+        self._fmode = _getopt(settings, 'fmode', kwds=kwds)
+        self._recurse = _getopt(settings, 'recurse', kwds=kwds)
+        self._strictio = False #_getopt(settings, 'strictio', kwds=kwds)
         self._postproc = OrderedDict()
-        self._file = file
+        self._file_tell = getattr(file, 'tell', None)  # for logger and refonfail
+        StockPickler.__init__(self, file, *args, **kwds)
 
     def save(self, obj, save_persistent_id=True):
-        # register if the object is a numpy ufunc
-        # thanks to Paul Kienzle for pointing out ufuncs didn't pickle
+        # This method overrides StockPickler.save() and is called for every
+        # object pickled.  When 'refonfail' is True, it tries to save the object
+        # by reference if pickling it fails with a common pickling error, as
+        # defined by the constant UNPICKLEABLE_ERRORS.  If that also fails, then
+        # the exception is risen and, if this was called indirectly from another
+        # Pickler.save() call, the parent objects will try to be saved by
+        # reference recursively, until it succeeds or the exception propagates
+        # beyond the topmost save() call.  The extra 'name' argument is passed
+        # to StockPickler.save_global().
+
+        # numpy hack
         obj_type = type(obj)
         if NumpyArrayType and not (obj_type is type or obj_type in Pickler.dispatch):
-            if NumpyUfuncType and numpyufunc(obj_type):
+            # register if the object is a numpy ufunc
+            # thanks to Paul Kienzle for pointing out ufuncs didn't pickle
+            if numpyufunc(obj_type):
                 @register(obj_type)
                 def save_numpy_ufunc(pickler, obj):
                     logger.trace(pickler, "Nu: %s", obj)
@@ -359,7 +391,7 @@ class Pickler(StockPickler):
                 #   def uload(name): return getattr(numpy, name)
                 #   copy_reg.pickle(NumpyUfuncType, udump, uload)
             # register if the object is a numpy dtype
-            if NumpyDType and numpydtype(obj_type):
+            if numpydtype(obj_type):
                 @register(obj_type)
                 def save_numpy_dtype(pickler, obj):
                     logger.trace(pickler, "Dt: %s", obj)
@@ -372,27 +404,80 @@ class Pickler(StockPickler):
                 #   def udump(f): return uload, (f.type,)
                 #   copy_reg.pickle(NumpyDTypeType, udump, uload)
             # register if the object is a subclassed numpy array instance
-            if NumpyArrayType and ndarraysubclassinstance(obj_type):
+            if ndarraysubclassinstance(obj_type):
                 @register(obj_type)
                 def save_numpy_array(pickler, obj):
-                    logger.trace(pickler, "Nu: (%s, %s)", obj.shape, obj.dtype)
+                    logger.trace(pickler, "Nu: (%s, %s)", obj.shape, obj.dtype, obj=obj)
                     npdict = getattr(obj, '__dict__', None)
                     f, args, state = obj.__reduce__()
                     pickler.save_reduce(_create_array, (f,args,state,npdict), obj=obj)
                     logger.trace(pickler, "# Nu")
                     return
-        # end hack
-        if GENERATOR_FAIL and type(obj) == GeneratorType:
+        # end numpy hack
+
+        if GENERATOR_FAIL and obj_type is GeneratorType:
             msg = "Can't pickle %s: attribute lookup builtins.generator failed" % GeneratorType
             raise PicklingError(msg)
-        StockPickler.save(self, obj, save_persistent_id)
 
+        if not self._refonfail:
+            StockPickler.save(self, obj, save_persistent_id)
+            return
+
+        ## Save with 'refonfail' ##
+
+        # Disable framing (right after the framer.init_framing() call at dump()).
+        self.framer.current_frame = None
+        # Store initial state.
+        position = self._file_tell()
+        memo_size = len(self.memo)
+        try:
+            StockPickler.save(self, obj, save_persistent_id)
+        except UNPICKLEABLE_ERRORS as error_stack:
+            message = (
+                "# X: fallback to save as global: <%s object at %#012x>"
+                % (type(obj).__name__, id(obj))
+            )
+            # Roll back the stream.
+            self._file_seek(position)
+            self._file_truncate()
+            # Roll back memo.
+            for _ in range(len(self.memo) - memo_size):
+                self.memo.popitem()  # LIFO order is guaranteed since 3.7
+            # Handle modules specially.
+            if self._session and obj is self._main:
+                if not _is_builtin_module(self._main):
+                    raise
+                self.save_reduce(_import_module, (obj.__name__,), obj=obj)
+                logger.trace(self, message, obj=obj)
+                warnings.warn(
+                    "module %r saved by reference due to the unpickleable "
+                    "variable %r" % (self._main.__name__, error_stack.name),
+                    PicklingWarning,
+                    stacklevel=5,
+                )
+            elif (isinstance(obj, ModuleType)
+                    and (_is_builtin_module(obj) or obj is sys.modules['dill'])):
+                self.save_reduce(_import_module, (obj.__name__,), obj=obj)
+                logger.trace(self, message, obj=obj)
+            # Try to save object by reference.
+            elif hasattr(obj, '__name__') or hasattr(obj, '__qualname__'):
+                try:
+                    self.save_global(obj)
+                    logger.trace(self, message, obj=obj)
+                except PicklingError as error:
+                    # Roll back trace state.
+                    logger.roll_back(self, obj)
+                    raise error from error_stack
+            else:
+                # Roll back trace state.
+                logger.roll_back(self, obj)
+                raise
+        return
     save.__doc__ = StockPickler.save.__doc__
 
     def dump(self, obj): #NOTE: if settings change, need to update attributes
         logger.trace_setup(self)
         StockPickler.dump(self, obj)
-
     dump.__doc__ = StockPickler.dump.__doc__
 
 class Unpickler(StockUnpickler):
@@ -410,10 +495,9 @@ class Unpickler(StockUnpickler):
 
     def __init__(self, *args, **kwds):
         settings = Pickler.settings
-        _ignore = kwds.pop('ignore', None)
-        StockUnpickler.__init__(self, *args, **kwds)
         self._main = _main_module
-        self._ignore = settings['ignore'] if _ignore is None else _ignore
+        self._ignore = _getopt(settings, 'ignore', kwds=kwds)
+        StockUnpickler.__init__(self, *args, **kwds)
 
     def load(self): #NOTE: if settings change, need to update attributes
         obj = StockUnpickler.load(self)
@@ -460,7 +544,7 @@ def use_diff(on=True):
     Reduces size of pickles by only including object which have changed.
 
     Decreases pickle size but increases CPU time needed.
-    Also helps avoid some unpicklable objects.
+    Also helps avoid some unpickleable objects.
     MUST be called at start of script, otherwise changes will not be recorded.
     """
     global _use_diff, diff
@@ -1088,7 +1172,7 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
             else:
                 pickler.save_reduce(*reduction)
             # pop None created by calling preprocessing step off stack
-            pickler.write(bytes('0', 'UTF-8'))
+            pickler.write(POP)
 
 #@register(CodeType)
 #def save_code(pickler, obj):
@@ -1157,30 +1241,140 @@ def save_code(pickler, obj):
     logger.trace(pickler, "# Co")
     return
 
+def _module_map(main_module):
+    """get map of imported modules"""
+    from collections import defaultdict
+    from types import SimpleNamespace
+    modmap = SimpleNamespace(
+        by_name=defaultdict(list),
+        by_id=defaultdict(list),
+        top_level={},  # top-level modules
+        package = _module_package(main_module),
+    )
+    for modname, module in sys.modules.items():
+        if (modname in ('__main__', '__mp_main__') or module is main_module
+                or not isinstance(module, ModuleType)):
+            continue
+        if '.' not in modname:
+            modmap.top_level[id(module)] = modname
+        for objname, modobj in module.__dict__.items():
+            modmap.by_name[objname].append((modobj, modname))
+            modmap.by_id[id(modobj)].append((objname, modname))
+    return modmap
+
+def _lookup_module(modmap, name, obj, lookup_by_id=True) -> typing.Tuple[str, str, bool]:
+    """Lookup name or id of obj if module is imported.
+
+    Lookup for objects identical to 'obj' at modules in 'modmpap'.  If multiple
+    copies are found in different modules, return the one from the module with
+    higher probability of being available at unpickling time, according to the
+    hierarchy:
+
+    1. Standard Library modules
+    2. modules of the same package as the module being saved (if it's part of a module)
+    3. installed modules in general
+    4. non-installed modules
+
+    Returns:
+        A 3-tuple containing the module's name, the object's name in the module,
+        and a boolean flag, which is `True` if the module falls under categories
+        (1) to (3) from the hierarchy, or `False` if it's in category (4).
+    """
+    for map, by_id in [(modmap.by_name, False), (modmap.by_id, True)]:
+        if by_id and not lookup_by_id:
+            break
+        _2nd_choice = _3rd_choice = _4th_choice = None
+        key = id(obj) if by_id else name
+        for other, modname in map[key]:
+            if by_id or other is obj:
+                other_module = sys.modules[modname]
+                other_name = other if by_id else name
+                # Prefer modules imported earlier (first found).
+                if _is_stdlib_module(other_module):
+                    return modname, other_name, True
+                elif modmap.package and modmap.package == _module_package(other_module):
+                    if _2nd_choice: continue
+                    _2nd_choice = modname, other_name, True
+                elif not _2nd_choice:
+                    # Don't call _is_builtin_module() unnecessarily.
+                    if _is_builtin_module(other_module):
+                        if _3rd_choice: continue
+                        _3rd_choice = modname, other_name, True
+                    else:
+                        if _4th_choice: continue
+                        _4th_choice = modname, other_name, False  # unsafe
+        found = _2nd_choice or _3rd_choice or _4th_choice
+        if found:
+            return found
+    return None, None, None
+
+def _global_string(modname, name):
+    return GLOBAL + bytes('%s\n%s\n' % (modname, name), 'UTF-8')
+
+def _save_module_dict(pickler, obj):
+    # If an object doesn't have a '__name__' attribute, pass the object's name
+    # in the module's namespace to save(), so that it can be used with
+    # save_global() to increase the chances of finding the object for saving
+    # it by reference in the event of a failed serialization.
+    main = getattr(pickler, '_original_main', pickler._main)
+    modmap = getattr(pickler, '_modmap', None)  # cached from _stash_modules()
+    is_builtin = _is_builtin_module(main)
+    pickler.write(MARK + DICT)  # don't need to memoize
+    for name, value in obj.items():
+        pickler.save(name)
+        try:
+            pickler.save(value)
+        except UNPICKLEABLE_ERRORS as error_stack:
+            if modmap is None:
+                modmap = _module_map(main)
+            modname, objname, installed = _lookup_module(modmap, name, value)
+            if modname and (installed or not is_builtin):
+                pickler.write(_global_string(modname, objname))
+            elif is_builtin:
+                pickler.write(_global_string(main.__name__, name))
+            else:
+                error = PicklingError("can't save variable %r as global" % name)
+                error.name = name
+                raise error from error_stack
+            pickler.memoize(value)
+        pickler.write(SETITEM)
+
 def _repr_dict(obj):
     """make a short string representation of a dictionary"""
     return "<%s object at %#012x>" % (type(obj).__name__, id(obj))
 
 @register(dict)
 def save_module_dict(pickler, obj):
-    if is_dill(pickler, child=False) and obj == pickler._main.__dict__ and \
-            not (pickler._session and pickler._first_pass):
-        logger.trace(pickler, "D1: %s", _repr_dict(obj)) # obj
-        pickler.write(bytes('c__builtin__\n__main__\n', 'UTF-8'))
+    is_pickler_dill = is_dill(pickler, child=False)
+    if (is_pickler_dill
+            and obj is pickler._main.__dict__
+            and not (pickler._session and pickler._first_pass)):
+        logger.trace(pickler, "D1: %s", _repr_dict(obj), obj=obj)
+        pickler.write(GLOBAL + b'__builtin__\n__main__\n')
         logger.trace(pickler, "# D1")
-    elif (not is_dill(pickler, child=False)) and (obj == _main_module.__dict__):
-        logger.trace(pickler, "D3: %s", _repr_dict(obj)) # obj
-        pickler.write(bytes('c__main__\n__dict__\n', 'UTF-8'))  #XXX: works in general?
+    elif not is_pickler_dill and obj is _main_module.__dict__:
+        logger.trace(pickler, "D3: %s", _repr_dict(obj), obj=obj)
+        pickler.write(GLOBAL + b'__main__\n__dict__\n')  #XXX: works in general?
         logger.trace(pickler, "# D3")
-    elif '__name__' in obj and obj != _main_module.__dict__ \
-            and type(obj['__name__']) is str \
-            and obj is getattr(_import_module(obj['__name__'],True), '__dict__', None):
-        logger.trace(pickler, "D4: %s", _repr_dict(obj)) # obj
-        pickler.write(bytes('c%s\n__dict__\n' % obj['__name__'], 'UTF-8'))
+    elif (is_pickler_dill
+            and pickler._session
+            and pickler._refonfail
+            and obj is pickler._main_dict_copy):
+        logger.trace(pickler, "D5: %s", _repr_dict(obj), obj=obj)
+        # we only care about session the first pass thru
+        pickler.first_pass = False
+        _save_module_dict(pickler, obj)
+        logger.trace(pickler, "# D5")
+    elif ('__name__' in obj
+            and obj is not _main_module.__dict__
+            and type(obj['__name__']) is str
+            and obj is getattr(_import_module(obj['__name__'], safe=True), '__dict__', None)):
+        logger.trace(pickler, "D4: %s", _repr_dict(obj), obj=obj)
+        pickler.write(_global_string(obj['__name__'], '__dict__'))
         logger.trace(pickler, "# D4")
     else:
-        logger.trace(pickler, "D2: %s", _repr_dict(obj)) # obj
-        if is_dill(pickler, child=False) and pickler._session:
+        logger.trace(pickler, "D2: %s", _repr_dict(obj), obj=obj)
+        if is_pickler_dill:
             # we only care about session the first pass thru
             pickler._first_pass = False
         StockPickler.save_dict(pickler, obj)
@@ -1470,7 +1664,7 @@ def save_cell(pickler, obj):
         # The result of this function call will be None
         pickler.save_reduce(_shims._delattr, (obj, 'cell_contents'))
         # pop None created by calling _delattr off stack
-        pickler.write(bytes('0', 'UTF-8'))
+        pickler.write(POP)
         logger.trace(pickler, "# Ce3")
         return
     if is_dill(pickler, child=True):
@@ -1498,7 +1692,7 @@ def save_cell(pickler, obj):
 if MAPPING_PROXY_TRICK:
     @register(DictProxyType)
     def save_dictproxy(pickler, obj):
-        logger.trace(pickler, "Mp: %s", _repr_dict(obj)) # obj
+        logger.trace(pickler, "Mp: %s", _repr_dict(obj), obj=obj)
         mapping = obj | _dictproxy_helper_instance
         pickler.save_reduce(DictProxyType, (mapping,), obj=obj)
         logger.trace(pickler, "# Mp")
@@ -1506,7 +1700,7 @@ if MAPPING_PROXY_TRICK:
 else:
     @register(DictProxyType)
     def save_dictproxy(pickler, obj):
-        logger.trace(pickler, "Mp: %s", _repr_dict(obj)) # obj
+        logger.trace(pickler, "Mp: %s", _repr_dict(obj), obj=obj)
         pickler.save_reduce(DictProxyType, (obj.copy(),), obj=obj)
         logger.trace(pickler, "# Mp")
         return
@@ -1577,24 +1771,75 @@ def save_weakref(pickler, obj):
 @register(CallableProxyType)
 def save_weakproxy(pickler, obj):
     # Must do string substitution here and use %r to avoid ReferenceError.
-    logger.trace(pickler, "R2: %r" % obj)
+    logger.trace(pickler, "R2: %r" % obj, obj=obj)
     refobj = _locate_object(_proxy_helper(obj))
     pickler.save_reduce(_create_weakproxy, (refobj, callable(obj)), obj=obj)
     logger.trace(pickler, "# R2")
     return
 
+def _weak_cache(func=None, *, defaults=None):
+    if defaults is None:
+        defaults = {}
+    if func is None:
+        return partial(_weak_cache, defaults=defaults)
+    cache = weakref.WeakKeyDictionary()
+    @wraps(func)
+    def wrapper(referent):
+        try:
+            return defaults[referent]
+        except KeyError:
+            try:
+                return cache[referent]
+            except KeyError:
+                value = func(referent)
+                cache[referent] = value
+                return value
+    return wrapper
+
+PYTHONPATH_PREFIXES = {getattr(sys, attr) for attr in (
+        'base_prefix', 'prefix', 'base_exec_prefix', 'exec_prefix',
+        'real_prefix',  # for old virtualenv versions
+        ) if hasattr(sys, attr)}
+PYTHONPATH_PREFIXES = tuple(os.path.realpath(path) for path in PYTHONPATH_PREFIXES)
+EXTENSION_SUFFIXES = tuple(importlib.machinery.EXTENSION_SUFFIXES)
+if OLD310:
+    STDLIB_PREFIX = os.path.dirname(os.path.realpath(os.__file__))
+
+@_weak_cache(defaults={None: True})
 def _is_builtin_module(module):
-    if not hasattr(module, "__file__"): return True
+    if module.__name__ in ('__main__', '__mp_main__'):
+        return False
+    mod_path = getattr(module, '__file__', None)
+    if not mod_path:
+        return True
     # If a module file name starts with prefix, it should be a builtin
     # module, so should always be pickled as a reference.
-    names = ["base_prefix", "base_exec_prefix", "exec_prefix", "prefix", "real_prefix"]
-    return any(os.path.realpath(module.__file__).startswith(os.path.realpath(getattr(sys, name)))
-               for name in names if hasattr(sys, name)) or \
-            module.__file__.endswith(EXTENSION_SUFFIXES) or \
-            'site-packages' in module.__file__
+    mod_path = os.path.realpath(mod_path)
+    return (
+        any(mod_path.startswith(prefix) for prefix in PYTHONPATH_PREFIXES)
+        or mod_path.endswith(EXTENSION_SUFFIXES)
+        or 'site-packages' in mod_path
+    )
+
+@_weak_cache(defaults={None: False})
+def _is_stdlib_module(module):
+    first_level = module.__name__.partition('.')[0]
+    if OLD310:
+        if first_level in sys.builtin_module_names:
+            return True
+        mod_path = getattr(module, '__file__', '')
+        if mod_path:
+            mod_path = os.path.realpath(mod_path)
+        return mod_path.startswith(STDLIB_PREFIX)
+    else:
+        return first_level in sys.stdlib_module_names
 
 def _is_imported_module(module):
     return getattr(module, '__loader__', None) is not None or module in sys.modules.values()
+
+def _module_package(module):
+    package = getattr(module, '__package__', None)
+    return package.partition('.')[0] if package else None
 
 @register(ModuleType)
 def save_module(pickler, obj):
@@ -1606,7 +1851,7 @@ def save_module(pickler, obj):
                 pass
             else:
                 logger.trace(pickler, "M2: %s with diff", obj)
-                logger.trace(pickler, "Diff: %s", changed.keys())
+                logger.info("Diff: %s", changed.keys())
                 pickler.save_reduce(_import_module, (obj.__name__,), obj=obj,
                                     state=changed)
                 logger.trace(pickler, "# M2")
@@ -1617,15 +1862,22 @@ def save_module(pickler, obj):
         logger.trace(pickler, "# M1")
     else:
         builtin_mod = _is_builtin_module(obj)
-        if obj.__name__ not in ("builtins", "dill", "dill._dill") and not builtin_mod or \
-                is_dill(pickler, child=True) and obj is pickler._main:
+        is_session_main = is_dill(pickler, child=True) and obj is pickler._main
+        if (obj.__name__ not in ("builtins", "dill", "dill._dill") and not builtin_mod
+                or is_session_main):
             logger.trace(pickler, "M1: %s", obj)
-            _main_dict = obj.__dict__.copy() #XXX: better no copy? option to copy?
-            [_main_dict.pop(item, None) for item in singletontypes
-                + ["__builtins__", "__loader__"]]
+            # Hack for handling module-type objects in load_module().
             mod_name = obj.__name__ if _is_imported_module(obj) else '__runtime__.%s' % obj.__name__
-            pickler.save_reduce(_import_module, (mod_name,), obj=obj,
-                                state=_main_dict)
+            # Second references are saved as __builtin__.__main__ in save_module_dict().
+            main_dict = obj.__dict__.copy()
+            for item in ('__builtins__', '__loader__'):
+                main_dict.pop(item, None)
+            for item in IPYTHON_SINGLETONS:
+                if getattr(item, '__module__', '').startswith('IPython'):
+                    main_dict.pop(item, None)
+            if is_session_main:
+                pickler._main_dict_copy = main_dict
+            pickler.save_reduce(_import_module, (mod_name,), obj=obj, state=main_dict)
             logger.trace(pickler, "# M1")
         elif obj.__name__ == "dill._dill":
             logger.trace(pickler, "M2: %s", obj)
@@ -1635,7 +1887,6 @@ def save_module(pickler, obj):
             logger.trace(pickler, "M2: %s", obj)
             pickler.save_reduce(_import_module, (obj.__name__,), obj=obj)
             logger.trace(pickler, "# M2")
-        return
     return
 
 @register(TypeType)
@@ -1661,7 +1912,7 @@ def save_type(pickler, obj, postproc_list=None):
     elif obj is type(None):
         logger.trace(pickler, "T7: %s", obj)
         #XXX: pickler.save_reduce(type, (None,), obj=obj)
-        pickler.write(bytes('c__builtin__\nNoneType\n', 'UTF-8'))
+        pickler.write(GLOBAL + b'__builtin__\nNoneType\n')
         logger.trace(pickler, "# T7")
     elif obj is NotImplementedType:
         logger.trace(pickler, "T7: %s", obj)
@@ -1763,8 +2014,7 @@ def save_function(pickler, obj):
         logger.trace(pickler, "F1: %s", obj)
         _recurse = getattr(pickler, '_recurse', None)
         _postproc = getattr(pickler, '_postproc', None)
-        _main_modified = getattr(pickler, '_main_modified', None)
-        _original_main = getattr(pickler, '_original_main', __builtin__)#'None'
+        _original_main = getattr(pickler, '_original_main', None)
         postproc_list = []
         if _recurse:
             # recurse to get all globals referred to by obj
@@ -1781,7 +2031,7 @@ def save_function(pickler, obj):
 
             # If the globals is the __dict__ from the module being saved as a
             # session, substitute it by the dictionary being actually saved.
-            if _main_modified and globs_copy is _original_main.__dict__:
+            if _original_main is not None and globs_copy is _original_main.__dict__:
                 globs_copy = getattr(pickler, '_main', _original_main).__dict__
                 globs = globs_copy
             # If the globals is a module __dict__, do not save it in the pickle.
@@ -1840,7 +2090,7 @@ def save_function(pickler, obj):
                     # Change the value of the cell
                     pickler.save_reduce(*possible_postproc)
                     # pop None created by calling preprocessing step off stack
-                    pickler.write(bytes('0', 'UTF-8'))
+                    pickler.write(POP)
 
         logger.trace(pickler, "# F1")
     else:
@@ -1949,7 +2199,7 @@ def pickles(obj,exact=False,safe=False,**kwds):
     """
     if safe: exceptions = (Exception,) # RuntimeError, ValueError
     else:
-        exceptions = (TypeError, AssertionError, NotImplementedError, PicklingError, UnpicklingError)
+        exceptions = UNPICKLEABLE_ERRORS + (AssertionError, UnpicklingError)
     try:
         pik = copy(obj, **kwds)
         #FIXME: should check types match first, then check content if "exact"

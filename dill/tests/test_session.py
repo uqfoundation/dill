@@ -11,8 +11,10 @@ import sys
 import __main__
 from contextlib import suppress
 from io import BytesIO
+from types import ModuleType
 
 import dill
+from dill.session import ipython_filter, EXCLUDE, INCLUDE
 
 session_file = os.path.join(os.path.dirname(__file__), 'session-refimported-%s.pkl')
 
@@ -20,7 +22,7 @@ session_file = os.path.join(os.path.dirname(__file__), 'session-refimported-%s.p
 #  Child process  #
 ###################
 
-def _error_line(error, obj, refimported):
+def _error_line(obj, refimported):
     import traceback
     line = traceback.format_exc().splitlines()[-2].replace('[obj]', '['+repr(obj)+']')
     return "while testing (with refimported=%s):  %s" % (refimported, line.lstrip())
@@ -52,7 +54,7 @@ if __name__ == '__main__' and len(sys.argv) >= 3 and sys.argv[1] == '--child':
             assert __main__.complex_log is cmath.log
 
         except AssertionError as error:
-            error.args = (_error_line(error, obj, refimported),)
+            error.args = (_error_line(obj, refimported),)
             raise
 
     test_modules(refimported)
@@ -91,6 +93,7 @@ class CalendarSubclass(Calendar):
         return [day_name[i] for i in self.iterweekdays()]
 cal = CalendarSubclass()
 selfref = __main__
+self_dict = __main__.__dict__
 
 # Setup global namespace for session saving tests.
 class TestNamespace:
@@ -120,7 +123,7 @@ atexit.register(_clean_up_cache, local_mod)
 def _test_objects(main, globals_copy, refimported):
     try:
         main_dict = __main__.__dict__
-        global Person, person, Calendar, CalendarSubclass, cal, selfref
+        global Person, person, Calendar, CalendarSubclass, cal, selfref, self_dict
 
         for obj in ('json', 'url', 'local_mod', 'sax', 'dom'):
             assert globals()[obj].__name__ == globals_copy[obj].__name__
@@ -141,9 +144,10 @@ def _test_objects(main, globals_copy, refimported):
         assert cal.weekdays() == globals_copy['cal'].weekdays()
 
         assert selfref is __main__
+        assert self_dict is __main__.__dict__
 
     except AssertionError as error:
-        error.args = (_error_line(error, obj, refimported),)
+        error.args = (_error_line(obj, refimported),)
         raise
 
 def test_session_main(refimported):
@@ -192,12 +196,11 @@ def test_session_other():
     assert module.selfref is module
 
 def test_runtime_module():
-    from types import ModuleType
     modname = '__runtime__'
     runtime = ModuleType(modname)
     runtime.x = 42
 
-    mod = dill.session._stash_modules(runtime)
+    mod, _ = dill.session._stash_modules(runtime)
     if mod is not runtime:
         print("There are objects to save by referenece that shouldn't be:",
               mod.__dill_imported, mod.__dill_imported_as, mod.__dill_imported_top_level,
@@ -225,12 +228,54 @@ def test_runtime_module():
     assert runtime.x == 42
     assert runtime not in sys.modules.values()
 
+def test_lookup_module():
+    assert not dill._dill._is_builtin_module(local_mod) and local_mod.__package__ == ''
+
+    def lookup(mod, name, obj, lookup_by_name=True):
+        from dill._dill import _lookup_module, _module_map
+        return _lookup_module(_module_map(mod), name, obj, lookup_by_name)
+
+    name = '__test_obj'
+    obj = object()
+    setattr(dill, name, obj)
+    assert lookup(dill, name, obj) == (None, None, None)
+
+    # 4th level: non-installed module
+    setattr(local_mod, name, obj)
+    sys.modules[local_mod.__name__] = sys.modules.pop(local_mod.__name__) # put at the end
+    assert lookup(dill, name, obj) == (local_mod.__name__, name, False) # not installed
+    try:
+        import pox
+        # 3rd level: installed third-party module
+        setattr(pox, name, obj)
+        sys.modules['pox'] = sys.modules.pop('pox')
+        assert lookup(dill, name, obj) == ('pox', name, True)
+    except ModuleNotFoundError:
+        pass
+    # 2nd level: module of same package
+    setattr(dill.session, name, obj)
+    sys.modules['dill.session'] = sys.modules.pop('dill.session')
+    assert lookup(dill, name, obj) == ('dill.session', name, True)
+    # 1st level: stdlib module
+    setattr(os, name, obj)
+    sys.modules['os'] = sys.modules.pop('os')
+    assert lookup(dill, name, obj) == ('os', name, True)
+
+    # Lookup by id.
+    name2 = name + '2'
+    setattr(dill, name2, obj)
+    assert lookup(dill, name2, obj) == ('os', name, True)
+    assert lookup(dill, name2, obj, lookup_by_name=False) == (None, None, None)
+    setattr(local_mod, name2, obj)
+    assert lookup(dill, name2, obj) == (local_mod.__name__, name2, False)
+
 def test_refimported_imported_as():
     import collections
     import concurrent.futures
     import types
     import typing
-    mod = sys.modules['__test__'] = types.ModuleType('__test__')
+
+    mod = sys.modules['__test__'] = ModuleType('__test__')
     dill.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     mod.Dict = collections.UserDict             # select by type
     mod.AsyncCM = typing.AsyncContextManager    # select by __module__
@@ -247,6 +292,51 @@ def test_refimported_imported_as():
         ('typing', 'AsyncContextManager', 'AsyncCM'),
         ('dill', 'executor', 'thread_exec'),
     }
+
+def test_refonfail_unpickleable():
+    global local_mod
+    import keyword as builtin_mod
+    from dill._dill import _global_string
+    dill.session.settings['refonfail'] = True
+    name = '__test_obj'
+    obj = memoryview(b'')
+    assert dill._dill._is_builtin_module(builtin_mod)
+    assert not dill._dill._is_builtin_module(local_mod)
+    # assert not dill.pickles(obj)
+    try:
+        dill.dumps(obj)
+    except dill._dill.UNPICKLEABLE_ERRORS:
+        pass
+    else:
+        raise Exception("test object should be unpickleable")
+
+    def dump_with_ref(mod, other_mod):
+        setattr(other_mod, name, obj)
+        buf = BytesIO()
+        dill.dump_module(buf, mod)
+        return buf.getvalue()
+
+    # "user" modules
+    _local_mod = local_mod
+    del local_mod  # remove from __main__'s namespace
+    try:
+        dump_with_ref(__main__, __main__)
+    except dill.PicklingError:
+        pass  # success
+    else:
+        raise Exception("saving with a reference to the module itself should fail for '__main__'")
+    assert _global_string(_local_mod.__name__, name) in dump_with_ref(__main__, _local_mod)
+    assert _global_string('os', name) in dump_with_ref(__main__, os)
+    local_mod = _local_mod
+    del _local_mod, __main__.__test_obj, local_mod.__test_obj, os.__test_obj
+
+    # "builtin" or "installed" modules
+    assert _global_string(builtin_mod.__name__, name) in dump_with_ref(builtin_mod, builtin_mod)
+    assert _global_string(builtin_mod.__name__, name) in dump_with_ref(builtin_mod, local_mod)
+    assert _global_string('os', name) in dump_with_ref(builtin_mod, os)
+    del builtin_mod.__test_obj, local_mod.__test_obj, os.__test_obj
+
+    dill.reset_settings()
 
 def test_load_module_asdict():
     with TestNamespace():
@@ -271,10 +361,38 @@ def test_load_module_asdict():
         assert 'y' not in main_vars
         assert 'empty' in main_vars
 
+def test_ipython_filter():
+    from itertools import filterfalse
+    from types import SimpleNamespace
+    from dill._utils import FilterRules
+    dill._dill.IS_IPYTHON = True  # trick ipython_filter
+    sys.modules['IPython'] = MockIPython = ModuleType('IPython')
+
+    # Mimic the behavior of IPython namespaces at __main__.
+    user_ns_actual = {'user_var': 1, 'x': 2}
+    user_ns_hidden = {'x': 3, '_i1': '1 / 2', '_1': 0.5, 'hidden': 4}
+    user_ns = user_ns_hidden.copy()  # user_ns == vars(__main__)
+    user_ns.update(user_ns_actual)
+    assert user_ns['x'] == user_ns_actual['x']  # user_ns.x masks user_ns_hidden.x
+    MockIPython.get_ipython = lambda: SimpleNamespace(user_ns=user_ns, user_ns_hidden=user_ns_hidden)
+
+    # Test variations of keeping or dropping the interpreter history.
+    user_vars = set(user_ns_actual)
+    def namespace_matches(keep_history, should_keep_vars):
+        rules = FilterRules([(EXCLUDE, ipython_filter(keep_history=keep_history))])
+        return set(rules.apply_filters(user_ns)) == user_vars | should_keep_vars
+    assert namespace_matches(keep_history='input', should_keep_vars={'_i1'})
+    assert namespace_matches(keep_history='output', should_keep_vars={'_1'})
+    assert namespace_matches(keep_history='both', should_keep_vars={'_i1', '_1'})
+    assert namespace_matches(keep_history='none', should_keep_vars=set())
+
 if __name__ == '__main__':
     test_session_main(refimported=False)
     test_session_main(refimported=True)
     test_session_other()
     test_runtime_module()
+    test_lookup_module()
     test_refimported_imported_as()
+    test_refonfail_unpickleable()
     test_load_module_asdict()
+    test_ipython_filter()
