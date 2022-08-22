@@ -445,7 +445,7 @@ class Pickler(StockPickler):
                 self.memo.popitem()  # LIFO order is guaranteed since 3.7
             # Handle modules specially.
             if self._session and obj is self._main:
-                if not _is_builtin_module(self._main):
+                if self._main is _main_module or not _is_imported_module(self._main):
                     raise
                 # Save an empty dict as state to distinguish this from modules saved with dump().
                 self.save_reduce(_import_module, (obj.__name__,), obj=obj, state={})

@@ -196,12 +196,12 @@ def test_session_other():
     assert module.selfref is module
 
 def test_runtime_module():
-    modname = '__runtime__'
-    runtime = ModuleType(modname)
-    runtime.x = 42
+    modname = 'runtime'
+    runtime_mod = ModuleType(modname)
+    runtime_mod.x = 42
 
-    mod, _ = dill.session._stash_modules(runtime)
-    if mod is not runtime:
+    mod, _ = dill.session._stash_modules(runtime_mod)
+    if mod is not runtime_mod:
         print("There are objects to save by referenece that shouldn't be:",
               mod.__dill_imported, mod.__dill_imported_as, mod.__dill_imported_top_level,
               file=sys.stderr)
@@ -210,23 +210,23 @@ def test_runtime_module():
     # without imported objects in the namespace. It's a contrived example because
     # even dill can't be in it.  This should work after fixing #462.
     session_buffer = BytesIO()
-    dill.dump_module(session_buffer, module=runtime, refimported=True)
+    dill.dump_module(session_buffer, module=runtime_mod, refimported=True)
     session_dump = session_buffer.getvalue()
 
     # Pass a new runtime created module with the same name.
-    runtime = ModuleType(modname)  # empty
-    return_val = dill.load_module(BytesIO(session_dump), module=runtime)
+    runtime_mod = ModuleType(modname)  # empty
+    return_val = dill.load_module(BytesIO(session_dump), module=runtime_mod)
     assert return_val is None
-    assert runtime.__name__ == modname
-    assert runtime.x == 42
-    assert runtime not in sys.modules.values()
+    assert runtime_mod.__name__ == modname
+    assert runtime_mod.x == 42
+    assert runtime_mod not in sys.modules.values()
 
     # Pass nothing as main.  load_module() must create it.
     session_buffer.seek(0)
-    runtime = dill.load_module(BytesIO(session_dump))
-    assert runtime.__name__ == modname
-    assert runtime.x == 42
-    assert runtime not in sys.modules.values()
+    runtime_mod = dill.load_module(BytesIO(session_dump))
+    assert runtime_mod.__name__ == modname
+    assert runtime_mod.x == 42
+    assert runtime_mod not in sys.modules.values()
 
 def test_lookup_module():
     assert not dill._dill._is_builtin_module(local_mod) and local_mod.__package__ == ''
@@ -235,7 +235,7 @@ def test_lookup_module():
         from dill._dill import _lookup_module, _module_map
         return _lookup_module(_module_map(mod), name, obj, lookup_by_name)
 
-    name = '__test_obj'
+    name = '__unpickleable'
     obj = object()
     setattr(dill, name, obj)
     assert lookup(dill, name, obj) == (None, None, None)
@@ -299,7 +299,7 @@ def test_refonfail_unpickleable():
     from dill._dill import _global_string
     refonfail_default = dill.session.settings['refonfail']
     dill.session.settings['refonfail'] = True
-    name = '__test_obj'
+    name = '__unpickleable'
     obj = memoryview(b'')
     assert dill._dill._is_builtin_module(builtin_mod)
     assert not dill._dill._is_builtin_module(local_mod)
@@ -329,13 +329,13 @@ def test_refonfail_unpickleable():
     assert _global_string(_local_mod.__name__, name) in dump_with_ref(__main__, _local_mod)
     assert _global_string('os', name) in dump_with_ref(__main__, os)
     local_mod = _local_mod
-    del _local_mod, __main__.__test_obj, local_mod.__test_obj, os.__test_obj
+    del _local_mod, __main__.__unpickleable, local_mod.__unpickleable, os.__unpickleable
 
     # "builtin" or "installed" modules
     assert _global_string(builtin_mod.__name__, name) in dump_with_ref(builtin_mod, builtin_mod)
     assert _global_string(builtin_mod.__name__, name) in dump_with_ref(builtin_mod, local_mod)
     assert _global_string('os', name) in dump_with_ref(builtin_mod, os)
-    del builtin_mod.__test_obj, local_mod.__test_obj, os.__test_obj
+    del builtin_mod.__unpickleable, local_mod.__unpickleable, os.__unpickleable
 
     dill.session.settings['refonfail'] = refonfail_default
 
@@ -387,6 +387,46 @@ def test_ipython_filter():
     assert namespace_matches(keep_history='both', should_keep_vars={'_i1', '_1'})
     assert namespace_matches(keep_history='none', should_keep_vars=set())
 
+def test_is_pickled_module():
+    import tempfile
+    import warnings
+
+    # Module saved with dump().
+    pickle_file = tempfile.NamedTemporaryFile(mode='wb')
+    dill.dump(os, pickle_file)
+    pickle_file.flush()
+    assert not dill.is_pickled_module(pickle_file.name)
+    assert not dill.is_pickled_module(pickle_file.name, importable=False)
+    pickle_file.close()
+
+    # Importable module saved with dump_module().
+    pickle_file = tempfile.NamedTemporaryFile(mode='wb')
+    dill.dump_module(pickle_file, local_mod)
+    pickle_file.flush()
+    assert dill.is_pickled_module(pickle_file.name)
+    assert not dill.is_pickled_module(pickle_file.name, importable=False)
+    pickle_file.close()
+
+    # Module-type object saved with dump_module().
+    pickle_file = tempfile.NamedTemporaryFile(mode='wb')
+    dill.dump_module(pickle_file, ModuleType('runtime'))
+    pickle_file.flush()
+    assert not dill.is_pickled_module(pickle_file.name)
+    assert dill.is_pickled_module(pickle_file.name, importable=False)
+    pickle_file.close()
+
+    # Importable module saved by reference due to unpickleable object.
+    pickle_file = tempfile.NamedTemporaryFile(mode='wb')
+    local_mod.__unpickleable = memoryview(b'')
+    warnings.filterwarnings('ignore')
+    dill.dump_module(pickle_file, local_mod)
+    warnings.resetwarnings()
+    del local_mod.__unpickleable
+    pickle_file.flush()
+    assert dill.is_pickled_module(pickle_file.name)
+    assert not dill.is_pickled_module(pickle_file.name, importable=False)
+    pickle_file.close()
+
 if __name__ == '__main__':
     test_session_main(refimported=False)
     test_session_main(refimported=True)
@@ -397,3 +437,4 @@ if __name__ == '__main__':
     test_refonfail_unpickleable()
     test_load_module_asdict()
     test_ipython_filter()
+    test_is_pickled_module()
