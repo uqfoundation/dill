@@ -366,11 +366,10 @@ class Pickler(StockPickler):
         # object pickled.  When 'refonfail' is True, it tries to save the object
         # by reference if pickling it fails with a common pickling error, as
         # defined by the constant UNPICKLEABLE_ERRORS.  If that also fails, then
-        # the exception is risen and, if this was called indirectly from another
-        # Pickler.save() call, the parent objects will try to be saved by
-        # reference recursively, until it succeeds or the exception propagates
-        # beyond the topmost save() call.  The extra 'name' argument is passed
-        # to StockPickler.save_global().
+        # the exception is raised and, if this method was called indirectly from
+        # another Pickler.save() call, the parent objects will try to be saved
+        # by reference recursively, until it succeeds or the exception
+        # propagates beyond the topmost save() call.
 
         # numpy hack
         obj_type = type(obj)
@@ -1312,11 +1311,8 @@ def _lookup_module(modmap, name, obj, lookup_by_id=True) -> typing.Tuple[str, st
 def _global_string(modname, name):
     return GLOBAL + bytes('%s\n%s\n' % (modname, name), 'UTF-8')
 
-def _save_module_dict(pickler, obj):
-    # If an object doesn't have a '__name__' attribute, pass the object's name
-    # in the module's namespace to save(), so that it can be used with
-    # save_global() to increase the chances of finding the object for saving
-    # it by reference in the event of a failed serialization.
+def _save_module_dict(pickler, main_dict):
+    """Save a module's dictionary, saving unpickleable variables by referece."""
     main = getattr(pickler, '_original_main', pickler._main)
     modmap = getattr(pickler, '_modmap', None)  # cached from _stash_modules()
     is_builtin = _is_builtin_module(main)
@@ -1341,7 +1337,7 @@ def _save_module_dict(pickler, obj):
         pickler.write(SETITEM)
 
 def _repr_dict(obj):
-    """make a short string representation of a dictionary"""
+    """Make a short string representation of a dictionary."""
     return "<%s object at %#012x>" % (type(obj).__name__, id(obj))
 
 @register(dict)
