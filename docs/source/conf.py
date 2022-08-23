@@ -77,13 +77,14 @@ autodoc_default_options = {
         '__slots__,'            # implementation detail
         '__weakref__,'          # implementation detail
         '__module__,'           # implementation detail
+        '_abc_impl,'            # implementation detail of abstract classes
+        '__init__,'             # repeated in class docstring by "autoclass_content=both"
         '__annotations__,'      # redundant with signature documentation
         '__dataclass_fields__,' # dataclass automatic attribute, redundant
-        '_abc_impl,'            # implementation detail
     )
 }
 autodoc_typehints = 'description'
-napoleon_include_init_with_doc = True
+autodoc_typehints_format = 'short'
 napoleon_include_private_with_doc = False
 napoleon_include_special_with_doc = True
 napoleon_use_ivar = True
