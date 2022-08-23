@@ -75,6 +75,7 @@ autodoc_default_options = {
     'exclude-members': ( #NOTE: this is a single string concatenation
         '__dict__,'             # implementation detail (may be verbose)
         '__slots__,'            # implementation detail
+        '__weakref__,'          # implementation detail
         '__module__,'           # implementation detail
         '__annotations__,'      # redundant with signature documentation
         '__dataclass_fields__,' # dataclass automatic attribute, redundant
