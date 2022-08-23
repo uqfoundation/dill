@@ -1317,7 +1317,7 @@ def _save_module_dict(pickler, main_dict):
     modmap = getattr(pickler, '_modmap', None)  # cached from _stash_modules()
     is_builtin = _is_builtin_module(main)
     pickler.write(MARK + DICT)  # don't need to memoize
-    for name, value in obj.items():
+    for name, value in main_dict.items():
         pickler.save(name)
         try:
             pickler.save(value)
