@@ -16,7 +16,8 @@ that are pickled, `dill` assumes that they are importable when unpickling.
 
 Contrary of using :py:func:`dill.dump` and :py:func:`dill.load` to save and load
 a module object, :py:func:`dill.dump_module` always tries to pickle the module
-by value (including built-in modules).  Also, options like
+by value (including built-in modules).  Modules saved with :py:func:`dill.dump`
+can't be loaded with :py:func:`load_module`.  Also, options like
 ``dill.settings['byref']`` and ``dill.settings['recurse']`` don't affect its
 behavior.
 
