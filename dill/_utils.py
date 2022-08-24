@@ -136,6 +136,8 @@ EXCLUDE, INCLUDE = RuleType.EXCLUDE, RuleType.INCLUDE
 class NamedObject:
     """Simple container for a variable's name and value used by filter functions."""
     __slots__ = 'name', 'value'
+    name: str
+    value: Any
     def __init__(self, name_value: Tuple[str, Any]):
         self.name, self.value = name_value
     def __eq__(self, other: Any) -> bool:
@@ -147,6 +149,8 @@ class NamedObject:
             raise TypeError("'==' not supported between instances of 'NamedObject' and %r" %
                     type(other).__name__)
         return self.value is other.value and self.name == other.name
+    def __repr__(self):
+        return "NamedObject(%r, %r)" % (self.name, self.value)
 
 FilterFunction = Callable[[NamedObject], bool]
 Filter = Union[str, Pattern[str], int, type, FilterFunction]

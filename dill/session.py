@@ -36,7 +36,8 @@ from __future__ import annotations
 
 __all__ = [
     'dump_module', 'load_module', 'load_module_asdict', 'is_pickled_module',
-    'ModuleFilters', 'FilterRules', 'FilterSet', 'size_filter', 'ipython_filter',
+    'ModuleFilters', 'NamedObject', 'FilterRules', 'FilterSet', 'size_filter',
+    'ipython_filter',
     'dump_session', 'load_session' # backward compatibility
 ]
 
@@ -116,6 +117,7 @@ def _stash_modules(main_module):
         newmod.__dill_imported = imported
         newmod.__dill_imported_as = imported_as
         newmod.__dill_imported_top_level = imported_top_level
+        _discard_added_variables(newmod, main_module.__dict__)
         return newmod, modmap
     else:
         return main_module, modmap
@@ -151,7 +153,17 @@ def _filter_vars(main_module, exclude, include, base_rules):
 
     newmod = ModuleType(main_module.__name__)
     newmod.__dict__.update(namespace)
+    _discard_added_variables(newmod, namespace)
     return newmod
+
+def _discard_added_variables(main, original_namespace):
+    # Some empty attributes like __doc__ may have been added by ModuleType().
+    added_names = set(main.__dict__)
+    added_names.discard('__name__')  # required
+    added_names.difference_update(original_namespace)
+    added_names.difference_update('__dill_imported%s' % s for s in ('', '_as', '_top_level'))
+    for name in added_names:
+        delattr(main, name)
 
 def _fix_module_namespace(main, original_main):
     # Self-references.
@@ -160,12 +172,6 @@ def _fix_module_namespace(main, original_main):
             setattr(main, name, main)
         elif obj is original_main.__dict__:
             setattr(main, name, main.__dict__)
-    # Some empty attributes like __doc__ may have been added by ModuleType().
-    added_names = set(main.__dict__)
-    added_names.difference_update(original_main.__dict__)
-    added_names.difference_update('__dill_imported%s' % s for s in ('', '_as', '_top_level'))
-    for name in added_names:
-        delattr(main, name)
     # Trick _is_imported_module(), forcing main to be saved as an imported module.
     if getattr(main, '__loader__', None) is None and _is_imported_module(original_main):
         main.__loader__ = True  # will be discarded by _dill.save_module()
@@ -710,7 +716,7 @@ def load_module_asdict(
         main_name = _identify_module(file)
         original_main = sys.modules.get(main_name)
         main = ModuleType(main_name)
-        del main.__doc__, main.__package__, main.__spec__
+        del main.__doc__, main.__loader__, main.__package__, main.__spec__
         if update:
             if original_main is None:
                 original_main = _import_module(main_name)
