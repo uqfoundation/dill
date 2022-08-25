@@ -133,9 +133,9 @@ def _restore_modules(unpickler, main_module):
 def _filter_vars(main_module, exclude, include, base_rules):
     """apply exclude/include filters from arguments *and* settings"""
     rules = FilterRules()
-    mod_filters = base_rules.get(main_module.__name__, base_rules)
-    rules.exclude |= mod_filters.get_filters(EXCLUDE)
-    rules.include |= mod_filters.get_filters(INCLUDE)
+    mod_rules = base_rules.get_rules(main_module.__name__)
+    rules.exclude |= mod_rules.get_filters(EXCLUDE)
+    rules.include |= mod_rules.get_filters(INCLUDE)
     if exclude is not None:
         rules.update([(EXCLUDE, exclude)])
     if include is not None:
@@ -656,8 +656,6 @@ load_session.__doc__ = load_module.__doc__
 
 def load_module_asdict(
     filename = str(TEMPDIR/'session.pkl'),
-    *,
-    update: bool = False,
     **kwds
 ) -> dict:
     """
@@ -667,13 +665,11 @@ def load_module_asdict(
 
         lambda filename: vars(dill.load_module(filename)).copy()
 
-    however, does not alter the original module. Also, the path of
-    the loaded module is stored in the ``__session__`` attribute.
+    however, it does not alter the original module. Also, the path of
+    the loaded file is stored with the key ``'__session__'``.
 
     Parameters:
         filename: a path-like object or a readable stream
-        update: if `True`, initialize the dictionary with the current state
-            of the module prior to loading the state stored at filename.
         **kwds: extra keyword arguments passed to :py:class:`Unpickler()`
 
     Raises:
@@ -683,11 +679,8 @@ def load_module_asdict(
         A copy of the restored module's dictionary.
 
     Note:
-        If ``update`` is True, the corresponding module may first be imported
-        into the current namespace before the saved state is loaded from
-        filename to the dictionary. Note that any module that is imported into
-        the current namespace as a side-effect of using ``update`` will not be
-        modified by loading the saved module in filename to a dictionary.
+        Even if not changed, the module refered in the file is always loaded
+        before its saved state is restored from `filename` to the dictionary.
 
     Example:
         >>> import dill
@@ -707,33 +700,37 @@ def load_module_asdict(
         False
         >>> main['anum'] == anum # changed after the session was saved
         False
-        >>> new_var in main # would be True if the option 'update' was set
-        False
+        >>> new_var in main # it was initialized with the current state of __main__
+        True
     """
     if 'module' in kwds:
         raise TypeError("'module' is an invalid keyword argument for load_module_asdict()")
+
     with _open(filename, 'rb', peekable=True) as file:
         main_name = _identify_module(file)
-        original_main = sys.modules.get(main_name)
-        main = ModuleType(main_name)
-        del main.__doc__, main.__loader__, main.__package__, main.__spec__
-        if update:
-            if original_main is None:
-                original_main = _import_module(main_name)
-            main.__dict__.update(original_main.__dict__)
-        else:
-            main.__builtins__ = __builtin__
+        main = _import_module(main_name)
+        main_copy = ModuleType(main_name)
+        main_copy.__dict__.clear()
+        main_copy.__dict__.update(main.__dict__)
+
+        parent_name = main_name.rpartition('.')[0]
+        if parent_name:
+            parent = sys.modules[parent_name]
         try:
-            sys.modules[main_name] = main
+            sys.modules[main_name] = main_copy
+            if parent_name and getattr(parent, main_name, None) is main:
+                setattr(parent, main_name, main_copy)
             load_module(file, **kwds)
         finally:
-            if original_main is None:
-                del sys.modules[main_name]
-            else:
-                sys.modules[main_name] = original_main
-    main.__session__ = str(filename)
-    return main.__dict__
+            sys.modules[main_name] = main
+            if parent_name and getattr(parent, main_name, None) is main_copy:
+                setattr(parent, main_name, main)
 
+    if isinstance(getattr(filename, 'name', None), str):
+        main_copy.__session__ = filename.name
+    else:
+        main_copy.__session__ = str(filename)
+    return main_copy.__dict__
 
 class ModuleFilters(FilterRules):
     """Stores default filtering rules for modules.
@@ -871,11 +868,13 @@ class ModuleFilters(FilterRules):
             keys += mod_filters.keys()
         keys.sort()
         return keys
-    def get(self, name: str, default: Optional[ModuleFilters] = None) -> ModuleFilters:
-        try:
-            return self[name]
-        except AttributeError:
-            return default
+    def get_rules(self, name: str) -> ModuleFilters:
+        while name:
+            try:
+                return self[name]
+            except AttributeError:
+                name = name.rpartition('.')[0]
+        return self
     def get_filters(self, rule_type: RuleType) -> FilterSet:
         """Get exclude/include filters. If not set, fall back to parent module's or default filters."""
         if not isinstance(rule_type, RuleType):

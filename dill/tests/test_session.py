@@ -359,7 +359,7 @@ def test_load_module_asdict():
         assert main_vars['names'] == names
         assert main_vars['names'] is not names
         assert main_vars['x'] != x
-        assert 'y' not in main_vars
+        assert 'y' in main_vars
         assert 'empty' in main_vars
 
 def test_ipython_filter():
