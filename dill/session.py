@@ -9,27 +9,29 @@
 """
 Pickle and restore the intepreter session or a module's state.
 
-The functions :py:func:`dump_module`, :py:func:`load_module` and
-:py:func:`load_module_asdict` are capable of saving and restoring, as long as
+The functions :func:`dump_module`, :func:`load_module` and
+:func:`load_module_asdict` are capable of saving and restoring, as long as
 objects are pickleable, the complete state of a module.  For imported modules
-that are pickled, `dill` assumes that they are importable when unpickling.
+that are pickled, `dill` requires them to be importable at unpickling.
 
-Contrary of using :py:func:`dill.dump` and :py:func:`dill.load` to save and load
-a module object, :py:func:`dill.dump_module` always tries to pickle the module
-by value (including built-in modules).  Modules saved with :py:func:`dill.dump`
-can't be loaded with :py:func:`load_module`.  Also, options like
-``dill.settings['byref']`` and ``dill.settings['recurse']`` don't affect its
-behavior.
+Options like ``dill.settings['byref']`` and ``dill.settings['recurse']`` don't
+affect the behavior of :func:`dump_module`.  However, if a module has variables
+refering to objects from other modules that would prevent it from pickling or
+drastically increase its disk size, using the option ``refimported`` forces them
+to be saved by reference instead of by value.
 
-However, if a module contains references to objects originating from other
-modules, that would prevent it from pickling or drastically increase its disk
-size, they can be saved by reference instead of by value, using the option
-``refimported``.
+Also with :func:`dump_module`, namespace filters may be used to restrict the
+list of pickled variables to a subset of those in the module, based on their
+names and values.
 
-With :py:func:`dump_module`, namespace filters may be used to restrict the list
-of pickled variables to a subset of those in the module, based on their names or
-values.  Also, using :py:func:`load_module_asdict` allows one to load the
-variables from different saved states of the same module into dictionaries.
+In turn, :func:`load_module_asdict` allows one to load the variables from
+different saved states of the same module into dictionaries.
+
+Note:
+    Contrary of using :func:`dill.dump` and :func:`dill.load` to save and load
+    a module object, :func:`dill.dump_module` always tries to pickle the module
+    by value (including built-in modules).  Modules saved with :func:`dill.dump`
+    can't be loaded with :func:`dill.load_module`.
 """
 
 from __future__ import annotations
@@ -57,7 +59,7 @@ from ._dill import (
 from ._utils import FilterRules, FilterSet, _open, size_filter, EXCLUDE, INCLUDE
 
 # Type hints.
-from typing import Iterable, Optional, Union
+from typing import Any, Dict, Iterable, Optional, Union
 from ._utils import Filter, FilterFunction, NamedObject, Rule, RuleType
 
 import pathlib
@@ -187,42 +189,52 @@ def dump_module(
     base_rules: Optional[ModuleFilters] = None,
     **kwds
 ) -> None:
-    R"""Pickle the current state of :py:mod:`__main__` or another module to a file.
+    """Pickle the current state of :mod:`__main__` or another module to a file.
 
-    Save the contents of :py:mod:`__main__` (e.g. from an interactive
+    Save the contents of :mod:`__main__` (e.g. from an interactive
     interpreter session), an imported module, or a module-type object (e.g.
-    built with :py:class:`~types.ModuleType`), to a file. The pickled
-    module can then be restored with the function :py:func:`load_module`.
+    built with :class:`~types.ModuleType`), to a file. The pickled
+    module can then be restored with the function :func:`load_module`.
 
     Only a subset of the module's variables may be saved if exclusion/inclusion
-    filters are specified.  Filters apply to every variable name or value and
-    determine if they should be saved or not.  They can be set in
+    filters are specified.  Filters are applied to every pair of variable's name
+    and value to determine if they should be saved or not.  They can be set in
     ``dill.session.settings['filters']`` or passed directly to the ``exclude``
-    and ``include`` parameters.  See :py:class:`ModuleFilters` for details.
+    and ``include`` parameters.
+
+    See :class:`FilterRules` and :class:`ModuleFilters` for details. See
+    also the bundled "filter factories": :class:`size_filter` and
+    :func:`ipython_filter`.
 
     Parameters:
         filename: a path-like object or a writable stream.
         module: a module object or the name of an importable module. If `None`
-            (the default), :py:mod:`__main__` is saved.
+            (the default), :mod:`__main__` is saved.
         refimported: if `True`, all objects identified as having been imported
             into the module's namespace are saved by reference. *Note:* this is
-            similar but independent from ``dill.settings[`byref`]``, as
+            similar but independent from ``dill.settings['byref']``, as
             ``refimported`` refers to virtually all imported objects, while
             ``byref`` only affects select objects.
         refonfail: if `True` (the default), objects that fail to pickle by value
             will try to be saved by reference.  If this also fails, saving their
             parent objects by reference will be attempted recursively.  In the
             worst case scenario, the module itself may be saved by reference,
-            with a warning.  Note: this option disables framing for pickle
-            protocol >= 4.  Turning it off may improve unpickling speed, but may
-            cause a module to fail pickling.
-        exclude: here be dragons
-        include: here be dragons
-        base_rules: here be dragons
-        **kwds: extra keyword arguments passed to :py:class:`Pickler()`.
+            with a warning.  *Note:* this has the side effect of disabling framing
+            for pickle protocol ≥ 4.  Turning this option off may improve
+            unpickling speed, but may cause a module to fail pickling.
+        exclude: one or more variable `exclusion` filters (see
+            :class:`FilterRules`).
+        include: one or more variable `inclusion` filters.
+        base_rules: if passed, overwrites ``settings['filters']``.
+        **kwds: extra keyword arguments passed to :class:`Pickler()`.
 
     Raises:
-       :py:exc:`PicklingError`: if pickling fails.
+        :exc:`PicklingError`: if pickling fails.
+        :exc:`PicklingWarning`: if the module itself ends being saved by
+            reference due to unpickleable objects in its namespace.
+
+    Default values for keyword-only arguments can be set in
+    `dill.session.settings`.
 
     Examples:
 
@@ -247,8 +259,7 @@ def dump_module(
           >>> foo.values = [1,2,3]
           >>> import math
           >>> foo.sin = math.sin
-          >>> dill.dump_module('foo_session.pkl', module=foo, refimported=True)
-          FIXME: here be dragons
+          >>> dill.dump_module('foo_session.pkl', module=foo)
 
         - Save the state of a module with unpickleable objects:
 
@@ -273,7 +284,23 @@ def dump_module(
           [0.8414709848078965, 0.9092974268256817, 0.1411200080598672]
           >>> os = dill.load_module('os_session.pkl')
           >>> print(os.altsep.join('path'))
-          p\a\t\h
+          p\\a\\t\\h
+
+        - Use `refimported` to save imported objects by reference:
+
+          >>> import dill
+          >>> from html.entities import html5
+          >>> type(html5), len(html5)
+          (dict, 2231)
+          >>> import io
+          >>> buf = io.BytesIO()
+          >>> dill.dump_module(buf) # saves __main__, with html5 saved by value
+          >>> len(buf.getvalue()) # pickle size in bytes
+          71665
+          >>> buf = io.BytesIO()
+          >>> dill.dump_module(buf, refimported=True) # html5 saved by reference
+          >>> len(buf.getvalue())
+          438
 
         - Save current session but exclude some variables:
 
@@ -442,39 +469,38 @@ def load_module(
     module: Optional[Union[ModuleType, str]] = None,
     **kwds
 ) -> Optional[ModuleType]:
-    """Update the selected module (default is :py:mod:`__main__`) with
-    the state saved at ``filename``.
+    """Update the selected module with the state saved at ``filename``.
 
-    Restore a module to the state saved with :py:func:`dump_module`. The
-    saved module can be :py:mod:`__main__` (e.g. an interpreter session),
+    Restore a module to the state saved with :func:`dump_module`. The
+    saved module can be :mod:`__main__` (e.g. an interpreter session),
     an imported module, or a module-type object (e.g. created with
-    :py:class:`~types.ModuleType`).
+    :class:`~types.ModuleType`).
 
-    When restoring the state of a non-importable module-type object, the
+    When restoring the state of a non-importable, module-type object, the
     current instance of this module may be passed as the argument ``module``.
-    Otherwise, a new instance is created with :py:class:`~types.ModuleType`
+    Otherwise, a new instance is created with :class:`~types.ModuleType`
     and returned.
 
     Parameters:
         filename: a path-like object or a readable stream.
         module: a module object or the name of an importable module;
-            the module name and kind (i.e. imported or non-imported) must
+            the module's name and kind (i.e. imported or non-imported) must
             match the name and kind of the module stored at ``filename``.
-        **kwds: extra keyword arguments passed to :py:class:`Unpickler()`.
+        **kwds: extra keyword arguments passed to :class:`Unpickler()`.
 
     Raises:
-        :py:exc:`UnpicklingError`: if unpickling fails.
-        :py:exc:`ValueError`: if the argument ``module`` and module saved
-            at ``filename`` are incompatible.
+        :exc:`UnpicklingError`: if unpickling fails.
+        :exc:`ValueError`: if the argument ``module`` and the module
+            saved at ``filename`` are incompatible.
 
     Returns:
-        A module object, if the saved module is not :py:mod:`__main__` or
+        A module object, if the saved module is not :mod:`__main__` and
         a module instance wasn't provided with the argument ``module``.
 
     Passing an argument to ``module`` forces `dill` to verify that the module
     being loaded is compatible with the argument value.  Additionally, if the
-    argument is a module (instead of a module name), it supresses the return
-    value. Each case and behavior is exemplified below:
+    argument is a module instance (instead of a module name), it supresses the
+    return value. Each case and behavior is exemplified below:
 
         1. `module`: ``None`` --- This call loads a previously saved state of
         the module ``math`` and returns it (the module object) at the end:
@@ -587,10 +613,6 @@ def load_module(
 
     *Changed in version 0.3.6:* Function ``load_session()`` was renamed to
     ``load_module()``. Parameter ``main`` was renamed to ``module``.
-
-    See also:
-        :py:func:`load_module_asdict` to load the contents of module saved
-        with :py:func:`dump_module` into a dictionary.
     """
     if 'main' in kwds:
         warnings.warn(
@@ -666,7 +688,7 @@ load_session.__doc__ = load_module.__doc__
 def load_module_asdict(
     filename = str(TEMPDIR/'session.pkl'),
     **kwds
-) -> dict:
+) -> Dict[str, Any]:
     """
     Load the contents of a saved module into a dictionary.
 
@@ -679,10 +701,10 @@ def load_module_asdict(
 
     Parameters:
         filename: a path-like object or a readable stream
-        **kwds: extra keyword arguments passed to :py:class:`Unpickler()`
+        **kwds: extra keyword arguments passed to :class:`Unpickler()`
 
     Raises:
-        :py:exc:`UnpicklingError`: if unpickling fails
+        :exc:`UnpicklingError`: if unpickling fails
 
     Returns:
         A copy of the restored module's dictionary.
@@ -744,7 +766,7 @@ def load_module_asdict(
 class ModuleFilters(FilterRules):
     """Stores default filtering rules for modules.
 
-    :py:class:`FilterRules` subclass with a tree-like structure that may hold
+    :class:`FilterRules` subclass with a tree-like structure that may hold
     exclusion/inclusion filters for specific modules and submodules.  See the
     base class documentation to learn more about how to create and use filters.
 
@@ -758,11 +780,12 @@ class ModuleFilters(FilterRules):
     Exclusion and inclusion filters for global variables can be added using the
     ``add()`` methods of the ``exclude`` and ``include`` attributes, or of the
     ``ModuleFilters`` object itself.  In the latter case, the filter is added to
-    its ``exclude`` :py:class:`FilterSet` by default:
+    its ``exclude`` :class:`FilterSet` by default:
 
     >>> filters.add('some_var') # exclude a variable named 'some_var'
     >>> filters.exclude.add('_.*') # exclude any variable with a name prefixed by '_'
     >>> filters.include.add('_keep_this') # an exception to the rule above
+    >>> filters
     <ModuleFilters DEFAULT:
       exclude=FilterSet(names={'some_var'}, regexes={re.compile('_.*')}),
       include=FilterSet(names={'_keep_this'})>
@@ -784,21 +807,40 @@ class ModuleFilters(FilterRules):
     To create filters specific for a module and its submodules, use the
     following syntax to add a child node to the default ``ModuleFilters``:
 
+    >>> import dill
     >>> from dill.session import EXCLUDE, INCLUDE
+    >>> filters = dill.session.settings['filters']
+    >>> # set empty rules for module 'foo':
+    >>> # (these will override any existing default rules)
     >>> filters['foo'] = []
-    >>> filters['foo'] # override default with empty rules for module 'foo'
+    >>> filters['foo']
     <ModuleFilters for 'foo': exclude=FilterSet(), include=FilterSet()>
-    >>> filters['bar.baz'] = [(EXCLUDE, r'\w+\d+'), (INCLUDE, 'ERROR404')]
-    >>> filters['bar.baz'] # specific rules for the submodule 'bar.baz'
+    >>> # add a name (exclusion) filter:
+    >>> # (this filter will also apply to any submodule of 'foo')
+    >>> filters['foo'].add('ignore_this')
+    >>> filters['foo']
+    <ModuleFilters for 'foo': exclude=FilterSet(names={'ignore_this'}), include=FilterSet()>
+
+    Create a filter for a submodule:
+
+    >>> filters['bar.baz'] = [
+    ...     (EXCLUDE, r'\w+\d+'),
+    ...     (INCLUDE, ['ERROR403', 'ERROR404'])
+    ... ]
+    >>> # set specific rules for the submodule 'bar.baz':
+    >>> filters['bar.baz']
     <ModuleFilters for 'bar.baz':
       exclude=FilterSet(regexes={re.compile('\\w+\\d+')}),
-      include=FilterSet(names={'ERROR404'})>
-    >>> filters['bar'] # but the default rules would apply for the module 'bar'
+      include=FilterSet(names={'ERROR403', 'ERROR404'})>
+    >>> # note that the default rules still apply to the module 'bar'
+    >>> filters['bar']
     <ModuleFilters for 'bar': NOT SET>
 
     Module-specific filter rules may be accessed using different syntaxes:
 
-    >>> filters['bar.baz'] is filters['bar']['baz'] is filters.bar.baz
+    >>> filters['bar.baz'] is filters['bar']['baz']
+    True
+    >>> filters.bar.baz is filters['bar']['baz']
     True
 
     Note, however, that using the attribute syntax to directly set rules for
@@ -910,9 +952,9 @@ settings = {
 def ipython_filter(*, keep_history: str = 'input') -> FilterFunction:
     """Filter factory to exclude IPython hidden variables.
 
-    When saving the session with :py:func:`dump_module` in an IPython
-    interpreter, hidden variables, i.e. variables listed by ``dir()`` but
-    not listed by the ``%who`` magic command, are saved unless they are excluded
+    When saving the session with :func:`dump_module` from an IPython
+    interpreter, hidden variables (i.e. variables listed by ``dir()`` but
+    not listed by the ``%who`` magic command) are saved unless they are excluded
     by filters.  This function generates a filter that will exclude these hidden
     variables from the list of saved variables, with the optional exception of
     command history variables.
@@ -921,15 +963,20 @@ def ipython_filter(*, keep_history: str = 'input') -> FilterFunction:
         keep_history: whether to keep (i.e. not exclude) the input and output
           history of the IPython interactive session. Accepted values:
 
-            - `'input'`: the input history contained in the hidden variables
+            - `"input"`: the input history contained in the hidden variables
               ``In``, ``_ih``, ``_i``, ``_i1``, ``_i2``, etc. will be saved.
-            - `'output'`, the output history contained in the hidden variables
+            - `"output"`, the output history contained in the hidden variables
               ``Out``, ``_oh``, ``_``, ``_1``, ``_2``, etc. will be saved.
-            - `'both'`: both the input and output history will be saved.
-            - `'none'`: all the hidden history variables will be excluded.
+            - `"both"`: both the input and output history will be saved.
+            - `"none"`: all the hidden history variables will be excluded.
 
     Returns:
-        An exclude filter function to be used with :py:func:`dump_module`.
+        A variable exclusion filter function to be used with :func:`dump_module`.
+
+    Important:
+        A filter of this kind should be created just before the call to
+        :func:`dump_module` where it's used, as it doesn't update the list of
+        hidden variables after its creation for performance reasons.
 
     Example:
 

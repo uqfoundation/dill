@@ -8,6 +8,13 @@
 """
 dill: a utility for serialization of python objects
 
+The main API of the package are the functions :func:`dump` and
+:func:`dumps` for serialization ("pickling"), and :func:`load`
+and :func:`loads` for deserialization ("unpickling").  The
+functions :func:`~dill.session.dump_module` and
+:func:`~dill.session.load_module` can be used to save and restore
+the intepreter session.
+
 Based on code written by Oren Tirosh and Armin Ronacher.
 Extended to a (near) full set of the builtin types (in types module),
 and coded to the pickle interface, by <mmckerns@caltech.edu>.
@@ -15,6 +22,9 @@ Initial port to python3 by Jonathan Dobson, continued by mmckerns.
 Test against "all" python types (Std. Lib. CH 1-15 @ 2.7) by mmckerns.
 Test against CH16+ Std. Lib. ... TBD.
 """
+
+from __future__ import annotations
+
 __all__ = [
     'dump','dumps','load','loads','copy',
     'Pickler','Unpickler','register','pickle','pickles','check',
@@ -342,7 +352,14 @@ def _getopt(settings, key, arg=None, *, kwds=None):
 ### Extend the Picklers
 class Pickler(StockPickler):
     """python's Pickler extended to interpreter sessions"""
-    dispatch = MetaCatchingDict(StockPickler.dispatch.copy())
+    dispatch: typing.Dict[type, typing.Callable[[Pickler, typing.Any], None]] \
+            = MetaCatchingDict(StockPickler.dispatch.copy())
+    """The dispatch table, a dictionary of serializing functions used
+    by Pickler to save objects of specific types.  Use :func:`pickle`
+    or :func:`register` to associate types to custom functions.
+
+    :meta hide-value:
+    """
     _refimported = False
     _refonfail = False  # True in session.settings
     _session = False
@@ -520,12 +537,12 @@ def dispatch_table():
 pickle_dispatch_copy = StockPickler.dispatch.copy()
 
 def pickle(t, func):
-    """expose dispatch table for user-created extensions"""
+    """expose :attr:`~Pickler.dispatch` table for user-created extensions"""
     Pickler.dispatch[t] = func
     return
 
 def register(t):
-    """register type to Pickler's dispatch table """
+    """decorator to register types to Pickler's :attr:`~Pickler.dispatch` table"""
     def proxy(func):
         Pickler.dispatch[t] = func
         return func

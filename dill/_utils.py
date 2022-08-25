@@ -166,7 +166,7 @@ def _iter(filters):
 
 @dataclass
 class FilterSet(abc.MutableSet):
-    """A superset of exclude/include filter sets."""
+    """A superset of exclusion/inclusion filter sets."""
     names: Set[str] = field(default_factory=set)
     regexes: Set[Pattern[str]] = field(default_factory=set)
     ids: Set[int] = field(default_factory=set)
@@ -289,10 +289,10 @@ class _FilterSetDescriptor:
             raise AttributeError(self.name) from None
 
 class FilterRules:
-    """Exclude and include rules for filtering a namespace.
+    """Exclusion and inclusion rules for filtering a namespace.
 
-    Namespace filtering rules can be of two types, ``EXCLUDE`` and ``INCLUDE``
-    rules, and of five "flavors":
+    Namespace filtering rules can be of two types, :const:`EXCLUDE` and
+    :const:`INCLUDE` rules, and of five "flavors":
 
         - `name`: match a variable name exactly;
         - `regex`: match a variable name by regular expression;
@@ -301,7 +301,7 @@ class FilterRules:
         - `func`: callable filter, match a variable name and/or value by an
           arbitrary logic.
 
-    A `name` filter is specified by a simple string, e.g. 'some_var'. If its
+    A `name` filter is specified by a simple string, e.g. ``'some_var'``. If its
     value is not a valid Python identifier, except for the special `type` case
     below, it is treated as a regular expression instead.
 
@@ -309,7 +309,7 @@ class FilterRules:
     expression, e.g. ``r'\w+_\d+'``, or by a :py:class:`re.Pattern` object.
 
     An `id` filter is specified by an ``int`` that corresponds to the id of an
-    object. For example, to exclude a specific object ``obj`` that may me
+    object. For example, to exclude a specific object ``obj`` that may be
     assigned to multiple variables, just use ``id(obj)`` as an `id` filter.
 
     A `type` filter is specified by a type-object, e.g. ``list`` or
@@ -318,20 +318,23 @@ class FilterRules:
     e.g. ``"type:function"`` or ``"type: FunctionType"``.  These include all
     the types defined in the module :py:mod:`types` and many more.
 
-    A `func` filter can be any callable that accepts a single argument and
-    returns a boolean value, being it ``True`` if the object should be excluded
-    (or included) or ``False`` if it should *not* be excluded (or included).
-    The single argument is an object with two attributes: ``name`` is the
+    Finally, a `func` filter can be any callable that accepts a single argument and
+    returns a boolean value, being it `True` if the object should be excluded
+    (or included, depending on how the filter is used) or `False` if it should
+    *not* be excluded (or included).
+
+    The single argument passed to `func` filters is an instance of
+    :py:class:`NamedObject`, an object with two attributes: ``name`` is the
     variable's name in the namespace and ``value`` is the object that it refers
     to.  Below are some examples of `func` filters.
+
+    A strict type filter, exclude ``int`` but not ``bool`` (an ``int`` subclass):
+
+    >>> int_filter = lambda obj: type(obj) == int
 
     Exclude objects that were renamed after definition:
 
     >>> renamed_filter = lambda obj: obj.name != getattr(obj.value, '__name__', obj.name)
-
-    Strict type filter, exclude ``int`` but not ``bool`` (an ``int`` subclass):
-
-    >>> int_filter = lambda obj: type(obj) == int
 
     Filters may be added interactively after creating an empty ``FilterRules``
     object:
@@ -350,12 +353,12 @@ class FilterRules:
     ...     (INCLUDE, r'__\w+__'),
     ... ])
 
-    The order that the exclude and include filters are added is irrelevant
-    because **exclude filters are always applied first**.  Therefore, generally
-    the rules work as a blocklist, with include filters acting as exceptions to
-    the exclusion rules.  However, **if there are only include filters, the
-    rules work as an allowlist** instead, and only the variables matched by the
-    include filters are kept.
+    The order that the exclusion and inclusion filters are added is irrelevant
+    because **exclusion filters are always applied first**.  Therefore,
+    generally the rules work as a blocklist, with inclusion rules acting as
+    exceptions to the exclusion rules.  However, **if there are only inclusion
+    filters, the rules work as an allowlist** instead, and only the variables
+    matched by the inclusion filters are kept.
     """
     __slots__ = '_exclude', '_include', '__weakref__'
     exclude = _FilterSetDescriptor()
@@ -478,7 +481,7 @@ class FilterRules:
             return namespace
         if len(exclude_objs) == len(namespace):
             warnings.warn(
-                "the exclude/include rules applied have excluded all %d items" % len(all_objs),
+                "the exclusion/inclusion rules applied have excluded all %d items" % len(all_objs),
                 _dill.PicklingWarning,
                 stacklevel=2
             )

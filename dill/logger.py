@@ -18,28 +18,31 @@ disabling the pickling trace.
 
 The trace shows a tree structure depicting the depth of each object serialized
 *with dill save functions*, but not the ones that use save functions from
-'pickle._Pickler.dispatch'. If the information is available, it also displays
+``pickle._Pickler.dispatch``. If the information is available, it also displays
 the size in bytes that the object contributed to the pickle stream (including
 its child objects).  Sample trace output:
 
-    >>> import dill, dill.tests
-    >>> dill.detect.trace(True)
-    >>> dill.dump_session(main=dill.tests)
-    ┬ M1: <module 'dill.tests' from '.../dill/tests/__init__.py'>
-    ├┬ F2: <function _import_module at 0x7f0d2dce1b80>
+    >>> import dill
+    >>> import keyword
+    >>> with dill.detect.trace():
+    ...     dill.dump_module(module=keyword)
+    ┬ M1: <module 'keyword' from '/usr/lib/python3.8/keyword.py'>
+    ├┬ F2: <function _import_module at 0x7f4a6087b0d0>
     │└ # F2 [32 B]
-    ├┬ D2: <dict object at 0x7f0d2e98a540>
+    ├┬ D5: <dict object at 0x7f4a60669940>
     │├┬ T4: <class '_frozen_importlib.ModuleSpec'>
     ││└ # T4 [35 B]
-    │├┬ D2: <dict object at 0x7f0d2ef0e8c0>
+    │├┬ D2: <dict object at 0x7f4a62e699c0>
     ││├┬ T4: <class '_frozen_importlib_external.SourceFileLoader'>
     │││└ # T4 [50 B]
-    ││├┬ D2: <dict object at 0x7f0d2e988a40>
-    │││└ # D2 [84 B]
-    ││└ # D2 [413 B]
-    │└ # D2 [763 B]
-    └ # M1 [813 B]
+    ││├┬ D2: <dict object at 0x7f4a62e5f280>
+    │││└ # D2 [47 B]
+    ││└ # D2 [280 B]
+    │└ # D5 [1 KiB]
+    └ # M1 [1 KiB]
 """
+
+from __future__ import annotations
 
 __all__ = ['adapter', 'logger', 'trace']
 
@@ -50,7 +53,7 @@ import logging
 import math
 import os
 from functools import partial
-from typing import TextIO, Union
+from typing import Optional, TextIO, Union
 
 import dill
 from ._utils import _format_bytes_size
@@ -235,7 +238,9 @@ adapter = TraceAdapter(logger)
 stderr_handler = logging._StderrHandler()
 adapter.addHandler(stderr_handler)
 
-def trace(arg: Union[bool, TextIO, str, os.PathLike] = None, *, mode: str = 'a') -> None:
+def trace(
+        arg: Union[bool, TextIO, str, os.PathLike] = None, *, mode: str = 'a'
+    ) -> Optional[TraceManager]:
     """print a trace through the stack when pickling; useful for debugging
 
     With a single boolean argument, enable or disable the tracing.
@@ -248,10 +253,10 @@ def trace(arg: Union[bool, TextIO, str, os.PathLike] = None, *, mode: str = 'a')
 
     Alternatively, ``trace()`` can be used as a context manager. With no
     arguments, it just takes care of restoring the tracing state on exit.
-    Either a file handle, or a file name and (optionally) a file mode may be
-    specitfied to redirect the tracing output in the ``with`` block context. A
-    log function is yielded by the manager so the user can write extra
-    information to the file.
+    Either a file handle, or a file name and a file mode (optional) may be
+    specified to redirect the tracing output in the ``with`` block.  A ``log()``
+    function is yielded by the manager so the user can write extra information
+    to the file.
 
     Example usage:
 
@@ -270,13 +275,17 @@ def trace(arg: Union[bool, TextIO, str, os.PathLike] = None, *, mode: str = 'a')
         >>>     log("> squared = %r", squared)
         >>>     dumps(squared)
 
-    Arguments:
-        arg: a boolean value, or an optional file-like or path-like object for the context manager
-        mode: mode string for ``open()`` if a file name is passed as the first argument
+    Parameters:
+        arg: a boolean value, or an optional file-like or path-like object for
+          the context manager
+        mode: mode string for ``open()`` if a file name is passed as the first
+          argument
     """
-    if not isinstance(arg, bool):
+    if isinstance(arg, bool):
+        logger.setLevel(logging.INFO if arg else logging.WARNING)
+        return
+    else:
         return TraceManager(file=arg, mode=mode)
-    logger.setLevel(logging.INFO if arg else logging.WARNING)
 
 class TraceManager(contextlib.AbstractContextManager):
     """context manager version of trace(); can redirect the trace to a file"""
