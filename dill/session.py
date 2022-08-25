@@ -378,21 +378,25 @@ def _identify_module(file, main=None):
             return None
         raise UnpicklingError("unable to identify module") from error
 
-def is_pickled_module(filename, importable: bool = True) -> bool:
-    """Check if a file can be loaded with :py:func:`load_module`.
+def is_pickled_module(
+    filename, importable: bool = True, identify: bool = False
+) -> Union[bool, str]:
+    """Check if a file can be loaded with :func:`load_module`.
 
-    Check if the file is a pickle file generated with :py:func:`dump_module`,
-    and thus can be loaded with :py:func:`load_module`.
+    Check if the file is a pickle file generated with :func:`dump_module`,
+    and thus can be loaded with :func:`load_module`.
 
     Parameters:
         filename: a path-like object or a readable stream.
         importable: expected kind of the file's saved module. Use `True` for
             importable modules (the default) or `False` for module-type objects.
+        identify: if `True`, return the module name if the test succeeds.
 
     Returns:
         `True` if the pickle file at ``filename`` was generated with
-        :py:func:`dump_module` **AND** the module whose state is saved in it is
+        :func:`dump_module` **AND** the module whose state is saved in it is
         of the kind specified by the ``importable`` argument. `False` otherwise.
+        If `identify` is set, return the name of the module instead of `True`.
 
     Examples:
         Create three types of pickle files:
@@ -414,6 +418,8 @@ def is_pickled_module(filename, importable: bool = True) -> bool:
         False
         >>> dill.is_pickled_module('module_object.pkl', importable=False)
         True
+        >>> dill.is_pickled_module('module_object.pkl', importable=False, identify=True)
+        'example'
         >>> dill.is_pickled_module('common_object.pkl') # always return False
         False
         >>> dill.is_pickled_module('common_object.pkl', importable=False)
@@ -424,9 +430,12 @@ def is_pickled_module(filename, importable: bool = True) -> bool:
             pickle_main = _identify_module(file)
         except UnpicklingError:
             return False
-        else:
-            is_runtime_mod = pickle_main.startswith('__runtime__.')
-            return importable ^ is_runtime_mod
+    is_runtime_mod = pickle_main.startswith('__runtime__.')
+    res = importable ^ is_runtime_mod
+    if res and identify:
+        return pickle_main.partition('.')[-1] if is_runtime_mod else pickle_main
+    else:
+        return res
 
 def load_module(
     filename = str(TEMPDIR/'session.pkl'),

@@ -405,6 +405,7 @@ def test_is_pickled_module():
     pickle_file.flush()
     assert dill.is_pickled_module(pickle_file.name)
     assert not dill.is_pickled_module(pickle_file.name, importable=False)
+    assert dill.is_pickled_module(pickle_file.name, identify=True) == local_mod.__name__
     pickle_file.close()
 
     # Module-type object saved with dump_module().
@@ -413,6 +414,7 @@ def test_is_pickled_module():
     pickle_file.flush()
     assert not dill.is_pickled_module(pickle_file.name)
     assert dill.is_pickled_module(pickle_file.name, importable=False)
+    assert dill.is_pickled_module(pickle_file.name, importable=False, identify=True) == 'runtime'
     pickle_file.close()
 
     # Importable module saved by reference due to unpickleable object.
