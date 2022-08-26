@@ -363,6 +363,8 @@ def dump_module(
             if refimported:
                 # Cache modmap for refonfail.
                 pickler._modmap = modmap
+        if logger.isEnabledFor(logging.INFO):
+            pickler._id_to_name = {id(v): k for k, v in main.__dict__.items()}
         pickler.dump(main)
     return
 

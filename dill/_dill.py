@@ -1888,8 +1888,8 @@ def save_module(pickler, obj):
             for item in ('__builtins__', '__loader__'):
                 main_dict.pop(item, None)
             for item in IPYTHON_SINGLETONS:
-                if getattr(item, '__module__', '').startswith('IPython'):
-                    main_dict.pop(item, None)
+                if getattr(main_dict.get(item), '__module__', '').startswith('IPython'):
+                    del main_dict[item]
             if is_session_main:
                 pickler._main_dict_copy = main_dict
             pickler.save_reduce(_import_module, (mod_name,), obj=obj, state=main_dict)

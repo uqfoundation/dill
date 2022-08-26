@@ -52,6 +52,7 @@ import locale
 import logging
 import math
 import os
+from contextlib import suppress
 from functools import partial
 from typing import Optional, TextIO, Union
 
@@ -167,7 +168,7 @@ class TraceAdapter(logging.LoggerAdapter):
                 obj = args[-1]
             pickler._trace_stack.append(id(obj))
         size = None
-        try:
+        with suppress(AttributeError, TypeError):
             # Streams are not required to be tellable.
             size = pickler._file_tell()
             frame = pickler.framer.current_frame
@@ -176,11 +177,12 @@ class TraceAdapter(logging.LoggerAdapter):
             except AttributeError:
                 # PyPy may use a BytesBuilder as frame
                 size += len(frame)
-        except (AttributeError, TypeError):
-            pass
         if size is not None:
             if not pushed_obj:
                 pickler._size_stack.append(size)
+                if len(pickler._size_stack) == 3:  # module > dict > variable
+                    with suppress(AttributeError, KeyError):
+                        extra['varname'] = pickler._id_to_name.pop(id(obj))
             else:
                 size -= pickler._size_stack.pop()
                 extra['size'] = size
@@ -227,7 +229,9 @@ class TraceFormatter(logging.Formatter):
             if not self.is_utf8:
                 prefix = prefix.translate(ASCII_MAP) + "-"
             fields['prefix'] = prefix + " "
-        if hasattr(record, 'size'):
+        if hasattr(record, 'varname'):
+            fields['suffix'] = " as %r" % record.varname
+        elif hasattr(record, 'size'):
             fields['suffix'] = " [%d %s]" % _format_bytes_size(record.size)
         vars(record).update(fields)
         return super().format(record)
