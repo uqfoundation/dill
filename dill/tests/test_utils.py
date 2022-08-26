@@ -31,7 +31,8 @@ def test_open():
     file_unpeekable.close()
 
     _pipe_r, _pipe_w = os.pipe()
-    pipe_r, pipe_w = io.FileIO(_pipe_r, closefd=False), io.FileIO(_pipe_w, mode='w')
+    pipe_r = io.FileIO(_pipe_r, closefd=False)
+    pipe_w = io.FileIO(_pipe_w, mode='w')
     assert not hasattr(pipe_r, 'peek')
     assert not pipe_r.seekable()
     assert not pipe_w.seekable()
@@ -44,7 +45,7 @@ def test_open():
         assert isinstance(file, io.BufferedReader)
     assert not pipe_r.closed
 
-    # Test _Seekable writer for unseekable stream
+    # Test _SeekableWriter for unseekable stream
     with _utils._open(pipe_w, 'w', seekable=True) as file:
         # pipe_r is closed here for some reason...
         file.write(content)
@@ -58,5 +59,14 @@ def test_open():
     pipe_r.close()
     pipe_w.close()
 
+def test_format_bytes():
+    formatb = _utils._format_bytes_size
+    assert formatb(1000) == (1000, 'B')
+    assert formatb(1024) == (1, 'KiB')
+    assert formatb(1024 + 511) == (1, 'KiB')
+    assert formatb(1024 + 512) == (2, 'KiB')
+    assert formatb(10**9) == (954, 'MiB')
+
 if __name__ == '__main__':
     test_open()
+    test_format_bytes()
