@@ -171,8 +171,7 @@ def test_session_main(refimported):
 
         # Test session loading in the same session.
         session_buffer = BytesIO()
-        with dill.detect.trace():
-            dill.dump_module(session_buffer, refimported=refimported)
+        dill.dump_module(session_buffer, refimported=refimported)
         session_buffer.seek(0)
         dill.load_module(session_buffer, module='__main__')
         ns.backup['_test_objects'](__main__, ns.backup, refimported)
@@ -431,8 +430,9 @@ def test_is_pickled_module():
     pickle_file.close()
 
 if __name__ == '__main__':
-    test_session_main(refimported=False)
-    test_session_main(refimported=True)
+    if os.getenv('COVERAGE') != 'true':
+        test_session_main(refimported=False)
+        test_session_main(refimported=True)
     test_session_other()
     test_runtime_module()
     test_lookup_module()
