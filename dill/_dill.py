@@ -172,8 +172,8 @@ from socket import socket as SocketType
 from multiprocessing.reduction import _reduce_socket as reduce_socket
 try:
     IS_IPYTHON = __IPYTHON__  # is True
-    ExitType = None     # IPython.core.autocall.ExitAutocall
-    IPYTHON_SINGLETONS = ('exit', 'quit', 'get_ipython')
+    ExitType = None # IPython.core.autocall.ExitAutocall #pragma: no cover
+    IPYTHON_SINGLETONS = ('exit', 'quit', 'get_ipython') #pragma: no cover
 except NameError:
     IS_IPYTHON = False
     try: ExitType = type(exit) # apparently 'exit' can be removed
@@ -459,7 +459,7 @@ class Pickler(StockPickler):
             # Roll back memo.
             for _ in range(len(self.memo) - memo_size):
                 self.memo.popitem()  # LIFO order is guaranteed since 3.7
-            # Handle modules specially.
+            # Handle session main.
             if self._session and obj is self._main:
                 if self._main is _main_module or not _is_imported_module(self._main):
                     raise
@@ -472,10 +472,6 @@ class Pickler(StockPickler):
                     PicklingWarning,
                     stacklevel=5,
                 )
-            elif (isinstance(obj, ModuleType)
-                    and (_is_builtin_module(obj) or obj is sys.modules['dill'])):
-                self.save_reduce(_import_module, (obj.__name__,), obj=obj)
-                logger.trace(self, message, obj=obj)
             # Try to save object by reference.
             elif hasattr(obj, '__name__') or hasattr(obj, '__qualname__'):
                 try:
@@ -1366,7 +1362,7 @@ def save_module_dict(pickler, obj):
         logger.trace(pickler, "D1: %s", _repr_dict(obj), obj=obj)
         pickler.write(GLOBAL + b'__builtin__\n__main__\n')
         logger.trace(pickler, "# D1")
-    elif not is_pickler_dill and obj is _main_module.__dict__:
+    elif not is_pickler_dill and obj is _main_module.__dict__: #prama: no cover
         logger.trace(pickler, "D3: %s", _repr_dict(obj), obj=obj)
         pickler.write(GLOBAL + b'__main__\n__dict__\n')  #XXX: works in general?
         logger.trace(pickler, "# D3")
@@ -1887,7 +1883,7 @@ def save_module(pickler, obj):
             main_dict = obj.__dict__.copy()
             for item in ('__builtins__', '__loader__'):
                 main_dict.pop(item, None)
-            for item in IPYTHON_SINGLETONS:
+            for item in IPYTHON_SINGLETONS: #pragma: no cover
                 if getattr(main_dict.get(item), '__module__', '').startswith('IPython'):
                     del main_dict[item]
             if is_session_main:

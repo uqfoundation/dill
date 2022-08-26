@@ -332,7 +332,7 @@ def dump_module(
     refimported = _getopt(settings, 'refimported', refimported)
     refonfail = _getopt(settings, 'refonfail', refonfail)
     base_rules = _getopt(settings, 'filters', base_rules)
-    if not isinstance(base_rules, ModuleFilters):
+    if not isinstance(base_rules, ModuleFilters): #pragma: no cover
         base_rules = ModuleFilters(base_rules)
 
     main = module
@@ -740,22 +740,22 @@ def load_module_asdict(
         raise TypeError("'module' is an invalid keyword argument for load_module_asdict()")
 
     with _open(filename, 'rb', peekable=True) as file:
-        main_name = _identify_module(file)
-        main = _import_module(main_name)
-        main_copy = ModuleType(main_name)
+        main_qualname = _identify_module(file)
+        main = _import_module(main_qualname)
+        main_copy = ModuleType(main_qualname)
         main_copy.__dict__.clear()
         main_copy.__dict__.update(main.__dict__)
 
-        parent_name = main_name.rpartition('.')[0]
+        parent_name, _, main_name = main_qualname.rpartition('.')
         if parent_name:
             parent = sys.modules[parent_name]
         try:
-            sys.modules[main_name] = main_copy
+            sys.modules[main_qualname] = main_copy
             if parent_name and getattr(parent, main_name, None) is main:
                 setattr(parent, main_name, main_copy)
             load_module(file, **kwds)
         finally:
-            sys.modules[main_name] = main
+            sys.modules[main_qualname] = main
             if parent_name and getattr(parent, main_name, None) is main_copy:
                 setattr(parent, main_name, main)
 
@@ -987,12 +987,12 @@ def ipython_filter(*, keep_history: str = 'input') -> FilterFunction:
         >>> dill.dump_module(exclude=ipython_filter(keep_history='none'))
     """
     HISTORY_OPTIONS = {'input', 'output', 'both', 'none'}
-    if keep_history not in HISTORY_OPTIONS:
+    if keep_history not in HISTORY_OPTIONS: #pramga: no cover
         raise ValueError(
             "invalid 'keep_history' argument: %r (must be one of %r)" %
             (keep_history, HISTORY_OPTIONS)
         )
-    if not _dill.IS_IPYTHON:
+    if not _dill.IS_IPYTHON: #pragma: no cover
         # Return no-op filter if not in IPython.
         return (lambda x: False)
 

@@ -269,29 +269,41 @@ def test_lookup_module():
     setattr(local_mod, name2, obj)
     assert lookup(dill, name2, obj) == (local_mod.__name__, name2, False)
 
-def test_refimported_imported_as():
+def test_refimported():
     import collections
     import concurrent.futures
     import types
     import typing
 
     mod = sys.modules['__test__'] = ModuleType('__test__')
+    mod.session = dill.session
     dill.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     mod.Dict = collections.UserDict             # select by type
     mod.AsyncCM = typing.AsyncContextManager    # select by __module__
     mod.thread_exec = dill.executor             # select by __module__ with regex
+    mod.local_mod = local_mod
 
     session_buffer = BytesIO()
     dill.dump_module(session_buffer, mod, refimported=True)
     session_buffer.seek(0)
     mod = dill.load(session_buffer)
-    del sys.modules['__test__']
 
+    assert mod.__dill_imported == [('dill', 'session')]
     assert set(mod.__dill_imported_as) == {
         ('collections', 'UserDict', 'Dict'),
         ('typing', 'AsyncContextManager', 'AsyncCM'),
         ('dill', 'executor', 'thread_exec'),
     }
+    assert mod.__dill_imported_top_level == [(local_mod.__name__, 'local_mod')]
+
+    session_buffer.seek(0)
+    dill.load_module(session_buffer, mod)
+    del sys.modules['__test__']
+    assert mod.session is dill.session
+    assert mod.Dict is collections.UserDict
+    assert mod.AsyncCM is typing.AsyncContextManager
+    assert mod.thread_exec is dill.executor
+    assert mod.local_mod is local_mod
 
 def test_refonfail_unpickleable():
     global local_mod
@@ -361,6 +373,22 @@ def test_load_module_asdict():
         assert main_vars['x'] != x
         assert 'y' in main_vars
         assert 'empty' in main_vars
+
+    # Test a submodule.
+    import html
+    from html import entities
+    entitydefs = entities.entitydefs
+
+    session_buffer = BytesIO()
+    dill.dump_module(session_buffer, entities)
+    session_buffer.seek(0)
+    entities_vars = dill.load_module_asdict(session_buffer)
+
+    assert entities is html.entities  # restored
+    assert entities is sys.modules['html.entities']  # restored
+    assert entitydefs is entities.entitydefs  # unchanged
+    assert entitydefs is not entities_vars['entitydefs']  # saved by value
+    assert entitydefs == entities_vars['entitydefs']
 
 def test_ipython_filter():
     from itertools import filterfalse
@@ -436,7 +464,7 @@ if __name__ == '__main__':
     test_session_other()
     test_runtime_module()
     test_lookup_module()
-    test_refimported_imported_as()
+    test_refimported()
     test_refonfail_unpickleable()
     test_load_module_asdict()
     test_ipython_filter()
