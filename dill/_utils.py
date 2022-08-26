@@ -108,7 +108,17 @@ def _open(file, mode, *, peekable=False, seekable=False):
     # Wrap stream in a helper class if necessary.
     if peekable and not hasattr(file, 'peek'):
         # Try our best to return it as an object with a peek() method.
-        if hasattr(file, 'tell') and hasattr(file, 'seek'):
+        if hasattr(file, 'seekable'):
+            file_seekable = file.seekable()
+        elif hasattr(file, 'seek') and hasattr(file, 'tell'):
+            try:
+                file.seek(file.tell())
+                file_seekable = True
+            except Exception:
+                file_seekable = False
+        else:
+            file_seekable = False
+        if file_seekable:
             file = _PeekableReader(file, closing=should_close)
         else:
             try:

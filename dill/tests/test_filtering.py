@@ -89,6 +89,30 @@ def test_size_filter():
     filter_size = [(EXCLUDE, size_filter(limit=5*small_size))]
     assert did_exclude(NS_copy, filter_size, excluded_subset={'large'})
 
+def test_ipython_filter():
+    from itertools import filterfalse
+    from types import SimpleNamespace
+    _dill.IS_IPYTHON = True  # trick ipython_filter
+    sys.modules['IPython'] = MockIPython = ModuleType('IPython')
+
+    # Mimic the behavior of IPython namespaces at __main__.
+    user_ns_actual = {'user_var': 1, 'x': 2}
+    user_ns_hidden = {'x': 3, '_i1': '1 / 2', '_1': 0.5, 'hidden': 4}
+    user_ns = user_ns_hidden.copy()  # user_ns == vars(__main__)
+    user_ns.update(user_ns_actual)
+    assert user_ns['x'] == user_ns_actual['x']  # user_ns.x masks user_ns_hidden.x
+    MockIPython.get_ipython = lambda: SimpleNamespace(user_ns=user_ns, user_ns_hidden=user_ns_hidden)
+
+    # Test variations of keeping or dropping the interpreter history.
+    user_vars = set(user_ns_actual)
+    def namespace_matches(keep_history, should_keep_vars):
+        rules = FilterRules([(EXCLUDE, ipython_filter(keep_history=keep_history))])
+        return set(rules.apply_filters(user_ns)) == user_vars | should_keep_vars
+    assert namespace_matches(keep_history='input', should_keep_vars={'_i1'})
+    assert namespace_matches(keep_history='output', should_keep_vars={'_1'})
+    assert namespace_matches(keep_history='both', should_keep_vars={'_i1', '_1'})
+    assert namespace_matches(keep_history='none', should_keep_vars=set())
+
 if __name__ == '__main__':
     test_basic_filtering()
     test_exclude_include()

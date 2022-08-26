@@ -453,7 +453,7 @@ class Pickler(StockPickler):
                 "# X: fallback to save as global: <%s object at %#012x>"
                 % (type(obj).__name__, id(obj))
             )
-            # Roll back the stream.
+            # Roll back the stream, stream.truncate(position) doesn't work for all types.
             self._file_seek(position)
             self._file_truncate()
             # Roll back memo.

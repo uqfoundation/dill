@@ -228,6 +228,45 @@ def test_runtime_module():
     assert runtime_mod.x == 42
     assert runtime_mod not in sys.modules.values()
 
+def test_load_module_asdict():
+    with TestNamespace():
+        session_buffer = BytesIO()
+        dill.dump_module(session_buffer)
+
+        global empty, names, x, y
+        x = y = 0  # change x and create y
+        del empty
+        globals_state = globals().copy()
+
+        session_buffer.seek(0)
+        main_vars = dill.load_module_asdict(session_buffer)
+
+        assert main_vars is not globals()
+        assert globals() == globals_state
+
+        assert main_vars['__name__'] == '__main__'
+        assert main_vars['names'] == names
+        assert main_vars['names'] is not names
+        assert main_vars['x'] != x
+        assert 'y' in main_vars
+        assert 'empty' in main_vars
+
+    # Test a submodule.
+    import html
+    from html import entities
+    entitydefs = entities.entitydefs
+
+    session_buffer = BytesIO()
+    dill.dump_module(session_buffer, entities)
+    session_buffer.seek(0)
+    entities_vars = dill.load_module_asdict(session_buffer)
+
+    assert entities is html.entities  # restored
+    assert entities is sys.modules['html.entities']  # restored
+    assert entitydefs is entities.entitydefs  # unchanged
+    assert entitydefs is not entities_vars['entitydefs']  # saved by value
+    assert entitydefs == entities_vars['entitydefs']
+
 def test_lookup_module():
     assert not dill._dill._is_builtin_module(local_mod) and local_mod.__package__ == ''
 
@@ -305,7 +344,7 @@ def test_refimported():
     assert mod.thread_exec is dill.executor
     assert mod.local_mod is local_mod
 
-def test_refonfail_unpickleable():
+def test_unpickleable_var():
     global local_mod
     import keyword as builtin_mod
     from dill._dill import _global_string
@@ -350,70 +389,6 @@ def test_refonfail_unpickleable():
     del builtin_mod.__unpickleable, local_mod.__unpickleable, os.__unpickleable
 
     dill.session.settings['refonfail'] = refonfail_default
-
-def test_load_module_asdict():
-    with TestNamespace():
-        session_buffer = BytesIO()
-        dill.dump_module(session_buffer)
-
-        global empty, names, x, y
-        x = y = 0  # change x and create y
-        del empty
-        globals_state = globals().copy()
-
-        session_buffer.seek(0)
-        main_vars = dill.load_module_asdict(session_buffer)
-
-        assert main_vars is not globals()
-        assert globals() == globals_state
-
-        assert main_vars['__name__'] == '__main__'
-        assert main_vars['names'] == names
-        assert main_vars['names'] is not names
-        assert main_vars['x'] != x
-        assert 'y' in main_vars
-        assert 'empty' in main_vars
-
-    # Test a submodule.
-    import html
-    from html import entities
-    entitydefs = entities.entitydefs
-
-    session_buffer = BytesIO()
-    dill.dump_module(session_buffer, entities)
-    session_buffer.seek(0)
-    entities_vars = dill.load_module_asdict(session_buffer)
-
-    assert entities is html.entities  # restored
-    assert entities is sys.modules['html.entities']  # restored
-    assert entitydefs is entities.entitydefs  # unchanged
-    assert entitydefs is not entities_vars['entitydefs']  # saved by value
-    assert entitydefs == entities_vars['entitydefs']
-
-def test_ipython_filter():
-    from itertools import filterfalse
-    from types import SimpleNamespace
-    from dill._utils import FilterRules
-    dill._dill.IS_IPYTHON = True  # trick ipython_filter
-    sys.modules['IPython'] = MockIPython = ModuleType('IPython')
-
-    # Mimic the behavior of IPython namespaces at __main__.
-    user_ns_actual = {'user_var': 1, 'x': 2}
-    user_ns_hidden = {'x': 3, '_i1': '1 / 2', '_1': 0.5, 'hidden': 4}
-    user_ns = user_ns_hidden.copy()  # user_ns == vars(__main__)
-    user_ns.update(user_ns_actual)
-    assert user_ns['x'] == user_ns_actual['x']  # user_ns.x masks user_ns_hidden.x
-    MockIPython.get_ipython = lambda: SimpleNamespace(user_ns=user_ns, user_ns_hidden=user_ns_hidden)
-
-    # Test variations of keeping or dropping the interpreter history.
-    user_vars = set(user_ns_actual)
-    def namespace_matches(keep_history, should_keep_vars):
-        rules = FilterRules([(EXCLUDE, ipython_filter(keep_history=keep_history))])
-        return set(rules.apply_filters(user_ns)) == user_vars | should_keep_vars
-    assert namespace_matches(keep_history='input', should_keep_vars={'_i1'})
-    assert namespace_matches(keep_history='output', should_keep_vars={'_1'})
-    assert namespace_matches(keep_history='both', should_keep_vars={'_i1', '_1'})
-    assert namespace_matches(keep_history='none', should_keep_vars=set())
 
 def test_is_pickled_module():
     import tempfile
@@ -463,9 +438,8 @@ if __name__ == '__main__':
         test_session_main(refimported=True)
     test_session_other()
     test_runtime_module()
+    test_load_module_asdict()
     test_lookup_module()
     test_refimported()
-    test_refonfail_unpickleable()
-    test_load_module_asdict()
-    test_ipython_filter()
+    test_unpickleable_var()
     test_is_pickled_module()
