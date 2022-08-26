@@ -171,7 +171,8 @@ def test_session_main(refimported):
 
         # Test session loading in the same session.
         session_buffer = BytesIO()
-        dill.dump_module(session_buffer, refimported=refimported)
+        with dill.detect.trace():
+            dill.dump_module(session_buffer, refimported=refimported)
         session_buffer.seek(0)
         dill.load_module(session_buffer, module='__main__')
         ns.backup['_test_objects'](__main__, ns.backup, refimported)
