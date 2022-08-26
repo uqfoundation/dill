@@ -276,7 +276,7 @@ def test_refimported():
     import typing
 
     mod = sys.modules['__test__'] = ModuleType('__test__')
-    mod.session = dill.session
+    mod.builtin_module_names = sys.builtin_module_names
     dill.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     mod.Dict = collections.UserDict             # select by type
     mod.AsyncCM = typing.AsyncContextManager    # select by __module__
@@ -288,7 +288,7 @@ def test_refimported():
     session_buffer.seek(0)
     mod = dill.load(session_buffer)
 
-    assert mod.__dill_imported == [('dill', 'session')]
+    assert mod.__dill_imported == [('sys', 'builtin_module_names')]
     assert set(mod.__dill_imported_as) == {
         ('collections', 'UserDict', 'Dict'),
         ('typing', 'AsyncContextManager', 'AsyncCM'),
@@ -299,7 +299,7 @@ def test_refimported():
     session_buffer.seek(0)
     dill.load_module(session_buffer, mod)
     del sys.modules['__test__']
-    assert mod.session is dill.session
+    assert mod.builtin_module_names is sys.builtin_module_names
     assert mod.Dict is collections.UserDict
     assert mod.AsyncCM is typing.AsyncContextManager
     assert mod.thread_exec is dill.executor
