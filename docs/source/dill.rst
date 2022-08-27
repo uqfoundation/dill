@@ -13,10 +13,10 @@ detect module
 .. automodule:: dill.detect
 ..  :exclude-members: +ismethod, isfunction, istraceback, isframe, iscode, parent, reference, at, parents, children
 
-logger module
+logging module
 -------------
 
-.. automodule:: dill.logger
+.. automodule:: dill.logging
     :exclude-members: +trace
 
 objtypes module

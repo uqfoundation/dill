@@ -36,8 +36,9 @@ __all__ = [
 __module__ = 'dill'
 
 import warnings
-from .logger import adapter as logger
-from .logger import trace as _trace
+from dill import logging
+from .logging import adapter as logger
+from .logging import trace as _trace
 
 import os
 import sys
@@ -477,6 +478,7 @@ class Pickler(StockPickler):
                 try:
                     self.save_global(obj)
                     logger.trace(self, message, obj=obj)
+                    return True  # for _saved_byref, ignored otherwise
                 except PicklingError as error:
                     # Roll back trace state.
                     logger.roll_back(self, obj)
@@ -1333,8 +1335,10 @@ def _save_module_dict(pickler, main_dict):
     for name, value in main_dict.items():
         pickler.save(name)
         try:
-            pickler.save(value)
+            if pickler.save(value):
+                pickler._saved_byref.append(name)
         except UNPICKLEABLE_ERRORS as error_stack:
+            pickler._saved_byref.append(name)
             if modmap is None:
                 modmap = _module_map(main)
             modname, objname, installed = _lookup_module(modmap, name, value)
@@ -1964,9 +1968,18 @@ def save_type(pickler, obj, postproc_list=None):
         else:
             logger.trace(pickler, "T4: %s", obj)
             if incorrectly_named:
-                warnings.warn('Cannot locate reference to %r.' % (obj,), PicklingWarning)
+                warnings.warn(
+                    "Cannot locate reference to %r." % (obj,),
+                    PicklingWarning,
+                    stacklevel=3,
+                )
             if obj_recursive:
-                warnings.warn('Cannot pickle %r: %s.%s has recursive self-references that trigger a RecursionError.' % (obj, obj.__module__, obj_name), PicklingWarning)
+                warnings.warn(
+                    "Cannot pickle %r: %s.%s has recursive self-references that "
+                    "trigger a RecursionError." % (obj, obj.__module__, obj_name),
+                    PicklingWarning,
+                    stacklevel=3,
+                )
            #print (obj.__dict__)
            #print ("%s\n%s" % (type(obj), obj.__name__))
            #print ("%s\n%s" % (obj.__bases__, obj.__dict__))

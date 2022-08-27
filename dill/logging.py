@@ -11,7 +11,9 @@ Logging utilities for dill.
 The 'logger' object is dill's top-level logger.
 
 The 'adapter' object wraps the logger and implements a 'trace()' method that
-generates a detailed tree-style trace for the pickling call at log level INFO.
+generates a detailed tree-style trace for the pickling call at log level
+:const:`dill.logging.TRACE`, which has an intermediary value between
+:const:`logging.INFO` and :const:`logging.DEGUB`.
 
 The 'trace()' function sets and resets dill's logger log level, enabling and
 disabling the pickling trace.
@@ -44,7 +46,10 @@ its child objects).  Sample trace output:
 
 from __future__ import annotations
 
-__all__ = ['adapter', 'logger', 'trace']
+__all__ = [
+    'adapter', 'logger', 'trace', 'getLogger',
+    'CRITICAL', 'ERROR', 'WARNING', 'INFO', 'TRACE', 'DEBUG', 'NOTSET',
+]
 
 import codecs
 import contextlib
@@ -53,11 +58,15 @@ import logging
 import math
 import os
 from contextlib import suppress
+from logging import getLogger, CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET
 from functools import partial
 from typing import Optional, TextIO, Union
 
 import dill
 from ._utils import _format_bytes_size
+
+# Intermediary logging level for tracing.
+TRACE = (INFO + DEBUG) // 2
 
 # Tree drawing characters: Unicode to ASCII map.
 ASCII_MAP = str.maketrans({"│": "|", "├": "|", "┬": "+", "└": "`"})
@@ -144,7 +153,7 @@ class TraceAdapter(logging.LoggerAdapter):
         # Called by Pickler.dump().
         if not dill._dill.is_dill(pickler, child=False):
             return
-        elif self.isEnabledFor(logging.INFO):
+        elif self.isEnabledFor(TRACE):
             pickler._trace_stack = []
             pickler._size_stack = []
         else:
@@ -236,7 +245,7 @@ class TraceFormatter(logging.Formatter):
         vars(record).update(fields)
         return super().format(record)
 
-logger = logging.getLogger('dill')
+logger = getLogger('dill')
 logger.propagate = False
 adapter = TraceAdapter(logger)
 stderr_handler = logging._StderrHandler()
@@ -286,7 +295,7 @@ def trace(
           argument
     """
     if isinstance(arg, bool):
-        logger.setLevel(logging.INFO if arg else logging.WARNING)
+        logger.setLevel(TRACE if arg else WARNING)
         return
     else:
         return TraceManager(file=arg, mode=mode)
@@ -308,7 +317,7 @@ class TraceManager(contextlib.AbstractContextManager):
             adapter.removeHandler(stderr_handler)
             adapter.addHandler(self.handler)
         self.old_level = adapter.getEffectiveLevel()
-        adapter.setLevel(logging.INFO)
+        adapter.setLevel(TRACE)
         return adapter.info
     def __exit__(self, *exc_info):
         adapter.setLevel(self.old_level)

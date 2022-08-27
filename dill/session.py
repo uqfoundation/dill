@@ -43,20 +43,20 @@ __all__ = [
     'dump_session', 'load_session' # backward compatibility
 ]
 
-import logging
-logger = logging.getLogger(__name__)
-
 import re
 import sys
 import warnings
 
-from dill import _dill, Pickler, Unpickler, UnpicklingError
+from dill import _dill, logging
+from dill import Pickler, Unpickler, UnpicklingError
 from ._dill import (
     BuiltinMethodType, FunctionType, MethodType, ModuleType, TypeType,
     _getopt, _import_module, _is_builtin_module, _is_imported_module,
     _lookup_module, _main_module, _module_map, _reverse_typemap, __builtin__,
 )
 from ._utils import FilterRules, FilterSet, _open, size_filter, EXCLUDE, INCLUDE
+
+logger = logging.getLogger(__name__)
 
 # Type hints.
 from typing import Any, Dict, Iterable, Optional, Union
@@ -151,7 +151,7 @@ def _filter_vars(main_module, exclude, include, base_rules):
         excluded = {name: type(value).__name__
                 for name, value in sorted(main_module.__dict__.items()) if name not in namespace}
         excluded = str(excluded).translate({ord(","): "\n  ", ord("'"): None})
-        logger.info("Objects excluded from dump_session():\n  %s", excluded)
+        logger.info("[dump_module] Variables excluded by filtering:\n  %s", excluded)
 
     newmod = ModuleType(main_module.__name__)
     newmod.__dict__.update(namespace)
@@ -360,12 +360,19 @@ def dump_module(
             pickler._refonfail = True  # False by default
             pickler._file_seek = file.seek
             pickler._file_truncate = file.truncate
+            pickler._saved_byref = []
             if refimported:
                 # Cache modmap for refonfail.
                 pickler._modmap = modmap
-        if logger.isEnabledFor(logging.INFO):
+        if logger.isEnabledFor(logging.TRACE):
             pickler._id_to_name = {id(v): k for k, v in main.__dict__.items()}
         pickler.dump(main)
+    if pickler._saved_byref and logger.isEnabledFor(logging.INFO):
+        import textwrap
+        pickler._saved_byref.sort()
+        message = "[dump_module] Variables saved by reference (refonfail): "
+        message += str(pickler._saved_byref).replace("'", "")[1:-1]
+        logger.info("\n".join(textwrap.wrap(message, width=80)))
     return
 
 # Backward compatibility.
