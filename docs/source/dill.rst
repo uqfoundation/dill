@@ -14,7 +14,7 @@ detect module
 ..  :exclude-members: +ismethod, isfunction, istraceback, isframe, iscode, parent, reference, at, parents, children
 
 logging module
--------------
+--------------
 
 .. automodule:: dill.logging
     :exclude-members: +trace
@@ -32,7 +32,7 @@ pointers module
 ..  :exclude-members: +
 
 session module
----------------
+--------------
 
 .. automodule:: dill.session
     :exclude-members: +dump_session, load_session

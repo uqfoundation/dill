@@ -27,6 +27,11 @@ names and values.
 In turn, :func:`load_module_asdict` allows one to load the variables from
 different saved states of the same module into dictionaries.
 
+Using :func:`dill.detect.trace` enables the complete pickling trace of a
+module.  Alternatively, ``dill.detect.trace('INFO')`` enables only the messages
+about variables excluded by filtering or unpickleable variables saved by
+reference in the pickled module's namespace.
+
 Note:
     Contrary of using :func:`dill.dump` and :func:`dill.load` to save and load
     a module object, :func:`dill.dump_module` always tries to pickle the module

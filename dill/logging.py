@@ -68,6 +68,11 @@ from ._utils import _format_bytes_size
 # Intermediary logging level for tracing.
 TRACE = (INFO + DEBUG) // 2
 
+_nameOrBoolToLevel = logging._nameToLevel.copy()
+_nameOrBoolToLevel['TRACE'] = TRACE
+_nameOrBoolToLevel[False] = WARNING
+_nameOrBoolToLevel[True] = TRACE
+
 # Tree drawing characters: Unicode to ASCII map.
 ASCII_MAP = str.maketrans({"│": "|", "├": "|", "┬": "+", "└": "`"})
 
@@ -252,11 +257,12 @@ stderr_handler = logging._StderrHandler()
 adapter.addHandler(stderr_handler)
 
 def trace(
-        arg: Union[bool, TextIO, str, os.PathLike] = None, *, mode: str = 'a'
+        arg: Union[bool, str, TextIO, os.PathLike] = None, *, mode: str = 'a'
     ) -> Optional[TraceManager]:
     """print a trace through the stack when pickling; useful for debugging
 
-    With a single boolean argument, enable or disable the tracing.
+    With a single boolean argument, enable or disable the tracing. Or, with a
+    logging level name (not ``int``), set the logging level of the dill logger.
 
     Example usage:
 
@@ -289,13 +295,14 @@ def trace(
         >>>     dumps(squared)
 
     Parameters:
-        arg: a boolean value, or an optional file-like or path-like object for
-          the context manager
+        arg: a boolean value, the name of a logging level (including "TRACE")
+            or an optional file-like or path-like object for the context manager
         mode: mode string for ``open()`` if a file name is passed as the first
-          argument
+            argument
     """
-    if isinstance(arg, bool):
-        logger.setLevel(TRACE if arg else WARNING)
+    level = _nameOrBoolToLevel.get(arg) if isinstance(arg, (bool, str)) else None
+    if level is not None:
+        logger.setLevel(level)
         return
     else:
         return TraceManager(file=arg, mode=mode)
