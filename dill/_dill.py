@@ -469,7 +469,9 @@ class Pickler(StockPickler):
                 logger.trace(self, message, obj=obj)
                 warnings.warn(
                     "module %r saved by reference due to the unpickleable "
-                    "variable %r" % (self._main.__name__, error_stack.name),
+                    "variable %r. No changes to the module were saved. "
+                    "Unpickleable variables can be ignored with filters."
+                    % (self._main.__name__, error_stack.name),
                     PicklingWarning,
                     stacklevel=5,
                 )
