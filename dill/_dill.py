@@ -1266,6 +1266,7 @@ def _module_map(main_module):
         by_name=defaultdict(list),
         by_id=defaultdict(list),
         top_level={},  # top-level modules
+        module = main_module.__name__,
         package = _module_package(main_module),
     )
     for modname, module in sys.modules.items():
@@ -1297,6 +1298,13 @@ def _lookup_module(modmap, name, obj, lookup_by_id=True) -> typing.Tuple[str, st
         and a boolean flag, which is `True` if the module falls under categories
         (1) to (3) from the hierarchy, or `False` if it's in category (4).
     """
+    not_found = None, None, None
+    # Don't look for objects likely related to the module itself.
+    obj_module = getattr(obj, '__module__', type(obj).__module__)
+    if obj_module == modmap.module:
+        return not_found
+    obj_package = _module_package(_import_module(obj_module, safe=True))
+
     for map, by_id in [(modmap.by_name, False), (modmap.by_id, True)]:
         if by_id and not lookup_by_id:
             break
@@ -1304,12 +1312,18 @@ def _lookup_module(modmap, name, obj, lookup_by_id=True) -> typing.Tuple[str, st
         key = id(obj) if by_id else name
         for other, modname in map[key]:
             if by_id or other is obj:
-                other_module = sys.modules[modname]
                 other_name = other if by_id else name
+                other_module = sys.modules[modname]
+                other_package = _module_package(other_module)
+                # Don't return a reference to a module of another package
+                # if the object is likely from the same package.
+                if (modmap.package and obj_package == modmap.package
+                        and other_package != modmap.package):
+                    continue
                 # Prefer modules imported earlier (first found).
                 if _is_stdlib_module(other_module):
                     return modname, other_name, True
-                elif modmap.package and modmap.package == _module_package(other_module):
+                elif modmap.package and modmap.package == other_package:
                     if _2nd_choice: continue
                     _2nd_choice = modname, other_name, True
                 elif not _2nd_choice:
@@ -1323,7 +1337,7 @@ def _lookup_module(modmap, name, obj, lookup_by_id=True) -> typing.Tuple[str, st
         found = _2nd_choice or _3rd_choice or _4th_choice
         if found:
             return found
-    return None, None, None
+    return not_found
 
 def _global_string(modname, name):
     return GLOBAL + bytes('%s\n%s\n' % (modname, name), 'UTF-8')
@@ -1854,6 +1868,7 @@ def _is_stdlib_module(module):
     else:
         return first_level in sys.stdlib_module_names
 
+@_weak_cache(defaults={None: None})
 def _module_package(module):
     package = getattr(module, '__package__', None)
     return package.partition('.')[0] if package else None
