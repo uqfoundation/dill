@@ -29,8 +29,9 @@ different saved states of the same module into dictionaries.
 
 Using :func:`dill.detect.trace` enables the complete pickling trace of a
 module.  Alternatively, ``dill.detect.trace('INFO')`` enables only the messages
-about variables excluded by filtering or unpickleable variables saved by
-reference in the pickled module's namespace.
+about variables excluded by filtering or variables saved by reference (by
+effect of the `refimported` or the `refoonfail` option) in the pickled module's
+namespace.
 
 Note:
     Contrary of using :func:`dill.dump` and :func:`dill.load` to save and load
@@ -48,6 +49,7 @@ __all__ = [
     'dump_session', 'load_session' # backward compatibility
 ]
 
+import pprint
 import re
 import sys
 import warnings
@@ -127,6 +129,14 @@ def _stash_modules(main_module):
         newmod.__dill_imported_as = imported_as
         newmod.__dill_imported_top_level = imported_top_level
         _discard_added_variables(newmod, main_module.__dict__)
+
+        if logger.isEnabledFor(logging.INFO):
+            refimported = [(name, "%s.%s" % (mod, name)) for mod, name in imported]
+            refimported += [(name, "%s.%s" % (mod, objname)) for mod, objname, name in imported_as]
+            refimported += [(name, mod) for mod, name in imported_top_level]
+            message = "[dump_module] Variables saved by reference (refimported):\n"
+            logger.info(message + _format_log_dict(dict(refimported)))
+
         return newmod, modmap
     else:
         return main_module, modmap
@@ -138,6 +148,9 @@ def _restore_modules(unpickler, main_module):
         main_module.__dict__[name] = unpickler.find_class(modname, objname)
     for modname, name in main_module.__dict__.pop('__dill_imported_top_level', ()):
         main_module.__dict__[name] = _import_module(modname)
+
+def _format_log_dict(dict):
+    return pprint.pformat(dict, compact=True, sort_dicts=True).replace("'", "")
 
 def _filter_vars(main_module, exclude, include, base_rules):
     """apply exclude/include filters from arguments *and* settings"""
@@ -157,8 +170,8 @@ def _filter_vars(main_module, exclude, include, base_rules):
     if logger.isEnabledFor(logging.INFO):
         excluded = {name: type(value).__name__
                 for name, value in sorted(main_module.__dict__.items()) if name not in namespace}
-        excluded = str(excluded).translate({ord(","): "\n  ", ord("'"): None})
-        logger.info("[dump_module] Variables excluded by filtering:\n  %s", excluded)
+        message = "[dump_module] Variables excluded by filtering:\n"
+        logger.info(message + _format_log_dict(excluded))
 
     newmod = ModuleType(main_module.__name__)
     newmod.__dict__.update(namespace)
@@ -375,11 +388,9 @@ def dump_module(
             pickler._id_to_name = {id(v): k for k, v in main.__dict__.items()}
         pickler.dump(main)
     if pickler._saved_byref and logger.isEnabledFor(logging.INFO):
-        import textwrap
-        pickler._saved_byref.sort()
-        message = "[dump_module] Variables saved by reference (refonfail): "
-        message += str(pickler._saved_byref).replace("'", "")[1:-1]
-        logger.info("\n".join(textwrap.wrap(message, width=80)))
+        saved_byref = {var: "%s.%s" % (mod, obj) for var, mod, obj in pickler._saved_byref}
+        message = "[dump_module] Variables saved by reference (refonfail):\n"
+        logger.info(message + _format_log_dict(saved_byref))
     return
 
 # Backward compatibility.

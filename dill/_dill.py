@@ -1352,16 +1352,18 @@ def _save_module_dict(pickler, main_dict):
         pickler.save(name)
         try:
             if pickler.save(value):
-                pickler._saved_byref.append(name)
+                global_name = getattr(value, '__qualname__', value.__name__)
+                pickler._saved_byref.append((name, value.__module__, global_name))
         except UNPICKLEABLE_ERRORS as error_stack:
-            pickler._saved_byref.append(name)
             if modmap is None:
                 modmap = _module_map(main)
             modname, objname, installed = _lookup_module(modmap, name, value)
             if modname and (installed or not is_builtin):
                 pickler.write(_global_string(modname, objname))
+                pickler._saved_byref.append((name, modname, objname))
             elif is_builtin:
                 pickler.write(_global_string(main.__name__, name))
+                pickler._saved_byref.append((name, main.__name__, name))
             else:
                 error = PicklingError("can't save variable %r as global" % name)
                 error.name = name
