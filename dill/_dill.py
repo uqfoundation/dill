@@ -50,7 +50,7 @@ OLD310 = (sys.hexversion < 0x30a0000)
 #XXX: get types from .objtypes ?
 import builtins as __builtin__
 from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
-from pickle import DICT, EMPTY_DICT, GLOBAL, MARK, POP, SETITEM
+from pickle import DICT, GLOBAL, MARK, POP, SETITEM
 from _thread import LockType
 from _thread import RLock as RLockType
 #from io import IOBase
@@ -171,10 +171,10 @@ InputType = OutputType = None
 from socket import socket as SocketType
 #FIXME: additionally calls ForkingPickler.register several times
 from multiprocessing.reduction import _reduce_socket as reduce_socket
-try:
+try: #pragma: no cover
     IS_IPYTHON = __IPYTHON__  # is True
-    ExitType = None # IPython.core.autocall.ExitAutocall #pragma: no cover
-    IPYTHON_SINGLETONS = ('exit', 'quit', 'get_ipython') #pragma: no cover
+    ExitType = None # IPython.core.autocall.ExitAutocall
+    IPYTHON_SINGLETONS = ('exit', 'quit', 'get_ipython')
 except NameError:
     IS_IPYTHON = False
     try: ExitType = type(exit) # apparently 'exit' can be removed
@@ -330,16 +330,15 @@ class UnpicklingWarning(PickleWarning, UnpicklingError):
     pass
 
 def _getopt(settings, key, arg=None, *, kwds=None):
-    """Get option from 'kwds' or named 'arg', falling back to settings.
+    """Get option from named argument 'arg' or 'kwds', falling back to settings.
 
     Examples:
 
-        # With an explict named argument:
+        # With an explicitly named argument:
         protocol = int(_getopt(settings, 'protocol', protocol))
 
         # With a named argument in **kwds:
         self._byref = _getopt(settings, 'byref', kwds=kwds)
-
     """
     # Sanity check, it's a bug in calling code if False.
     assert kwds is None or arg is None
@@ -361,11 +360,12 @@ class Pickler(StockPickler):
 
     :meta hide-value:
     """
+    from .settings import settings
+    # Flags set by dump_module() is dill.session:
     _refimported = False
-    _refonfail = False  # True in session.settings
+    _refonfail = False
     _session = False
     _first_pass = False
-    from .settings import settings
 
     def __init__(self, file, *args, **kwds):
         settings = Pickler.settings
@@ -442,7 +442,8 @@ class Pickler(StockPickler):
 
         ## Save with 'refonfail' ##
 
-        # Disable framing (right after the framer.init_framing() call at dump()).
+        # Disable framing. This must be set right after the
+        # framer.init_framing() call at StockPickler.dump()).
         self.framer.current_frame = None
         # Store initial state.
         position = self._file_tell()
@@ -450,11 +451,11 @@ class Pickler(StockPickler):
         try:
             StockPickler.save(self, obj, save_persistent_id)
         except UNPICKLEABLE_ERRORS as error_stack:
-            message = (
+            trace_message = (
                 "# X: fallback to save as global: <%s object at %#012x>"
                 % (type(obj).__name__, id(obj))
             )
-            # Roll back the stream, stream.truncate(position) doesn't work for all types.
+            # Roll back the stream. Note: truncate(position) doesn't always work.
             self._file_seek(position)
             self._file_truncate()
             # Roll back memo.
@@ -464,9 +465,9 @@ class Pickler(StockPickler):
             if self._session and obj is self._main:
                 if self._main is _main_module or not _is_imported_module(self._main):
                     raise
-                # Save an empty dict as state to distinguish this from modules saved with dump().
+                # Save an empty dict as state to distinguish from modules saved with dump().
                 self.save_reduce(_import_module, (obj.__name__,), obj=obj, state={})
-                logger.trace(self, message, obj=obj)
+                logger.trace(self, trace_message, obj=obj)
                 warnings.warn(
                     "module %r saved by reference due to the unpickleable "
                     "variable %r. No changes to the module were saved. "
@@ -479,7 +480,7 @@ class Pickler(StockPickler):
             elif hasattr(obj, '__name__') or hasattr(obj, '__qualname__'):
                 try:
                     self.save_global(obj)
-                    logger.trace(self, message, obj=obj)
+                    logger.trace(self, trace_message, obj=obj)
                     return True  # for _saved_byref, ignored otherwise
                 except PicklingError as error:
                     # Roll back trace state.
@@ -1263,9 +1264,9 @@ def _module_map(main_module):
     from collections import defaultdict
     from types import SimpleNamespace
     modmap = SimpleNamespace(
-        by_name=defaultdict(list),
-        by_id=defaultdict(list),
-        top_level={},  # top-level modules
+        by_name = defaultdict(list),
+        by_id = defaultdict(list),
+        top_level = {},  # top-level modules
         module = main_module.__name__,
         package = _module_package(main_module),
     )
@@ -1289,7 +1290,7 @@ def _lookup_module(modmap, name, obj, lookup_by_id=True) -> typing.Tuple[str, st
     hierarchy:
 
     1. Standard Library modules
-    2. modules of the same package as the module being saved (if it's part of a module)
+    2. modules of the same top-level package as the module being saved (if it's part of a package)
     3. installed modules in general
     4. non-installed modules
 
@@ -1316,11 +1317,11 @@ def _lookup_module(modmap, name, obj, lookup_by_id=True) -> typing.Tuple[str, st
                 other_module = sys.modules[modname]
                 other_package = _module_package(other_module)
                 # Don't return a reference to a module of another package
-                # if the object is likely from the same package.
+                # if the object is likely from the same top-level package.
                 if (modmap.package and obj_package == modmap.package
                         and other_package != modmap.package):
                     continue
-                # Prefer modules imported earlier (first found).
+                # Prefer modules imported earlier (the first found).
                 if _is_stdlib_module(other_module):
                     return modname, other_name, True
                 elif modmap.package and modmap.package == other_package:
@@ -1872,6 +1873,7 @@ def _is_stdlib_module(module):
 
 @_weak_cache(defaults={None: None})
 def _module_package(module):
+    """get the top-level package of a module, if any"""
     package = getattr(module, '__package__', None)
     return package.partition('.')[0] if package else None
 

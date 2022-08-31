@@ -99,8 +99,8 @@ def _stash_modules(main_module):
     for name, obj in main_module.__dict__.items():
         # Avoid incorrectly matching a singleton value in another package (e.g. __doc__ == None).
         if (any(obj is constant for constant in BUILTIN_CONSTANTS)  # must compare by identity
-                or type(obj) is str and obj == ''  # for cases like: __package__ == ''
-                or type(obj) is int and -128 <= obj <= 256  # small values or CPython-internalized
+                or type(obj) is str and obj == ''  # internalized, for cases like: __package__ == ''
+                or type(obj) is int and -128 <= obj <= 256  # possibly cached by compiler/interpreter
                 or isinstance(obj, ModuleType) and _is_builtin_module(obj)  # always saved by ref
                 or obj is main_module or obj is main_module.__dict__):
             original[name] = obj
