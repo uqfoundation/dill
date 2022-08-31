@@ -387,7 +387,7 @@ def dump_module(
         if logger.isEnabledFor(logging.TRACE):
             pickler._id_to_name = {id(v): k for k, v in main.__dict__.items()}
         pickler.dump(main)
-    if pickler._saved_byref and logger.isEnabledFor(logging.INFO):
+    if refonfail and pickler._saved_byref and logger.isEnabledFor(logging.INFO):
         saved_byref = {var: "%s.%s" % (mod, obj) for var, mod, obj in pickler._saved_byref}
         message = "[dump_module] Variables saved by reference (refonfail):\n"
         logger.info(message + _format_log_dict(saved_byref))

@@ -14,6 +14,7 @@ from io import BytesIO
 from types import ModuleType
 
 import dill
+from dill import _dill
 from dill.session import ipython_filter, EXCLUDE, INCLUDE
 
 session_file = os.path.join(os.path.dirname(__file__), 'session-refimported-%s.pkl')
@@ -268,7 +269,7 @@ def test_load_module_asdict():
     assert entitydefs == entities_vars['entitydefs']
 
 def test_lookup_module():
-    assert not dill._dill._is_builtin_module(local_mod) and local_mod.__package__ == ''
+    assert not _dill._is_builtin_module(local_mod) and local_mod.__package__ == ''
 
     def lookup(mod, name, obj, lookup_by_name=True):
         from dill._dill import _lookup_module, _module_map
@@ -352,12 +353,12 @@ def test_unpickleable_var():
     dill.session.settings['refonfail'] = True
     name = '__unpickleable'
     obj = memoryview(b'')
-    assert dill._dill._is_builtin_module(builtin_mod)
-    assert not dill._dill._is_builtin_module(local_mod)
+    assert _dill._is_builtin_module(builtin_mod)
+    assert not _dill._is_builtin_module(local_mod)
     # assert not dill.pickles(obj)
     try:
         dill.dumps(obj)
-    except dill._dill.UNPICKLEABLE_ERRORS:
+    except _dill.UNPICKLEABLE_ERRORS:
         pass
     else:
         raise Exception("test object should be unpickleable")
