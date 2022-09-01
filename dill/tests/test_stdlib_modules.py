@@ -116,15 +116,19 @@ def test_stdlib_modules():
             load_total = load_successes + load_failures
             dump_percent = 100 * dump_successes / dump_total
             load_percent = 100 * load_successes / load_total
-            print()
-            print(message % ("dump", refonfail, dump_percent, dump_successes, dump_total))
-            print(message % ("load", refonfail, load_percent, load_successes, load_total))
+            if logging.getLogger().isEnabledFor(logging.INFO): print()
+            logging.info(message, "dump", refonfail, dump_percent, dump_successes, dump_total)
+            logging.info(message, "load", refonfail, load_percent, load_successes, load_total)
             if refonfail:
                 failed_dump = [mod for mod, (dumped, _) in zip(modules, result) if dumped is False]
                 failed_load = [mod for mod, (_, loaded) in zip(modules, result) if loaded is False]
-                logging.info("dump_module() fails: %s", failed_dump)
-                logging.info("load_module() fails: %s", failed_load)
-                assert dump_percent > 95
+                if failed_dump:
+                    logging.info("dump_module() FAILURES: %s", str(failed_dump).replace("'", "")[1:-1])
+                if failed_load:
+                    logging.info("load_module() FAILURES: %s", str(failed_load).replace("'", "")[1:-1])
+                assert dump_percent > 99
+                assert load_percent > 85  #FIXME: many important modules fail to unpickle
+        print()
 
 if __name__ == '__main__':
     logging.basicConfig(level=os.environ.get('PYTHONLOGLEVEL', 'WARNING'))
