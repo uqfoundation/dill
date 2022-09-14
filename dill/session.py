@@ -87,9 +87,9 @@ IMPORTED_AS_MODULES = [re.compile(x) for x in (
 
 BUILTIN_CONSTANTS = (None, False, True, NotImplemented)
 
-def _stash_modules(main_module):
+def _stash_modules(main_module, original_main):
     """pop imported variables to be saved by reference in the __dill_imported* attributes"""
-    modmap = _module_map(main_module)
+    modmap = _module_map(original_main)
     newmod = ModuleType(main_module.__name__)
     original = {}
     imported = []
@@ -136,6 +136,7 @@ def _stash_modules(main_module):
             refimported += [(name, mod) for mod, name in imported_top_level]
             message = "[dump_module] Variables saved by reference (refimported):\n"
             logger.info(message + _format_log_dict(dict(refimported)))
+        logger.debug("main namespace after _stash_modules(): %s", dir(newmod))
 
         return newmod, modmap
     else:
@@ -176,6 +177,7 @@ def _filter_vars(main_module, exclude, include, base_rules):
     newmod = ModuleType(main_module.__name__)
     newmod.__dict__.update(namespace)
     _discard_added_variables(newmod, namespace)
+    logger.debug("main namespace after _filter_vars(): %s", dir(newmod))
     return newmod
 
 def _discard_added_variables(main, original_namespace):
@@ -363,9 +365,12 @@ def dump_module(
     if not isinstance(main, ModuleType):
         raise TypeError("%r is not a module" % main)
     original_main = main
+
+    logger.debug("original main namespace: %s", dir(main))
     main = _filter_vars(main, exclude, include, base_rules)
     if refimported:
-        main, modmap = _stash_modules(original_main)
+        main, modmap = _stash_modules(main, original_main)
+
     with _open(filename, 'wb', seekable=True) as file:
         pickler = Pickler(file, protocol, **kwds)
         pickler._main = main     #FIXME: dill.settings are disabled

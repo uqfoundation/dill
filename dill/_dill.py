@@ -39,6 +39,7 @@ import warnings
 from dill import logging
 from .logging import adapter as logger
 from .logging import trace as _trace
+_logger = logging.getLogger(__name__)
 
 import os
 import sys
@@ -1350,6 +1351,7 @@ def _save_module_dict(pickler, main_dict):
     is_builtin = _is_builtin_module(main)
     pickler.write(MARK + DICT)  # don't need to memoize
     for name, value in main_dict.items():
+        _logger.debug("Pickling %r (%s)", name, type(value).__name__)
         pickler.save(name)
         try:
             if pickler.save(value):
