@@ -166,11 +166,12 @@ FilterFunction = Callable[[NamedObject], bool]
 Filter = Union[str, Pattern[str], int, type, FilterFunction]
 Rule = Tuple[RuleType, Union[Filter, Iterable[Filter]]]
 
-def _iter(filters):
-    if isinstance(filters, str):
+def _iter(obj):
+    """return iterator of object if it's not a string"""
+    if isinstance(obj, (str, bytes)):
         return None
     try:
-        return iter(filters)
+        return iter(obj)
     except TypeError:
         return None
 
@@ -199,7 +200,7 @@ class FilterSet(abc.MutableSet):
             else:
                 filter = re.compile(filter)
                 field = 'regexes'
-        elif filter_type is re.Pattern:
+        elif filter_type is re.Pattern and type(filter.pattern) is str:
             field = 'regexes'
         elif filter_type is int:
             field = 'ids'
