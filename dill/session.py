@@ -192,13 +192,29 @@ def dump_module(
           >>> [foo.sin(x) for x in foo.values]
           [0.8414709848078965, 0.9092974268256817, 0.1411200080598672]
 
+        - Use `refimported` to save imported objects by reference:
+
+          >>> import dill
+          >>> from html.entities import html5
+          >>> type(html5), len(html5)
+          (dict, 2231)
+          >>> import io
+          >>> buf = io.BytesIO()
+          >>> dill.dump_module(buf) # saves __main__, with html5 saved by value
+          >>> len(buf.getvalue()) # pickle size in bytes
+          71665
+          >>> buf = io.BytesIO()
+          >>> dill.dump_module(buf, refimported=True) # html5 saved by reference
+          >>> len(buf.getvalue())
+          438
+
     *Changed in version 0.3.6:* Function ``dump_session()`` was renamed to
     ``dump_module()``.  Parameters ``main`` and ``byref`` were renamed to
     ``module`` and ``refimported``, respectively.
 
     Note:
         Currently, ``dill.settings['byref']`` and ``dill.settings['recurse']``
-        don't apply to this function.`
+        don't apply to this function.
     """
     for old_par, par in [('main', 'module'), ('byref', 'refimported')]:
         if old_par in kwds:
