@@ -221,9 +221,6 @@ CONTENTS_FMODE = 1
 #: Pickles the entire file (handle and contents), preserving mode and position.
 FILE_FMODE = 2
 
-# Exceptions commonly raised by unpickleable objects in the Standard Library.
-UNPICKLEABLE_ERRORS = (PicklingError, TypeError, ValueError, NotImplementedError)
-
 ### Shorthands (modified from python2.5/lib/pickle.py)
 def copy(obj, *args, **kwds):
     """
@@ -341,11 +338,6 @@ class Pickler(StockPickler):
     :meta hide-value:
     """
     from .settings import settings
-    # Flags set by dump_module() is dill.session:
-    _refimported = False
-    _refonfail = False
-    _session = False
-    _first_pass = False
 
     def __init__(self, file, *args, **kwds):
         settings = Pickler.settings
@@ -1986,7 +1978,7 @@ def pickles(obj,exact=False,safe=False,**kwds):
     """
     if safe: exceptions = (Exception,) # RuntimeError, ValueError
     else:
-        exceptions = UNPICKLEABLE_ERRORS + (AssertionError, UnpicklingError)
+        exceptions = (TypeError, AssertionError, NotImplementedError, PicklingError, UnpicklingError)
     try:
         pik = copy(obj, **kwds)
         #FIXME: should check types match first, then check content if "exact"
