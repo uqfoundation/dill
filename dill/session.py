@@ -9,14 +9,14 @@
 """
 Pickle and restore the intepreter session or a module's state.
 
-The functions :py:func:`dump_module`, :py:func:`load_module` and
-:py:func:`load_module_asdict` are capable of saving and restoring, as long as
+The functions :func:`dump_module`, :func:`load_module` and
+:func:`load_module_asdict` are capable of saving and restoring, as long as
 objects are pickleable, the complete state of a module.  For imported modules
 that are pickled, `dill` assumes that they are importable when unpickling.
 
-Contrary of using :py:func:`dill.dump` and :py:func:`dill.load` to save and load
-a module object, :py:func:`dill.dump_module` always tries to pickle the module
-by value (including built-in modules).  Also, options like
+Contrary of using :func:`dill.dump` and :func:`dill.load` to save and load a
+module object, :func:`dill.dump_module` always tries to pickle the module by
+value (including built-in modules).  Also, options like
 ``dill.settings['byref']`` and ``dill.settings['recurse']`` don't affect its
 behavior.
 
@@ -24,180 +24,74 @@ However, if a module contains references to objects originating from other
 modules, that would prevent it from pickling or drastically increase its disk
 size, they can be saved by reference instead of by value, using the option
 ``refimported``.
-
-With :py:func:`dump_module`, namespace filters may be used to restrict the list
-of pickled variables to a subset of those in the module, based on their names or
-values.  Also, using :py:func:`load_module_asdict` allows one to load the
-variables from different saved states of the same module into dictionaries.
 """
 
-
 __all__ = [
-    'dump_module', 'load_module', 'load_module_asdict', 'is_pickled_module',
+    'dump_module', 'load_module', 'load_module_asdict',
     'dump_session', 'load_session' # backward compatibility
 ]
 
-import io
 import re
 import sys
 import warnings
-from contextlib import AbstractContextManager, nullcontext, suppress
 
-from dill import _dill, Pickler, Unpickler, UnpicklingError
+from dill import _dill, logging
+from dill import Pickler, Unpickler, UnpicklingError
 from ._dill import (
     BuiltinMethodType, FunctionType, MethodType, ModuleType, TypeType,
-    _import_module, _is_builtin_module, _is_imported_module, _main_module,
-    _reverse_typemap, __builtin__,
+    _import_module, _is_builtin_module, _is_imported_module,
+    _lookup_module, _main_module, _module_map, _reverse_typemap, __builtin__,
 )
+from ._utils import _open
+
+logger = logging.getLogger(__name__)
 
 # Type hints.
-from typing import Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import pathlib
 import tempfile
 
 TEMPDIR = pathlib.PurePath(tempfile.gettempdir())
 
-settings = {
-    'refimported': False,
-    'refonfail' : True,
-}
-
-class _PeekableReader(AbstractContextManager):
-    """lightweight readable stream wrapper that implements peek()"""
-    def __init__(self, stream, closing=True):
-        self.stream = stream
-        self.closing = closing
-    def __exit__(self, *exc_info):
-        if self.closing:
-            self.stream.close()
-    def read(self, n):
-        return self.stream.read(n)
-    def readline(self):
-        return self.stream.readline()
-    def tell(self):
-        return self.stream.tell()
-    def close(self):
-        return self.stream.close()
-    def peek(self, n):
-        stream = self.stream
-        try:
-            if hasattr(stream, 'flush'): stream.flush()
-            position = stream.tell()
-            stream.seek(position)  # assert seek() works before reading
-            chunk = stream.read(n)
-            stream.seek(position)
-            return chunk
-        except (AttributeError, OSError):
-            raise NotImplementedError("stream is not peekable: %r", stream) from None
-
-class _TruncatableWriter(io.BytesIO, AbstractContextManager):
-    """works as an unlimited buffer, writes to file on close"""
-    def __init__(self, stream, closing=True, *args, **kwds):
-        super().__init__(*args, **kwds)
-        self.stream = stream
-        self.closing = closing
-    def __exit__(self, *exc_info):
-        self.close()
-    def close(self):
-        self.stream.write(self.getvalue())
-        with suppress(AttributeError):
-            self.stream.flush()
-        super().close()
-        if self.closing:
-            self.stream.close()
-
-def _open(file, mode, *, peekable=False, truncatable=False):
-    """return a context manager with an opened file-like object"""
-    readonly = ('r' in mode and '+' not in mode)
-    if not readonly and peekable:
-        raise ValueError("the 'peekable' option is invalid for writable files")
-    if readonly and truncatable:
-        raise ValueError("the 'truncatable' option is invalid for read-only files")
-    should_close = not hasattr(file, 'read' if readonly else 'write')
-    if should_close:
-        file = open(file, mode)
-    # Wrap stream in a helper class if necessary.
-    if peekable and not hasattr(file, 'peek'):
-        # Try our best to return it as an object with a peek() method.
-        if hasattr(file, 'tell') and hasattr(file, 'seek'):
-            file = _PeekableReader(file, closing=should_close)
-        else:
-            try:
-                file = io.BufferedReader(file)
-            except Exception:
-                # It won't be peekable, but will fail gracefully in _identify_module().
-                file = _PeekableReader(file, closing=should_close)
-    elif truncatable and (
-        not hasattr(file, 'truncate')
-        or (hasattr(file, 'seekable') and not file.seekable())
-    ):
-        file = _TruncatableWriter(file, closing=should_close)
-    if should_close or isinstance(file, (_PeekableReader, _TruncatableWriter)):
-        return file
-    else:
-        return nullcontext(file)
-
-def _module_map():
-    """get map of imported modules"""
-    from collections import defaultdict
-    from types import SimpleNamespace
-    modmap = SimpleNamespace(
-        by_name=defaultdict(list),
-        by_id=defaultdict(list),
-        top_level={},
-    )
-    for modname, module in sys.modules.items():
-        if modname in ('__main__', '__mp_main__') or not isinstance(module, ModuleType):
-            continue
-        if '.' not in modname:
-            modmap.top_level[id(module)] = modname
-        for objname, modobj in module.__dict__.items():
-            modmap.by_name[objname].append((modobj, modname))
-            modmap.by_id[id(modobj)].append((modobj, objname, modname))
-    return modmap
-
+# Unique objects (with no duplicates) that may be imported with "import as".
 IMPORTED_AS_TYPES = (ModuleType, TypeType, FunctionType, MethodType, BuiltinMethodType)
 if 'PyCapsuleType' in _reverse_typemap:
     IMPORTED_AS_TYPES += (_reverse_typemap['PyCapsuleType'],)
 
+# For unique objects of various types that have a '__module__' attribute.
 IMPORTED_AS_MODULES = [re.compile(x) for x in (
     'ctypes', 'typing', 'subprocess', 'threading',
     r'concurrent\.futures(\.\w+)?', r'multiprocessing(\.\w+)?'
 )]
 
-def _lookup_module(modmap, name, obj, main_module):
-    """lookup name or id of obj if module is imported"""
-    for modobj, modname in modmap.by_name[name]:
-        if modobj is obj and sys.modules[modname] is not main_module:
-            return modname, name
-    __module__ = getattr(obj, '__module__', None)
-    if isinstance(obj, IMPORTED_AS_TYPES) or (__module__ is not None
-            and any(regex.fullmatch(__module__) for regex in IMPORTED_AS_MODULES)):
-        for modobj, objname, modname in modmap.by_id[id(obj)]:
-            if sys.modules[modname] is not main_module:
-                return modname, objname
-    return None, None
+BUILTIN_CONSTANTS = (None, False, True, NotImplemented)
 
-def _stash_modules(main_module):
-    modmap = _module_map()
+def _stash_modules(main_module, original_main):
+    """pop imported variables to be saved by reference in the __dill_imported* attributes"""
+    modmap = _module_map(original_main)
     newmod = ModuleType(main_module.__name__)
-
+    original = {}
     imported = []
     imported_as = []
     imported_top_level = []  # keep separated for backward compatibility
-    original = {}
+
     for name, obj in main_module.__dict__.items():
-        if obj is main_module:
-            original[name] = newmod  # self-reference
-        elif obj is main_module.__dict__:
-            original[name] = newmod.__dict__
-        # Avoid incorrectly matching a singleton value in another package (ex.: __doc__).
-        elif any(obj is singleton for singleton in (None, False, True)) \
-                or isinstance(obj, ModuleType) and _is_builtin_module(obj):  # always saved by ref
+        # Avoid incorrectly matching a singleton value in another package (e.g. __doc__ == None).
+        if (any(obj is constant for constant in BUILTIN_CONSTANTS)  # must compare by identity
+                or type(obj) is str and obj == ''  # internalized, for cases like: __package__ == ''
+                or type(obj) is int and -128 <= obj <= 256  # possibly cached by compiler/interpreter
+                or isinstance(obj, ModuleType) and _is_builtin_module(obj)  # always saved by ref
+                or obj is main_module or obj is main_module.__dict__):
             original[name] = obj
         else:
-            source_module, objname = _lookup_module(modmap, name, obj, main_module)
+            modname = getattr(obj, '__module__', None)
+            lookup_by_id = (
+                isinstance(obj, IMPORTED_AS_TYPES)
+                or modname is not None
+                    and any(regex.fullmatch(modname) for regex in IMPORTED_AS_MODULES)
+            )
+            source_module, objname, _ = _lookup_module(modmap, name, obj, lookup_by_id)
             if source_module is not None:
                 if objname == name:
                     imported.append((source_module, name))
@@ -214,23 +108,50 @@ def _stash_modules(main_module):
         newmod.__dill_imported = imported
         newmod.__dill_imported_as = imported_as
         newmod.__dill_imported_top_level = imported_top_level
-        if getattr(newmod, '__loader__', None) is None and _is_imported_module(main_module):
-            # Trick _is_imported_module() to force saving as an imported module.
-            newmod.__loader__ = True  # will be discarded by save_module()
-        return newmod
+        _discard_added_variables(newmod, main_module.__dict__)
+
+        if logger.isEnabledFor(logging.INFO):
+            refimported = [(name, "%s.%s" % (mod, name)) for mod, name in imported]
+            refimported += [(name, "%s.%s" % (mod, objname)) for mod, objname, name in imported_as]
+            refimported += [(name, mod) for mod, name in imported_top_level]
+            message = "[dump_module] Variables saved by reference (refimported):\n"
+            logger.info(message + _format_log_dict(dict(refimported)))
+        logger.debug("main namespace after _stash_modules(): %s", dir(newmod))
+
+        return newmod, modmap
     else:
-        return main_module
+        return main_module, modmap
 
 def _restore_modules(unpickler, main_module):
-    try:
-        for modname, name in main_module.__dict__.pop('__dill_imported'):
-            main_module.__dict__[name] = unpickler.find_class(modname, name)
-        for modname, objname, name in main_module.__dict__.pop('__dill_imported_as'):
-            main_module.__dict__[name] = unpickler.find_class(modname, objname)
-        for modname, name in main_module.__dict__.pop('__dill_imported_top_level'):
-            main_module.__dict__[name] = __import__(modname)
-    except KeyError:
-        pass
+    for modname, name in main_module.__dict__.pop('__dill_imported', ()):
+        main_module.__dict__[name] = unpickler.find_class(modname, name)
+    for modname, objname, name in main_module.__dict__.pop('__dill_imported_as', ()):
+        main_module.__dict__[name] = unpickler.find_class(modname, objname)
+    for modname, name in main_module.__dict__.pop('__dill_imported_top_level', ()):
+        main_module.__dict__[name] = _import_module(modname)
+
+def _format_log_dict(dict):
+    return pprint.pformat(dict, compact=True, sort_dicts=True).replace("'", "")
+
+def _discard_added_variables(main, original_namespace):
+    # Some empty attributes like __doc__ may have been added by ModuleType().
+    added_names = set(main.__dict__)
+    added_names.discard('__name__')  # required
+    added_names.difference_update(original_namespace)
+    added_names.difference_update('__dill_imported%s' % s for s in ('', '_as', '_top_level'))
+    for name in added_names:
+        delattr(main, name)
+
+def _fix_module_namespace(main, original_main):
+    # Self-references.
+    for name, obj in main.__dict__.items():
+        if obj is original_main:
+            setattr(main, name, main)
+        elif obj is original_main.__dict__:
+            setattr(main, name, main.__dict__)
+    # Trick _is_imported_module(), forcing main to be saved as an imported module.
+    if getattr(main, '__loader__', None) is None and _is_imported_module(original_main):
+        main.__loader__ = True  # will be discarded by _dill.save_module()
 
 def dump_module(
     filename = str(TEMPDIR/'session.pkl'),
@@ -240,33 +161,38 @@ def dump_module(
     refonfail: Optional[bool] = None,
     **kwds
 ) -> None:
-    R"""Pickle the current state of :py:mod:`__main__` or another module to a file.
+    """Pickle the current state of :mod:`__main__` or another module to a file.
 
-    Save the contents of :py:mod:`__main__` (e.g. from an interactive
+    Save the contents of :mod:`__main__` (e.g. from an interactive
     interpreter session), an imported module, or a module-type object (e.g.
-    built with :py:class:`~types.ModuleType`), to a file. The pickled
-    module can then be restored with the function :py:func:`load_module`.
+    built with :class:`~types.ModuleType`), to a file. The pickled
+    module can then be restored with the function :func:`load_module`.
 
     Parameters:
         filename: a path-like object or a writable stream.
         module: a module object or the name of an importable module. If `None`
-            (the default), :py:mod:`__main__` is saved.
+            (the default), :mod:`__main__` is saved.
         refimported: if `True`, all objects identified as having been imported
             into the module's namespace are saved by reference. *Note:* this is
-            similar but independent from ``dill.settings[`byref`]``, as
+            similar but independent from ``dill.settings['byref']``, as
             ``refimported`` refers to virtually all imported objects, while
             ``byref`` only affects select objects.
         refonfail: if `True` (the default), objects that fail to pickle by value
             will try to be saved by reference.  If this also fails, saving their
             parent objects by reference will be attempted recursively.  In the
             worst case scenario, the module itself may be saved by reference,
-            with a warning.  Note: this option disables framing for pickle
-            protocol >= 4.  Turning it off may improve unpickling speed, but may
-            cause a module to fail pickling.
-        **kwds: extra keyword arguments passed to :py:class:`Pickler()`.
+            with a warning.  *Note:* this has the side effect of disabling framing
+            for pickle protocol ≥ 4.  Turning this option off may improve
+            unpickling speed, but may cause a module to fail pickling.
+        **kwds: extra keyword arguments passed to :class:`Pickler()`.
 
     Raises:
-       :py:exc:`PicklingError`: if pickling fails.
+        :exc:`PicklingError`: if pickling fails.
+        :exc:`PicklingWarning`: if the module itself ends being saved by
+            reference due to unpickleable objects in its namespace.
+
+    Default values for keyword-only arguments can be set in
+    `dill.session.settings`.
 
     Examples:
 
@@ -291,7 +217,7 @@ def dump_module(
           >>> foo.values = [1,2,3]
           >>> import math
           >>> foo.sin = math.sin
-          >>> dill.dump_module('foo_session.pkl', module=foo, refimported=True)
+          >>> dill.dump_module('foo_session.pkl', module=foo)
 
         - Save the state of a module with unpickleable objects:
 
@@ -316,7 +242,23 @@ def dump_module(
           [0.8414709848078965, 0.9092974268256817, 0.1411200080598672]
           >>> os = dill.load_module('os_session.pkl')
           >>> print(os.altsep.join('path'))
-          p\a\t\h
+          p\\a\\t\\h
+
+        - Use `refimported` to save imported objects by reference:
+
+          >>> import dill
+          >>> from html.entities import html5
+          >>> type(html5), len(html5)
+          (dict, 2231)
+          >>> import io
+          >>> buf = io.BytesIO()
+          >>> dill.dump_module(buf) # saves __main__, with html5 saved by value
+          >>> len(buf.getvalue()) # pickle size in bytes
+          71665
+          >>> buf = io.BytesIO()
+          >>> dill.dump_module(buf, refimported=True) # html5 saved by reference
+          >>> len(buf.getvalue())
+          438
 
     *Changed in version 0.3.6:* Function ``dump_session()`` was renamed to
     ``dump_module()``.  Parameters ``main`` and ``byref`` were renamed to
@@ -324,7 +266,7 @@ def dump_module(
 
     Note:
         Currently, ``dill.settings['byref']`` and ``dill.settings['recurse']``
-        don't apply to this function.
+        don't apply to this function.`
     """
     for old_par, par in [('main', 'module'), ('byref', 'refimported')]:
         if old_par in kwds:
@@ -339,10 +281,9 @@ def dump_module(
 
     from .settings import settings as dill_settings
     protocol = dill_settings['protocol']
-    if refimported is None:
-        refimported = settings['refimported']
-    if refonfail is None:
-        refonfail = settings['refonfail']
+    if refimported is None: refimported = settings['refimported']
+    if refonfail is None: refonfail = settings['refonfail']
+
     main = module
     if main is None:
         main = _main_module
@@ -351,22 +292,36 @@ def dump_module(
     if not isinstance(main, ModuleType):
         raise TypeError("%r is not a module" % main)
     original_main = main
+
+    logger.debug("original main namespace: %s", dir(main))
     if refimported:
-        main = _stash_modules(main)
-    with _open(filename, 'wb', truncatable=True) as file:
+        main, modmap = _stash_modules(main, original_main)
+
+    with _open(filename, 'wb', seekable=True) as file:
         pickler = Pickler(file, protocol, **kwds)
-        if main is not original_main:
-            pickler._original_main = original_main
         pickler._main = main     #FIXME: dill.settings are disabled
         pickler._byref = False   # disable pickling by name reference
         pickler._recurse = False # disable pickling recursion for globals
         pickler._session = True  # is best indicator of when pickling a session
         pickler._first_pass = True
+        if main is not original_main:
+            pickler._original_main = original_main
+            _fix_module_namespace(main, original_main)
         if refonfail:
             pickler._refonfail = True  # False by default
             pickler._file_seek = file.seek
             pickler._file_truncate = file.truncate
+            pickler._saved_byref = []
+            if refimported:
+                # Cache modmap for refonfail.
+                pickler._modmap = modmap
+        if logger.isEnabledFor(logging.TRACE):
+            pickler._id_to_name = {id(v): k for k, v in main.__dict__.items()}
         pickler.dump(main)
+    if refonfail and pickler._saved_byref and logger.isEnabledFor(logging.INFO):
+        saved_byref = {var: "%s.%s" % (mod, obj) for var, mod, obj in pickler._saved_byref}
+        message = "[dump_module] Variables saved by reference (refonfail):\n"
+        logger.info(message + _format_log_dict(saved_byref))
     return
 
 # Backward compatibility.
@@ -377,97 +332,64 @@ dump_session.__doc__ = dump_module.__doc__
 
 def _identify_module(file, main=None):
     """identify the name of the module stored in the given file-type object"""
-    import pickletools
-    NEUTRAL = {'PROTO', 'FRAME', 'PUT', 'BINPUT', 'MEMOIZE', 'MARK', 'STACK_GLOBAL'}
-    opcodes = ((opcode.name, arg) for opcode, arg, pos in pickletools.genops(file.peek(256))
-               if opcode.name not in NEUTRAL)
+    from pickletools import genops
+    UNICODE = {'UNICODE', 'BINUNICODE', 'SHORT_BINUNICODE'}
+    found_import = False
     try:
-        opcode, arg = next(opcodes)
-        if (opcode, arg) == ('SHORT_BINUNICODE', 'dill._dill'):
-            # The file uses STACK_GLOBAL instead of GLOBAL.
-            opcode, arg = next(opcodes)
-        if not (opcode in ('SHORT_BINUNICODE', 'GLOBAL') and arg.split()[-1] == '_import_module'):
-            raise ValueError
-        opcode, arg = next(opcodes)
-        if not opcode in ('SHORT_BINUNICODE', 'BINUNICODE', 'UNICODE'):
-            raise ValueError
-        module_name = arg
-        if not (
-            next(opcodes)[0] in ('TUPLE1', 'TUPLE') and
-            next(opcodes)[0] == 'REDUCE' #and
-            #next(opcodes)[0] in ('EMPTY_DICT', 'DICT')
-        ):
-            raise ValueError
-        return module_name
-    except StopIteration:
-        raise UnpicklingError("reached STOP without finding module") from None
+        for opcode, arg, pos in genops(file.peek(256)):
+            if not found_import:
+                if opcode.name in ('GLOBAL', 'SHORT_BINUNICODE') and \
+                        arg.endswith('_import_module'):
+                    found_import = True
+            else:
+                if opcode.name in UNICODE:
+                    return arg
+        else:
+            raise UnpicklingError("reached STOP without finding main module")
     except (NotImplementedError, ValueError) as error:
         # ValueError occours when the end of the chunk is reached (without a STOP).
         if isinstance(error, NotImplementedError) and main is not None:
             # file is not peekable, but we have main.
             return None
-        raise UnpicklingError("unable to identify module") from error
-
-def is_pickled_module(filename, importable: bool = True) -> bool:
-    """Check if a file is a pickle file readable by :py:func:`load_module`.
-
-    Parameters:
-        filename: a path-like object or a readable stream.
-        importable: expected kind of the file's saved module. Use `True` for
-            importable modules (the default) or `False` for module-type objects.
-
-    Returns:
-        `True` if the pickle file at ``filename`` was generated with
-        :py:func:`dump_module` **AND** the module whose state is saved in it is
-        of the kind specified by the ``importable`` argument. `False` otherwise.
-    """
-    with _open(filename, 'rb', peekable=True) as file:
-        try:
-            pickle_main = _identify_module(file)
-        except UnpicklingError:
-            return False
-        else:
-            is_runtime_mod = pickle_main.startswith('__runtime__.')
-            return importable ^ is_runtime_mod
+        raise UnpicklingError("unable to identify main module") from error
 
 def load_module(
     filename = str(TEMPDIR/'session.pkl'),
     module: Optional[Union[ModuleType, str]] = None,
     **kwds
 ) -> Optional[ModuleType]:
-    """Update the selected module (default is :py:mod:`__main__`) with
-    the state saved at ``filename``.
+    """Update the selected module with the state saved at ``filename``.
 
-    Restore a module to the state saved with :py:func:`dump_module`. The
-    saved module can be :py:mod:`__main__` (e.g. an interpreter session),
+    Restore a module to the state saved with :func:`dump_module`. The
+    saved module can be :mod:`__main__` (e.g. an interpreter session),
     an imported module, or a module-type object (e.g. created with
-    :py:class:`~types.ModuleType`).
+    :class:`~types.ModuleType`).
 
-    When restoring the state of a non-importable module-type object, the
+    When restoring the state of a non-importable, module-type object, the
     current instance of this module may be passed as the argument ``module``.
-    Otherwise, a new instance is created with :py:class:`~types.ModuleType`
+    Otherwise, a new instance is created with :class:`~types.ModuleType`
     and returned.
 
     Parameters:
         filename: a path-like object or a readable stream.
         module: a module object or the name of an importable module;
-            the module name and kind (i.e. imported or non-imported) must
+            the module's name and kind (i.e. imported or non-imported) must
             match the name and kind of the module stored at ``filename``.
-        **kwds: extra keyword arguments passed to :py:class:`Unpickler()`.
+        **kwds: extra keyword arguments passed to :class:`Unpickler()`.
 
     Raises:
-        :py:exc:`UnpicklingError`: if unpickling fails.
-        :py:exc:`ValueError`: if the argument ``module`` and module saved
-            at ``filename`` are incompatible.
+        :exc:`UnpicklingError`: if unpickling fails.
+        :exc:`ValueError`: if the argument ``module`` and the module
+            saved at ``filename`` are incompatible.
 
     Returns:
-        A module object, if the saved module is not :py:mod:`__main__` or
+        A module object, if the saved module is not :mod:`__main__` and
         a module instance wasn't provided with the argument ``module``.
 
     Passing an argument to ``module`` forces `dill` to verify that the module
     being loaded is compatible with the argument value.  Additionally, if the
-    argument is a module (instead of a module name), it supresses the return
-    value. Each case and behavior is exemplified below:
+    argument is a module instance (instead of a module name), it supresses the
+    return value. Each case and behavior is exemplified below:
 
         1. `module`: ``None`` --- This call loads a previously saved state of
         the module ``math`` and returns it (the module object) at the end:
@@ -580,10 +502,6 @@ def load_module(
 
     *Changed in version 0.3.6:* Function ``load_session()`` was renamed to
     ``load_module()``. Parameter ``main`` was renamed to ``module``.
-
-    See also:
-        :py:func:`load_module_asdict` to load the contents of module saved
-        with :py:func:`dump_module` into a dictionary.
     """
     if 'main' in kwds:
         warnings.warn(
@@ -593,13 +511,10 @@ def load_module(
         if module is not None:
             raise TypeError("both 'module' and 'main' arguments were used")
         module = kwds.pop('main')
+
     main = module
     with _open(filename, 'rb', peekable=True) as file:
-        #FIXME: dill.settings are disabled
-        unpickler = Unpickler(file, **kwds)
-        unpickler._session = True
-
-        # Resolve unpickler._main
+        # Resolve main.
         pickle_main = _identify_module(file, main)
         if main is None:
             main = pickle_main
@@ -611,7 +526,6 @@ def load_module(
                 main = _import_module(main)
         if not isinstance(main, ModuleType):
             raise TypeError("%r is not a module" % main)
-        unpickler._main = main
 
         # Check against the pickle's main.
         is_main_imported = _is_imported_module(main)
@@ -622,17 +536,21 @@ def load_module(
             error_msg = "can't update{} module{} %r with the saved state of{} module{} %r"
             if main.__name__ != pickle_main:
                 raise ValueError(error_msg.format("", "", "", "") % (main.__name__, pickle_main))
-            if is_runtime_mod and is_main_imported:
+            elif is_runtime_mod and is_main_imported:
                 raise ValueError(
                     error_msg.format(" imported", "", "", "-type object")
                     % (main.__name__, main.__name__)
                 )
-            if not is_runtime_mod and not is_main_imported:
+            elif not is_runtime_mod and not is_main_imported:
                 raise ValueError(
                     error_msg.format("", "-type object", " imported", "")
                     % (main.__name__, main.__name__)
                 )
 
+        # Load the module's state.
+        #FIXME: dill.settings are disabled
+        unpickler = Unpickler(file, **kwds)
+        unpickler._session = True
         try:
             if not is_main_imported:
                 # This is for find_class() to be able to locate it.
@@ -658,9 +576,8 @@ load_session.__doc__ = load_module.__doc__
 
 def load_module_asdict(
     filename = str(TEMPDIR/'session.pkl'),
-    update: bool = False,
     **kwds
-) -> dict:
+) -> Dict[str, Any]:
     """
     Load the contents of a saved module into a dictionary.
 
@@ -668,27 +585,22 @@ def load_module_asdict(
 
         lambda filename: vars(dill.load_module(filename)).copy()
 
-    however, does not alter the original module. Also, the path of
-    the loaded module is stored in the ``__session__`` attribute.
+    however, it does not alter the original module. Also, the path of
+    the loaded file is stored with the key ``'__session__'``.
 
     Parameters:
         filename: a path-like object or a readable stream
-        update: if `True`, initialize the dictionary with the current state
-            of the module prior to loading the state stored at filename.
-        **kwds: extra keyword arguments passed to :py:class:`Unpickler()`
+        **kwds: extra keyword arguments passed to :class:`Unpickler()`
 
     Raises:
-        :py:exc:`UnpicklingError`: if unpickling fails
+        :exc:`UnpicklingError`: if unpickling fails
 
     Returns:
         A copy of the restored module's dictionary.
 
     Note:
-        If ``update`` is True, the corresponding module may first be imported
-        into the current namespace before the saved state is loaded from
-        filename to the dictionary. Note that any module that is imported into
-        the current namespace as a side-effect of using ``update`` will not be
-        modified by loading the saved module in filename to a dictionary.
+        Even if not changed, the module refered in the file is always loaded
+        before its saved state is restored from `filename` to the dictionary.
 
     Example:
         >>> import dill
@@ -708,37 +620,52 @@ def load_module_asdict(
         False
         >>> main['anum'] == anum # changed after the session was saved
         False
-        >>> new_var in main # would be True if the option 'update' was set
-        False
+        >>> new_var in main # it was initialized with the current state of __main__
+        True
     """
     if 'module' in kwds:
         raise TypeError("'module' is an invalid keyword argument for load_module_asdict()")
+
     with _open(filename, 'rb', peekable=True) as file:
-        main_name = _identify_module(file)
-        original_main = sys.modules.get(main_name)
-        main = ModuleType(main_name)
-        if update:
-            if original_main is None:
-                original_main = _import_module(main_name)
-            main.__dict__.update(original_main.__dict__)
-        else:
-            main.__builtins__ = __builtin__
+        main_qualname = _identify_module(file)
+        main = _import_module(main_qualname)
+        main_copy = ModuleType(main_qualname)
+        main_copy.__dict__.clear()
+        main_copy.__dict__.update(main.__dict__)
+
+        parent_name, _, main_name = main_qualname.rpartition('.')
+        if parent_name:
+            parent = sys.modules[parent_name]
         try:
-            sys.modules[main_name] = main
+            sys.modules[main_qualname] = main_copy
+            if parent_name and getattr(parent, main_name, None) is main:
+                setattr(parent, main_name, main_copy)
             load_module(file, **kwds)
         finally:
-            if original_main is None:
-                del sys.modules[main_name]
-            else:
-                sys.modules[main_name] = original_main
-    main.__session__ = str(filename)
-    return main.__dict__
+            sys.modules[main_qualname] = main
+            if parent_name and getattr(parent, main_name, None) is main_copy:
+                setattr(parent, main_name, main)
 
+    if isinstance(getattr(filename, 'name', None), str):
+        main_copy.__session__ = filename.name
+    else:
+        main_copy.__session__ = str(filename)
+    return main_copy.__dict__
+
+
+## Session settings ##
+
+settings = {
+    'refimported': False,
+    'refonfail': True,
+}
+
+
+## Variables set in this module to avoid circular import problems ##
 
 # Internal exports for backward compatibility with dill v0.3.5.1
-# Can't be placed in dill._dill because of circular import problems.
 for name in (
-    '_lookup_module', '_module_map', '_restore_modules', '_stash_modules',
+    '_restore_modules', '_stash_modules',
     'dump_session', 'load_session' # backward compatibility functions
 ):
     setattr(_dill, name, globals()[name])

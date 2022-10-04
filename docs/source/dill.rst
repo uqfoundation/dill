@@ -5,52 +5,107 @@ dill module
 -----------
 
 .. automodule:: dill._dill
-..  :exclude-members: +
+    :members:
+    :undoc-members:
+    :private-members:
+    :special-members:
+    :show-inheritance:
+    :imported-members:
+..  :exclude-members:
 
 detect module
 -------------
 
 .. automodule:: dill.detect
-..  :exclude-members: +ismethod, isfunction, istraceback, isframe, iscode, parent, reference, at, parents, children
+    :members:
+    :undoc-members:
+    :private-members:
+    :special-members:
+    :show-inheritance:
+    :imported-members:
+..  :exclude-members: ismethod, isfunction, istraceback, isframe, iscode, parent, reference, at, parents, children
 
-logger module
--------------
+logging module
+--------------
 
-.. automodule:: dill.logger
+.. automodule:: dill.logging
+    :members:
+    :undoc-members:
+    :private-members:
+    :special-members:
+    :show-inheritance:
+    :imported-members:
     :exclude-members: +trace
 
 objtypes module
 ---------------
 
 .. automodule:: dill.objtypes
-..  :exclude-members: +
+    :members:
+    :undoc-members:
+    :private-members:
+    :special-members:
+    :show-inheritance:
+    :imported-members:
+..  :exclude-members:
 
 pointers module
 ---------------
 
 .. automodule:: dill.pointers
-..  :exclude-members: +
+    :members:
+    :undoc-members:
+    :private-members:
+    :special-members:
+    :show-inheritance:
+    :imported-members:
+..  :exclude-members:
 
 session module
----------------
+--------------
 
 .. automodule:: dill.session
-    :exclude-members: +dump_session, load_session
+    :members:
+    :undoc-members:
+    :private-members:
+    :special-members:
+    :show-inheritance:
+    :imported-members:
+    :exclude-members: dump_session, load_session
 
 settings module
 ---------------
 
 .. automodule:: dill.settings
-..  :exclude-members: +
+    :members:
+    :undoc-members:
+    :private-members:
+    :special-members:
+    :show-inheritance:
+    :imported-members:
+..  :exclude-members:
 
 source module
 -------------
 
 .. automodule:: dill.source
-..  :exclude-members: +
+    :members:
+    :undoc-members:
+    :private-members:
+    :special-members:
+    :show-inheritance:
+    :imported-members:
+..  :exclude-members:
 
 temp module
 -----------
 
 .. automodule:: dill.temp
-..  :exclude-members: +
+    :members:
+    :undoc-members:
+    :private-members:
+    :special-members:
+    :show-inheritance:
+    :imported-members:
+..  :exclude-members:
+

@@ -11,10 +11,10 @@ try: # the package is installed
     from .__info__ import __version__, __author__, __doc__, __license__
 except: # pragma: no cover
     import os
-    import sys
+    import sys 
     parent = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
     sys.path.append(parent)
-    # get distribution meta info
+    # get distribution meta info 
     from version import (__version__, __author__,
                          get_license_text, get_readme_as_rst)
     __license__ = get_license_text(os.path.join(parent, 'LICENSE'))
@@ -24,23 +24,25 @@ except: # pragma: no cover
 
 
 from ._dill import (
-    dump, dumps, load, loads, copy,
-    Pickler, Unpickler, register, pickle, pickles, check,
-    DEFAULT_PROTOCOL, HIGHEST_PROTOCOL, HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE,
+    Pickler, Unpickler,
+    check, copy, dump, dumps, load, loads, pickle, pickles, register,
+    DEFAULT_PROTOCOL, HIGHEST_PROTOCOL, CONTENTS_FMODE, FILE_FMODE, HANDLE_FMODE,
     PickleError, PickleWarning, PicklingError, PicklingWarning, UnpicklingError,
     UnpicklingWarning,
 )
 from .session import (
-    dump_module, load_module, load_module_asdict, is_pickled_module,
+    dump_module, load_module, load_module_asdict,
     dump_session, load_session # backward compatibility
 )
-from . import detect, logger, session, source, temp
+from . import detect, logging, session, source, temp
 
 # get global settings
 from .settings import settings
 
 # make sure "trace" is turned off
-logger.trace(False)
+logging.trace(False)
+
+from importlib import reload
 
 objects = {}
 # local import of dill._objects
@@ -66,7 +68,6 @@ def load_types(pickleable=True, unpickleable=True):
     Returns:
         None
     """
-    from importlib import reload
     # local import of dill.objects
     from . import _objects
     if pickleable:
