@@ -229,10 +229,9 @@ def dump(obj, file, protocol=None, byref=None, fmode=None, recurse=None, **kwds)
     See :func:`dumps` for keyword arguments.
     """
     from .settings import settings
-    protocol = settings['protocol'] if protocol is None else int(protocol)
-    _kwds = kwds.copy()
-    _kwds.update(dict(byref=byref, fmode=fmode, recurse=recurse))
-    Pickler(file, protocol, **_kwds).dump(obj)
+    protocol = int(_getopt(settings, 'protocol', protocol))
+    kwds.update(byref=byref, fmode=fmode, recurse=recurse)
+    Pickler(file, protocol, **kwds).dump(obj)
     return
 
 def dumps(obj, protocol=None, byref=None, fmode=None, recurse=None, **kwds):#, strictio=None):
@@ -317,6 +316,26 @@ class PicklingWarning(PickleWarning, PicklingError):
 class UnpicklingWarning(PickleWarning, UnpicklingError):
     pass
 
+def _getopt(settings, key, arg=None, *, kwds=None):
+    """Get option from named argument 'arg' or 'kwds', falling back to settings.
+
+    Examples:
+
+        # With an explicitly named argument:
+        protocol = int(_getopt(settings, 'protocol', protocol))
+
+        # With a named argument in **kwds:
+        self._byref = _getopt(settings, 'byref', kwds=kwds)
+    """
+    # Sanity check, it's a bug in calling code if False.
+    assert kwds is None or arg is None
+    if kwds is not None:
+        arg = kwds.pop(key, None)
+    if arg is not None:
+        return arg
+    else:
+        return settings[key]
+
 ### Extend the Picklers
 class Pickler(StockPickler):
     """python's Pickler extended to interpreter sessions"""
@@ -326,19 +345,15 @@ class Pickler(StockPickler):
 
     def __init__(self, file, *args, **kwds):
         settings = Pickler.settings
-        _byref = kwds.pop('byref', None)
-       #_strictio = kwds.pop('strictio', None)
-        _fmode = kwds.pop('fmode', None)
-        _recurse = kwds.pop('recurse', None)
-        StockPickler.__init__(self, file, *args, **kwds)
         self._main = _main_module
         self._diff_cache = {}
-        self._byref = settings['byref'] if _byref is None else _byref
-        self._strictio = False #_strictio
-        self._fmode = settings['fmode'] if _fmode is None else _fmode
-        self._recurse = settings['recurse'] if _recurse is None else _recurse
+        self._byref = _getopt(settings, 'byref', kwds=kwds)
+        self._fmode = _getopt(settings, 'fmode', kwds=kwds)
+        self._recurse = _getopt(settings, 'recurse', kwds=kwds)
+        self._strictio = False #_getopt(settings, 'strictio', kwds=kwds)
         self._postproc = OrderedDict()
         self._file = file
+        StockPickler.__init__(self, file, *args, **kwds)
 
     def save(self, obj, save_persistent_id=True):
         # register if the object is a numpy ufunc
@@ -410,10 +425,9 @@ class Unpickler(StockUnpickler):
 
     def __init__(self, *args, **kwds):
         settings = Pickler.settings
-        _ignore = kwds.pop('ignore', None)
-        StockUnpickler.__init__(self, *args, **kwds)
         self._main = _main_module
-        self._ignore = settings['ignore'] if _ignore is None else _ignore
+        self._ignore = _getopt(settings, 'ignore', kwds=kwds)
+        StockUnpickler.__init__(self, *args, **kwds)
 
     def load(self): #NOTE: if settings change, need to update attributes
         obj = StockUnpickler.load(self)
