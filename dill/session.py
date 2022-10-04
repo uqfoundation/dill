@@ -11,7 +11,7 @@ Pickle and restore the intepreter session.
 """
 
 __all__ = [
-    'dump_module', 'load_module', 'load_module_asdict',
+    'dump_module', 'load_module', 'load_module_asdict', 'is_pickled_module',
     'dump_session', 'load_session' # backward compatibility
 ]
 
@@ -19,12 +19,14 @@ import re
 import sys
 import warnings
 
-from dill import _dill, Pickler, Unpickler
+from dill import _dill
+from dill import Pickler, Unpickler, UnpicklingError
 from ._dill import (
     BuiltinMethodType, FunctionType, MethodType, ModuleType, TypeType,
     _import_module, _is_builtin_module, _is_imported_module, _main_module,
     _reverse_typemap, __builtin__,
 )
+from ._utils import _open
 
 # Type hints.
 from typing import Optional, Union
@@ -285,26 +287,95 @@ def _make_peekable(stream):
 
 def _identify_module(file, main=None):
     """identify the name of the module stored in the given file-type object"""
-    from pickletools import genops
-    UNICODE = {'UNICODE', 'BINUNICODE', 'SHORT_BINUNICODE'}
-    found_import = False
+    import pickletools
+    NEUTRAL = {'PROTO', 'FRAME', 'PUT', 'BINPUT', 'MEMOIZE', 'MARK', 'STACK_GLOBAL'}
     try:
-        for opcode, arg, pos in genops(file.peek(256)):
-            if not found_import:
-                if opcode.name in ('GLOBAL', 'SHORT_BINUNICODE') and \
-                        arg.endswith('_import_module'):
-                    found_import = True
-            else:
-                if opcode.name in UNICODE:
-                    return arg
-        else:
-            raise UnpicklingError("reached STOP without finding main module")
+        opcodes = ((opcode.name, arg) for opcode, arg, pos in pickletools.genops(file.peek(256))
+                   if opcode.name not in NEUTRAL)
+        opcode, arg = next(opcodes)
+        if (opcode, arg) == ('SHORT_BINUNICODE', 'dill._dill'):
+            # The file uses STACK_GLOBAL instead of GLOBAL.
+            opcode, arg = next(opcodes)
+        if not (opcode in ('SHORT_BINUNICODE', 'GLOBAL') and arg.split()[-1] == '_import_module'):
+            raise ValueError
+        opcode, arg = next(opcodes)
+        if not opcode in ('SHORT_BINUNICODE', 'BINUNICODE', 'UNICODE'):
+            raise ValueError
+        module_name = arg
+        if not (
+            next(opcodes)[0] in ('TUPLE1', 'TUPLE') and
+            next(opcodes)[0] == 'REDUCE' and
+            next(opcodes)[0] in ('EMPTY_DICT', 'DICT')
+        ):
+            raise ValueError
+        return module_name
+    except StopIteration:
+        raise UnpicklingError("reached STOP without finding module") from None
     except (NotImplementedError, ValueError) as error:
-        # ValueError occours when the end of the chunk is reached (without a STOP).
+        # ValueError also occours when the end of the chunk is reached (without a STOP).
         if isinstance(error, NotImplementedError) and main is not None:
-            # file is not peekable, but we have main.
+            # The file is not peekable, but we have the argument main.
             return None
-        raise UnpicklingError("unable to identify main module") from error
+        raise UnpicklingError("unable to identify module") from error
+
+def is_pickled_module(
+    filename, importable: bool = True, identify: bool = False
+) -> Union[bool, str]:
+    """Check if a file can be loaded with :func:`load_module`.
+
+    Check if the file is a pickle file generated with :func:`dump_module`,
+    and thus can be loaded with :func:`load_module`.
+
+    Parameters:
+        filename: a path-like object or a readable stream.
+        importable: expected kind of the file's saved module. Use `True` for
+            importable modules (the default) or `False` for module-type objects.
+        identify: if `True`, return the module name if the test succeeds.
+
+    Returns:
+        `True` if the pickle file at ``filename`` was generated with
+        :func:`dump_module` **AND** the module whose state is saved in it is
+        of the kind specified by the ``importable`` argument. `False` otherwise.
+        If `identify` is set, return the name of the module instead of `True`.
+
+    Examples:
+        Create three types of pickle files:
+
+        >>> import dill
+        >>> import types
+        >>> dill.dump_module('module_session.pkl') # saves __main__
+        >>> dill.dump_module('module_object.pkl', module=types.ModuleType('example'))
+        >>> with open('common_object.pkl', 'wb') as file:
+        >>>     dill.dump('example', file)
+
+        Test each file's kind:
+
+        >>> dill.is_pickled_module('module_session.pkl') # the module is importable
+        True
+        >>> dill.is_pickled_module('module_session.pkl', importable=False)
+        False
+        >>> dill.is_pickled_module('module_object.pkl') # the module is not importable
+        False
+        >>> dill.is_pickled_module('module_object.pkl', importable=False)
+        True
+        >>> dill.is_pickled_module('module_object.pkl', importable=False, identify=True)
+        'example'
+        >>> dill.is_pickled_module('common_object.pkl') # always return False
+        False
+        >>> dill.is_pickled_module('common_object.pkl', importable=False)
+        False
+    """
+    with _open(filename, 'rb', peekable=True) as file:
+        try:
+            pickle_main = _identify_module(file)
+        except UnpicklingError:
+            return False
+    is_runtime_mod = pickle_main.startswith('__runtime__.')
+    res = importable ^ is_runtime_mod
+    if res and identify:
+        return pickle_main.partition('.')[-1] if is_runtime_mod else pickle_main
+    else:
+        return res
 
 def load_module(
     filename = str(TEMPDIR/'session.pkl'),
