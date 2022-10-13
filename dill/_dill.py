@@ -29,6 +29,7 @@ import warnings
 from .logger import adapter as logger
 from .logger import trace as _trace
 
+import abc
 import os
 import sys
 diff = None
@@ -1688,6 +1689,8 @@ def save_type(pickler, obj, postproc_list=None):
             if type(slots) == str: slots = (slots,) # __slots__ accepts a single string
             for name in slots:
                 del _dict[name]
+            if isinstance(obj, abc.ABCMeta) and '_abc_impl' in _dict:
+                del _dict['_abc_impl']
             _dict.pop('__dict__', None)
             _dict.pop('__weakref__', None)
             _dict.pop('__prepare__', None)
