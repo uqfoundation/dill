@@ -106,6 +106,7 @@ NOTE: Keep the return value for as long as you want your file to exist !
     """ #XXX: write a "load_source"?
     from .source import importable, getname
     import tempfile
+    kwds.setdefault('delete', True)
     kwds.pop('suffix', '') # this is *always* '.py'
     alias = kwds.pop('alias', '') #XXX: include an alias so a name is known
     name = str(alias) or getname(object)
@@ -157,6 +158,7 @@ NOTE: Keep the return value for as long as you want your file to exist !
     """
     import dill as pickle
     import tempfile
+    kwds.setdefault('delete', True)
     file = tempfile.NamedTemporaryFile(**kwds)
     pickle.dump(object, file)
     file.flush()
