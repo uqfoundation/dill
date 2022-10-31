@@ -13,7 +13,7 @@ import dis
 from inspect import ismethod, isfunction, istraceback, isframe, iscode
 
 from .pointers import parent, reference, at, parents, children
-from .logger import trace
+from .logging import trace
 
 __all__ = ['baditems','badobjects','badtypes','code','errors','freevars',
            'getmodule','globalvars','nestedcode','nestedglobals','outermost',
