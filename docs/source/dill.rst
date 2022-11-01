@@ -25,17 +25,17 @@ detect module
     :imported-members:
 ..  :exclude-members: ismethod, isfunction, istraceback, isframe, iscode, parent, reference, at, parents, children
 
-logger module
--------------
+logging module
+--------------
 
-.. automodule:: dill.logger
+.. automodule:: dill.logging
     :members:
     :undoc-members:
     :private-members:
     :special-members:
     :show-inheritance:
     :imported-members:
-..  :exclude-members:
+    :exclude-members: +trace
 
 objtypes module
 ---------------
@@ -62,7 +62,7 @@ pointers module
 ..  :exclude-members:
 
 session module
----------------
+--------------
 
 .. automodule:: dill.session
     :members:

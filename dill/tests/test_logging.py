@@ -11,7 +11,7 @@ import tempfile
 
 import dill
 from dill import detect
-from dill.logger import stderr_handler, adapter as logger
+from dill.logging import stderr_handler, adapter as logger
 
 try:
     from StringIO import StringIO

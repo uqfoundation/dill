@@ -34,13 +34,13 @@ from .session import (
     dump_module, load_module, load_module_asdict,
     dump_session, load_session # backward compatibility
 )
-from . import detect, logger, session, source, temp
+from . import detect, logging, session, source, temp
 
 # get global settings
 from .settings import settings
 
 # make sure "trace" is turned off
-logger.trace(False)
+logging.trace(False)
 
 from importlib import reload
 
