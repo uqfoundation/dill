@@ -15,8 +15,8 @@ Notes:
 
 Examples::
 
-    $ get_objgraph FrameType
-    Image generated as FrameType.png
+    $ get_objgraph ArrayType
+    Image generated as ArrayType.png
 """
 
 import dill as pickle

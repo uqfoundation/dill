@@ -74,7 +74,7 @@ setup_kwds = dict(
     ],
     packages = ['dill','dill.tests'],
     package_dir = {'dill':'dill', 'dill.tests':'dill/tests'},
-    scripts=['scripts/undill','scripts/get_objgraph'],
+    scripts=['scripts/undill','scripts/get_objgraph','scripts/get_gprof'],
 )
 
 # force python-, abi-, and platform-specific naming of bdist_wheel
