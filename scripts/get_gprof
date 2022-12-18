@@ -52,5 +52,11 @@ import cProfile
 cProfile.run("dill.dumps(obj)", filename="%s.prof" % name)
 msg = "gprof2dot -f pstats %s %s.prof | dot -Tpng -o %s.call.png" % (args, name, name)
 os.system(msg)
-os.remove("%s.prof" % name)
 
+# get stats
+f_prof = "%s.prof" % name
+import pstats
+stats = pstats.Stats(f_prof, stream=sys.stdout)
+stats.strip_dirs().sort_stats('cumtime')
+stats.print_stats(20) #XXX: save to file instead of print top 20?
+os.remove(f_prof)
