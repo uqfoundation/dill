@@ -42,7 +42,8 @@ def get_readme_as_rst(filepath):
                 README += line.replace('-','=') + '\n'
             elif line.startswith('!['): # image
                 alt,img = line.split('](',1)
-                img = img.split('docs/source/',1)[-1] # make is in docs
+                if img.startswith('docs'): # relative path
+                    img = img.split('docs/source/',1)[-1] # make is in docs
                 README += '.. image:: ' + img.replace(')','')
                 README += '   :alt: ' + alt.replace('![','') + '\n'
             #elif ')[http' in line: # alt text link (`text <http://url>`_)
