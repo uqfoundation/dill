@@ -17,7 +17,7 @@ matrix:
         - python: '3.10'
           env:
 
-        - python: '3.11-dev'
+        - python: '3.11'
           env:
 
         - python: '3.12-dev'
