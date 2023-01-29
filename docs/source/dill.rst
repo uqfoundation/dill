@@ -1,18 +1,6 @@
 dill module documentation
 =========================
 
-dill module
------------
-
-.. automodule:: dill._dill
-    :members:
-    :undoc-members:
-    :private-members:
-    :special-members:
-    :show-inheritance:
-    :imported-members:
-..  :exclude-members:
-
 detect module
 -------------
 
@@ -71,7 +59,7 @@ session module
     :special-members:
     :show-inheritance:
     :imported-members:
-    :exclude-members: dump_session, load_session
+..  :exclude-members: dump_session, load_session
 
 settings module
 ---------------
