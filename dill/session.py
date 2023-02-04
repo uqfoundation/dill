@@ -16,6 +16,7 @@ __all__ = [
 ]
 
 import re
+import os
 import sys
 import warnings
 
@@ -128,7 +129,7 @@ def _restore_modules(unpickler, main_module):
 
 #NOTE: 06/03/15 renamed main_module to main
 def dump_module(
-    filename = str(TEMPDIR/'session.pkl'),
+    filename: Union[str, os.PathLike] = None,
     module: Optional[Union[ModuleType, str]] = None,
     refimported: bool = False,
     **kwds
@@ -141,7 +142,8 @@ def dump_module(
     module can then be restored with the function :py:func:`load_module`.
 
     Parameters:
-        filename: a path-like object or a writable stream.
+        filename: a path-like object or a writable stream. If `None`
+            (the default), write to a named file in a temporary directory.
         module: a module object or the name of an importable module. If `None`
             (the default), :py:mod:`__main__` is saved.
         refimported: if `True`, all objects identified as having been imported
@@ -239,6 +241,8 @@ def dump_module(
     if hasattr(filename, 'write'):
         file = filename
     else:
+        if filename is None:
+            filename = str(TEMPDIR/'session.pkl')
         file = open(filename, 'wb')
     try:
         pickler = Pickler(file, protocol, **kwds)
@@ -258,7 +262,7 @@ def dump_module(
     return
 
 # Backward compatibility.
-def dump_session(filename=str(TEMPDIR/'session.pkl'), main=None, byref=False, **kwds):
+def dump_session(filename=None, main=None, byref=False, **kwds):
     warnings.warn("dump_session() has been renamed dump_module()", PendingDeprecationWarning)
     dump_module(filename, module=main, refimported=byref, **kwds)
 dump_session.__doc__ = dump_module.__doc__
@@ -323,7 +327,7 @@ def _identify_module(file, main=None):
         raise UnpicklingError("unable to identify main module") from error
 
 def load_module(
-    filename = str(TEMPDIR/'session.pkl'),
+    filename: Union[str, os.PathLike] = None,
     module: Optional[Union[ModuleType, str]] = None,
     **kwds
 ) -> Optional[ModuleType]:
@@ -341,7 +345,8 @@ def load_module(
     and returned.
 
     Parameters:
-        filename: a path-like object or a readable stream.
+        filename: a path-like object or a readable stream. If `None`
+            (the default), read from a named file in a temporary directory.
         module: a module object or the name of an importable module;
             the module name and kind (i.e. imported or non-imported) must
             match the name and kind of the module stored at ``filename``.
@@ -435,6 +440,8 @@ def load_module(
     if hasattr(filename, 'read'):
         file = filename
     else:
+        if filename is None:
+            filename = str(TEMPDIR/'session.pkl')
         file = open(filename, 'rb')
     try:
         file = _make_peekable(file)
@@ -500,13 +507,13 @@ def load_module(
         return main
 
 # Backward compatibility.
-def load_session(filename=str(TEMPDIR/'session.pkl'), main=None, **kwds):
+def load_session(filename=None, main=None, **kwds):
     warnings.warn("load_session() has been renamed load_module().", PendingDeprecationWarning)
     load_module(filename, module=main, **kwds)
 load_session.__doc__ = load_module.__doc__
 
 def load_module_asdict(
-    filename = str(TEMPDIR/'session.pkl'),
+    filename: Union[str, os.PathLike] = None,
     update: bool = False,
     **kwds
 ) -> dict:
@@ -521,7 +528,8 @@ def load_module_asdict(
     the loaded module is stored in the ``__session__`` attribute.
 
     Parameters:
-        filename: a path-like object or a readable stream
+        filename: a path-like object or a readable stream. If `None`
+            (the default), read from a named file in a temporary directory.
         update: if `True`, initialize the dictionary with the current state
             of the module prior to loading the state stored at filename.
         **kwds: extra keyword arguments passed to :py:class:`Unpickler()`
@@ -565,6 +573,8 @@ def load_module_asdict(
     if hasattr(filename, 'read'):
         file = filename
     else:
+        if filename is None:
+            filename = str(TEMPDIR/'session.pkl')
         file = open(filename, 'rb')
     try:
         file = _make_peekable(file)
