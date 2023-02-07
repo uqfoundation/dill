@@ -12,7 +12,7 @@
 """
 Extensions to python's 'inspect' module, which can be used
 to retrieve information from live python objects. The methods
-defined in this module are augmented to facilitate access to 
+defined in this module are augmented to facilitate access to
 source code of interactively defined functions and classes,
 as well as provide access to source code for objects defined
 in a file.
@@ -29,7 +29,7 @@ from inspect import (getblock, getfile, getmodule, getsourcefile, indentsize,
                      ismodule, istraceback)
 from tokenize import TokenError
 
-from ._dill import PY3
+from ._dill import IS_IPYTHON
 
 
 def isfrommain(obj):
@@ -43,7 +43,7 @@ def isfrommain(obj):
 def isdynamic(obj):
     "check if object was built in the interpreter"
     try: file = getfile(obj)
-    except TypeError: file = None 
+    except TypeError: file = None
     if file == '<stdin>' and isfrommain(obj):
         return True
     return False
@@ -58,7 +58,7 @@ def _matchlambda(func, line):
     lhs,rhs = line.split('lambda ',1)[-1].split(":", 1) #FIXME: if !1 inputs
     try: #FIXME: unsafe
         _ = eval("lambda %s : %s" % (lhs,rhs), globals(),locals())
-    except: _ = dummy
+    except Exception: _ = dummy
     # get code objects, for comparison
     _, code = getcode(_).co_code, getcode(func).co_code
     # check if func is in closure
@@ -80,7 +80,7 @@ def _matchlambda(func, line):
         _lhs,_rhs = rhs.split('lambda ',1)[-1].split(":",1) #FIXME: if !1 inputs
         try: #FIXME: unsafe
             _f = eval("lambda %s : %s" % (_lhs,_rhs), globals(),locals())
-        except: _f = dummy
+        except Exception: _f = dummy
         # get code objects, for comparison
         _, code = getcode(_f).co_code, getcode(func).co_code
         if len(_) != len(code): return False
@@ -114,13 +114,35 @@ def findsource(object):
 
     module = getmodule(object)
     try: file = getfile(module)
-    except TypeError: file = None 
+    except TypeError: file = None
+    is_module_main = (module and module.__name__ == '__main__' and not file)
+    if IS_IPYTHON and is_module_main:
+        #FIXME: quick fix for functions and classes in IPython interpreter
+        try:
+            file = getfile(object)
+            sourcefile = getsourcefile(object)
+        except TypeError:
+            if isclass(object):
+                for object_method in filter(isfunction, object.__dict__.values()):
+                    # look for a method of the class
+                    file_candidate = getfile(object_method)
+                    if not file_candidate.startswith('<ipython-input-'):
+                        continue
+                    file = file_candidate
+                    sourcefile = getsourcefile(object_method)
+                    break
+        if file:
+            lines = linecache.getlines(file)
+        else:
+            # fallback to use history
+            history = '\n'.join(get_ipython().history_manager.input_hist_parsed)
+            lines = [line + '\n' for line in history.splitlines()]
     # use readline when working in interpreter (i.e. __main__ and not file)
-    if module and module.__name__ == '__main__' and not file:
-        try: 
+    elif is_module_main:
+        try:
             import readline
             err = ''
-        except:
+        except ImportError:
             import sys
             err = sys.exc_info()[1].args[0]
             if sys.platform[:3] == 'win':
@@ -132,7 +154,7 @@ def findsource(object):
     else:
         try: # special handling for class instances
             if not isclass(object) and isclass(type(object)): # __class__
-                file = getfile(module)        
+                file = getfile(module)
                 sourcefile = getsourcefile(module)
             else: # builtins fail with a TypeError
                 file = getfile(object)
@@ -165,16 +187,14 @@ def findsource(object):
         name = object.__name__
         if name == '<lambda>': pat1 = r'(.*(?<!\w)lambda(:|\s))'
         else: pat1 = r'^(\s*def\s)'
-        if PY3: object = object.__func__
-        else: object = object.im_func
+        object = object.__func__
     if isfunction(object):
         name = object.__name__
         if name == '<lambda>':
             pat1 = r'(.*(?<!\w)lambda(:|\s))'
             obj = object #XXX: better a copy?
         else: pat1 = r'^(\s*def\s)'
-        if PY3: object = object.__code__
-        else: object = object.func_code
+        object = object.__code__
     if istraceback(object):
         object = object.tb_frame
     if isframe(object):
@@ -455,13 +475,12 @@ def _intypes(object):
 
 def _isstring(object): #XXX: isstringlike better?
     '''check if object is a string-like type'''
-    if PY3: return isinstance(object, (str, bytes))
-    return isinstance(object, basestring)
+    return isinstance(object, (str, bytes))
 
 
 def indent(code, spaces=4):
     '''indent a block of code with whitespace (default is 4 spaces)'''
-    indent = indentsize(code) 
+    indent = indentsize(code)
     if type(spaces) is int: spaces = ' '*spaces
     # if '\t' is provided, will indent with a tab
     nspaces = indentsize(spaces)
@@ -491,7 +510,7 @@ def indent(code, spaces=4):
 
 def _outdent(lines, spaces=None, all=True):
     '''outdent lines of code, accounting for docs and line continuations'''
-    indent = indentsize(lines[0]) 
+    indent = indentsize(lines[0])
     if spaces is None or spaces > indent or spaces < 0: spaces = indent
     for i in range(len(lines) if all else 1):
         #FIXME: works... but shouldn't outdent 2nd+ lines of multiline doc
@@ -503,7 +522,7 @@ def _outdent(lines, spaces=None, all=True):
 
 def outdent(code, spaces=None, all=True):
     '''outdent a block of code (default is to strip all leading whitespace)'''
-    indent = indentsize(code) 
+    indent = indentsize(code)
     if spaces is None or spaces > indent or spaces < 0: spaces = indent
     #XXX: will this delete '\n' in some cases?
     if not all: return code[spaces:]
@@ -511,42 +530,20 @@ def outdent(code, spaces=None, all=True):
 
 
 #XXX: not sure what the point of _wrap is...
-#exec_ = lambda s, *a: eval(compile(s, '<string>', 'exec'), *a)
 __globals__ = globals()
 __locals__ = locals()
-wrap2 = '''
 def _wrap(f):
     """ encapsulate a function and it's __import__ """
     def func(*args, **kwds):
         try:
             # _ = eval(getsource(f, force=True)) #XXX: safer but less robust
-            exec getimportable(f, alias='_') in %s, %s
-        except:
+            exec(getimportable(f, alias='_'), __globals__, __locals__)
+        except Exception:
             raise ImportError('cannot import name ' + f.__name__)
         return _(*args, **kwds)
     func.__name__ = f.__name__
     func.__doc__ = f.__doc__
     return func
-''' % ('__globals__', '__locals__')
-wrap3 = '''
-def _wrap(f):
-    """ encapsulate a function and it's __import__ """
-    def func(*args, **kwds):
-        try:
-            # _ = eval(getsource(f, force=True)) #XXX: safer but less robust
-            exec(getimportable(f, alias='_'), %s, %s)
-        except:
-            raise ImportError('cannot import name ' + f.__name__)
-        return _(*args, **kwds)
-    func.__name__ = f.__name__
-    func.__doc__ = f.__doc__
-    return func
-''' % ('__globals__', '__locals__')
-if PY3:
-    exec(wrap3)
-else:
-    exec(wrap2)
-del wrap2, wrap3
 
 
 def _enclose(object, alias=''): #FIXME: needs alias to hold returned object
@@ -581,17 +578,14 @@ def dumpsource(object, alias='', new=False, enclose=True):
     else:
         stub = alias
         pre = '%s = ' % stub if alias else alias
-    
+
     # if a 'new' instance is not needed, then just dump and load
     if not new or not _isinstance(object):
         code += pre + 'dill.loads(%s)\n' % pik
     else: #XXX: other cases where source code is needed???
         code += getsource(object.__class__, alias='', lstrip=True, force=True)
         mod = repr(object.__module__) # should have a module (no builtins here)
-        if PY3:
-            code += pre + 'dill.loads(%s.replace(b%s,bytes(__name__,"UTF-8")))\n' % (pik,mod)
-        else:
-            code += pre + 'dill.loads(%s.replace(%s,__name__))\n' % (pik,mod)
+        code += pre + 'dill.loads(%s.replace(b%s,bytes(__name__,"UTF-8")))\n' % (pik,mod)
        #code += 'del %s' % object.__class__.__name__ #NOTE: kills any existing!
 
     if enclose:
@@ -654,7 +648,7 @@ def _namespace(obj):
         if module in ['builtins','__builtin__']: # BuiltinFunctionType
             if _intypes(name): return ['types'] + [name]
         return qual + [name] #XXX: can be wrong for some aliased objects
-    except: pass
+    except Exception: pass
     # special case: numpy.inf and numpy.nan (we don't want them as floats)
     if str(obj) in ['inf','nan','Inf','NaN']: # is more, but are they needed?
         return ['numpy'] + [str(obj)]
@@ -742,7 +736,7 @@ def getimport(obj, alias='', verify=True, builtin=False, enclosing=False):
     try: # look for '<...>' and be mindful it might be in lists, dicts, etc...
         name = repr(obj).split('<',1)[1].split('>',1)[1]
         name = None # we have a 'object'-style repr
-    except: # it's probably something 'importable'
+    except Exception: # it's probably something 'importable'
         if head in ['builtins','__builtin__']:
             name = repr(obj) #XXX: catch [1,2], (1,2), set([1,2])... others?
         else:
@@ -800,7 +794,7 @@ def _importable(obj, alias='', source=None, enclosing=False, force=True, \
         try:
             return getsource(obj, alias, enclosing=enclosing, \
                              force=force, lstrip=lstrip, builtin=builtin)
-        except: pass
+        except Exception: pass
     try:
         if not _isinstance(obj):
             return getimport(obj, alias, enclosing=enclosing, \
@@ -815,12 +809,12 @@ def _importable(obj, alias='', source=None, enclosing=False, force=True, \
         if alias == name: _alias = ""
         return _import+_alias+"%s\n" % name
 
-    except: pass
+    except Exception: pass
     if not source: # try getsource, only if it hasn't been tried yet
         try:
             return getsource(obj, alias, enclosing=enclosing, \
                              force=force, lstrip=lstrip, builtin=builtin)
-        except: pass
+        except Exception: pass
     # get the name (of functions, lambdas, and classes)
     # or hope that obj can be built from the __repr__
     #XXX: what to do about class instances and such?
@@ -859,7 +853,7 @@ def _closuredimport(func, alias='', builtin=False):
                          re.match(pat, line)]
             if not candidate:
                 mod = getname(getmodule(fobj))
-                #HACK: get file containing 'inner' function; is func there? 
+                #HACK: get file containing 'inner' function; is func there?
                 lines,_ = findsource(fobj)
                 candidate = [line for line in lines \
                              if getname(fobj) in line and re.match(pat, line)]
@@ -960,7 +954,7 @@ def importable(obj, alias='', source=None, builtin=True):
                 if len(src) > 1:
                     raise NotImplementedError('not implemented')
                 return list(src.values())[0]
-            except:
+            except Exception:
                 if tried_source: raise
                 tried_import = True
         # we want the source
@@ -999,7 +993,7 @@ def importable(obj, alias='', source=None, builtin=True):
             if not obj: return src
             if not src: return obj
             return obj + src
-        except:
+        except Exception:
             if tried_import: raise
             tried_source = True
             source = not source

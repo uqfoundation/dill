@@ -9,8 +9,7 @@
 import sys
 import dill
 import test_mixins as module
-try: from importlib import reload
-except ImportError: pass
+from importlib import reload
 dill.settings['recurse'] = True
 
 cached = (module.__cached__ if hasattr(module, "__cached__")

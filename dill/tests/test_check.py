@@ -10,7 +10,6 @@ from dill import check
 import sys
 
 from dill.temp import capture
-from dill._dill import PY3
 
 
 #FIXME: this doesn't catch output... it's from the internal call
@@ -30,24 +29,24 @@ def raise_check(func, **kwds):
 f = lambda x:x**2
 
 
-def test_simple():
-    raise_check(f)
+def test_simple(verbose=None):
+    raise_check(f, verbose=verbose)
 
 
-def test_recurse():
-    raise_check(f, recurse=True)
+def test_recurse(verbose=None):
+    raise_check(f, recurse=True, verbose=verbose)
 
 
-def test_byref():
-    raise_check(f, byref=True)
+def test_byref(verbose=None):
+    raise_check(f, byref=True, verbose=verbose)
 
 
-def test_protocol():
-    raise_check(f, protocol=True)
+def test_protocol(verbose=None):
+    raise_check(f, protocol=True, verbose=verbose)
 
 
-def test_python():
-    raise_check(f, python=None)
+def test_python(verbose=None):
+    raise_check(f, python=None, verbose=verbose)
 
 
 #TODO: test incompatible versions
