@@ -8,19 +8,21 @@
 """
 dill: a utility for serialization of python objects
 
-The main API of the package are the functions :func:`dump` and
-:func:`dumps` for serialization ("pickling"), and :func:`load`
-and :func:`loads` for deserialization ("unpickling").  The
-functions :func:`~dill.session.dump_module` and
-:func:`~dill.session.load_module` can be used to save and restore
-the intepreter session.
+The primary functions in `dill` are :func:`dump` and
+:func:`dumps` for serialization ("pickling") to a
+file or to a string, respectively, and :func:`load`
+and :func:`loads` for deserialization ("unpickling"),
+similarly, from a file or from a string. Other notable
+functions are :func:`~dill.dump_module` and
+:func:`~dill.load_module`, which are used to save and
+restore module objects, including an intepreter session.
 
 Based on code written by Oren Tirosh and Armin Ronacher.
 Extended to a (near) full set of the builtin types (in types module),
 and coded to the pickle interface, by <mmckerns@caltech.edu>.
 Initial port to python3 by Jonathan Dobson, continued by mmckerns.
-Test against "all" python types (Std. Lib. CH 1-15 @ 2.7) by mmckerns.
-Test against CH16+ Std. Lib. ... TBD.
+Tested against "all" python types (Std. Lib. CH 1-15 @ 2.7) by mmckerns.
+Tested against CH16+ Std. Lib. ... TBD.
 """
 
 from __future__ import annotations
@@ -337,6 +339,7 @@ class Pickler(StockPickler):
 
     :meta hide-value:
     """
+    _session = False
     from .settings import settings
 
     def __init__(self, file, *args, **kwds):

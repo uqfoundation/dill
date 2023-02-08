@@ -74,14 +74,14 @@ autodoc_default_options = {
     'show-inheritance': True,
     'imported-members': True,
     'exclude-members': ( #NOTE: this is a single string concatenation
-        '__dict__,'             # implementation detail (may be verbose)
-        '__slots__,'            # implementation detail
-        '__weakref__,'          # implementation detail
-        '__module__,'           # implementation detail
-        '_abc_impl,'            # implementation detail of abstract classes
-        '__init__,'             # repeated in class docstring by "autoclass_content=both"
-        '__annotations__,'      # redundant with signature documentation
-        '__dataclass_fields__,' # dataclass automatic attribute, redundant
+        '__dict__,' # may be verbose
+        '__slots__,'
+        '__weakref__,'
+        '__module__,'
+        '_abc_impl,'
+        '__init__,' # redundant with class docstring by "autoclass_content=both"
+        '__annotations__,' # redundant with signature documentation
+        '__dataclass_fields__,' # redundant automatic attribute
     )
 }
 autodoc_typehints = 'description'
