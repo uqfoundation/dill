@@ -11,7 +11,7 @@ logger module
 -------------
 
 .. automodule:: dill.logger
-..  :exclude-members: +
+    :exclude-members: +trace
 
 objtypes module
 ---------------

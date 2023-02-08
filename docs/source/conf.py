@@ -73,15 +73,15 @@ autodoc_default_options = {
     'special-members': True,
     'show-inheritance': True,
     'imported-members': True,
-    'exclude-members': (
-        '__dict__,'
+    'exclude-members': ( #NOTE: this is a single string concatenation
+        '__dict__,' # may be verbose
         '__slots__,'
         '__weakref__,'
         '__module__,'
         '_abc_impl,'
-        '__init__,'
-        '__annotations__,'
-        '__dataclass_fields__,'
+        '__init__,' # redundant with class docstring by "autoclass_content=both"
+        '__annotations__,' # redundant with signature documentation
+        '__dataclass_fields__,' # redundant automatic attribute
     )
 }
 autodoc_typehints = 'description'
