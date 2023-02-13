@@ -2,7 +2,7 @@
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
 # Copyright (c) 2008-2016 California Institute of Technology.
-# Copyright (c) 2016-2022 The Uncertainty Quantification Foundation.
+# Copyright (c) 2016-2023 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
@@ -145,8 +145,8 @@ def test_dtype():
         import numpy as np
 
         dti = np.dtype('int')
-        assert np.dtype == dill.loads(dill.dumps(np.dtype))
-        assert dti == dill.loads(dill.dumps(dti))
+        assert np.dtype == dill.copy(np.dtype)
+        assert dti == dill.copy(dti)
     except ImportError: pass
 
 
@@ -156,8 +156,7 @@ def test_array_nested():
 
         x = np.array([1])
         y = (x,)
-        dill.dumps(x)
-        assert y == dill.loads(dill.dumps(y))
+        assert y == dill.copy(y)
 
     except ImportError: pass
 

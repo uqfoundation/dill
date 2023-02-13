@@ -4,11 +4,7 @@ dill package documentation
 ==========================
 
 .. automodule:: dill
-    :members:
-    :undoc-members:
-    :private-members:
-    :special-members:
-    :show-inheritance:
+..  :exclude-members: +
 
 .. toctree::
     :maxdepth: 2
