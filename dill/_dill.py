@@ -1784,7 +1784,7 @@ def save_type(pickler, obj, postproc_list=None):
         logger.trace(pickler, "# T6")
         return
 
-    # special cases: NoneType, NotImplementedType, EllipsisType
+    # special cases: NoneType, NotImplementedType, EllipsisType, EnumMeta
     elif obj is type(None):
         logger.trace(pickler, "T7: %s", obj)
         #XXX: pickler.save_reduce(type, (None,), obj=obj)
@@ -1797,6 +1797,10 @@ def save_type(pickler, obj, postproc_list=None):
     elif obj is EllipsisType:
         logger.trace(pickler, "T7: %s", obj)
         pickler.save_reduce(type, (Ellipsis,), obj=obj)
+        logger.trace(pickler, "# T7")
+    elif obj is EnumMeta:
+        logger.trace(pickler, "T7: %s", obj)
+        pickler.write(GLOBAL + b'enum\nEnumMeta\n')
         logger.trace(pickler, "# T7")
 
     else:
@@ -1815,7 +1819,7 @@ def save_type(pickler, obj, postproc_list=None):
             slots = _dict.get('__slots__', ())
             if type(slots) == str:
                 # __slots__ accepts a single string
-                slots = (slots,) 
+                slots = (slots,)
             for name in slots:
                 _dict.pop(name, None)
 
@@ -1824,7 +1828,7 @@ def save_type(pickler, obj, postproc_list=None):
                 _dict, attrs = _get_typedict_abc(obj, _dict, attrs, postproc_list)
                 logger.trace(pickler, "# ABC")
 
-            if EnumMeta and isinstance(obj, EnumMeta):
+            if isinstance(obj, EnumMeta):
                 logger.trace(pickler, "E: %s", obj)
                 _dict, attrs = _get_typedict_enum(obj, _dict, attrs, postproc_list)
                 logger.trace(pickler, "# E")
@@ -1843,7 +1847,7 @@ def save_type(pickler, obj, postproc_list=None):
                 _save_with_postproc(pickler, (_create_type, (
                     type(obj), obj.__name__, obj.__bases__, _dict
                 )), obj=obj, postproc_list=postproc_list)
-            else: 
+            else:
                 # This case will always work, but might be overkill.
                 from types import new_class
                 _metadict = {
