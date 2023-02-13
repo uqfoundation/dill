@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
-# Author: Anirudh Vegesana (avegesan@stanford.edu)
+# Author: Anirudh Vegesana (avegesan@cs.stanford.edu)
 # Copyright (c) 2021-2022 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
@@ -49,7 +49,8 @@ See this PR for the discussion that lead to this system:
 https://github.com/uqfoundation/dill/pull/443
 """
 
-import inspect, sys
+import inspect
+import sys
 
 _dill = sys.modules['dill._dill']
 
@@ -150,117 +151,43 @@ def move_to(module, name=None):
         return func
     return decorator
 
+def register_shim(name, default):
+    """
+    A easier to understand and more compact way of "softly" defining a function.
+    These two pieces of code are equivalent:
+
+    if _dill.OLD3X:
+        def _create_class():
+            ...
+    _create_class = register_shim('_create_class', types.new_class)
+
+    if _dill.OLD3X:
+        @move_to(_dill)
+        def _create_class():
+            ...
+    _create_class = Getattr(_dill, '_create_class', types.new_class)
+
+    Intuitively, it creates a function or object in the versions of dill/python
+    that require special reimplementations, and use a core library or default
+    implementation if that function or object does not exist.
+    """
+    func = globals().get(name)
+    if func is not None:
+        _dill.__dict__[name] = func
+        func.__module__ = _dill.__name__
+
+    if default is Getattr.NO_DEFAULT:
+        reduction = (getattr, (_dill, name))
+    else:
+        reduction = (getattr, (_dill, name, default))
+
+    return Reduce(*reduction, is_callable=callable(default))
+
 ######################
 ## Compatibility Shims are defined below
 ######################
 
-_CELL_EMPTY = Getattr(_dill, '_CELL_EMPTY', None)
+_CELL_EMPTY = register_shim('_CELL_EMPTY', None)
 
-if _dill.OLD37:
-    if _dill.HAS_CTYPES and hasattr(_dill.ctypes, 'pythonapi') and hasattr(_dill.ctypes.pythonapi, 'PyCell_Set'):
-        # CPython
-        ctypes = _dill.ctypes
-
-        _PyCell_Set = ctypes.pythonapi.PyCell_Set
-
-        @move_to(_dill)
-        def _setattr(object, name, value):
-            if type(object) is _dill.CellType and name == 'cell_contents':
-                _PyCell_Set.argtypes = (ctypes.py_object, ctypes.py_object)
-                _PyCell_Set(object, value)
-            else:
-                setattr(object, name, value)
-
-        @move_to(_dill)
-        def _delattr(object, name):
-            if type(object) is _dill.CellType and name == 'cell_contents':
-                _PyCell_Set.argtypes = (ctypes.py_object, ctypes.c_void_p)
-                _PyCell_Set(object, None)
-            else:
-                delattr(object, name)
-
-    # General Python (not CPython) up to 3.6 is in a weird case, where it is
-    # possible to pickle recursive cells, but we can't assign directly to the
-    # cell.
-    elif _dill.PY3:
-        # Use nonlocal variables to reassign the cell value.
-        # https://stackoverflow.com/a/59276835
-        __nonlocal = ('nonlocal cell',)
-        exec('''def _setattr(cell, name, value):
-            if type(cell) is _dill.CellType and name == 'cell_contents':
-                def cell_setter(value):
-                    %s
-                    cell = value # pylint: disable=unused-variable
-                func = _dill.FunctionType(cell_setter.__code__, globals(), "", None, (cell,)) # same as cell_setter, but with cell being the cell's contents
-                func(value)
-            else:
-                setattr(cell, name, value)''' % __nonlocal)
-        move_to(_dill)(_setattr)
-
-        exec('''def _delattr(cell, name):
-            if type(cell) is _dill.CellType and name == 'cell_contents':
-                try:
-                    cell.cell_contents
-                except:
-                    return
-                def cell_deleter():
-                    %s
-                    del cell # pylint: disable=unused-variable
-                func = _dill.FunctionType(cell_deleter.__code__, globals(), "", None, (cell,)) # same as cell_deleter, but with cell being the cell's contents
-                func()
-            else:
-                delattr(cell, name)''' % __nonlocal)
-        move_to(_dill)(_delattr)
-
-    else:
-        # Likely PyPy 2.7. Simulate the nonlocal keyword with bytecode
-        # manipulation.
-
-        # The following function is based on 'cell_set' from 'cloudpickle'
-        # https://github.com/cloudpipe/cloudpickle/blob/5d89947288a18029672596a4d719093cc6d5a412/cloudpickle/cloudpickle.py#L393-L482
-        # Copyright (c) 2012, Regents of the University of California.
-        # Copyright (c) 2009 `PiCloud, Inc. <http://www.picloud.com>`_.
-        # License: https://github.com/cloudpipe/cloudpickle/blob/master/LICENSE
-        @move_to(_dill)
-        def _setattr(cell, name, value):
-            if type(cell) is _dill.CellType and name == 'cell_contents':
-                _cell_set = _dill.FunctionType(
-                      _cell_set_template_code, {}, '_cell_set', (), (cell,),)
-                _cell_set(value)
-            else:
-                setattr(cell, name, value)
-
-        def _cell_set_factory(value):
-            lambda: cell
-            cell = value
-
-        co = _cell_set_factory.__code__
-
-        _cell_set_template_code = _dill.CodeType(
-            co.co_argcount,
-            co.co_nlocals,
-            co.co_stacksize,
-            co.co_flags,
-            co.co_code,
-            co.co_consts,
-            co.co_names,
-            co.co_varnames,
-            co.co_filename,
-            co.co_name,
-            co.co_firstlineno,
-            co.co_lnotab,
-            co.co_cellvars,  # co_freevars is initialized with co_cellvars
-            (),  # co_cellvars is made empty
-        )
-
-        del co
-
-        @move_to(_dill)
-        def _delattr(cell, name):
-            if type(cell) is _dill.CellType and name == 'cell_contents':
-                pass
-            else:
-                delattr(cell, name)
-
-_setattr = Getattr(_dill, '_setattr', setattr)
-_delattr = Getattr(_dill, '_delattr', delattr)
+_setattr = register_shim('_setattr', setattr)
+_delattr = register_shim('_delattr', delattr)

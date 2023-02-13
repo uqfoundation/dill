@@ -6,52 +6,45 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
-# get version numbers, license, and long description
-try:
-    from .info import this_version as __version__
-    from .info import readme as __doc__, license as __license__
-except ImportError:
-    msg = """First run 'python setup.py build' to build dill."""
-    raise ImportError(msg)
+# author, version, license, and long description
+try: # the package is installed
+    from .__info__ import __version__, __author__, __doc__, __license__
+except: # pragma: no cover
+    import os
+    import sys 
+    parent = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
+    sys.path.append(parent)
+    # get distribution meta info 
+    from version import (__version__, __author__,
+                         get_license_text, get_readme_as_rst)
+    __license__ = get_license_text(os.path.join(parent, 'LICENSE'))
+    __license__ = "\n%s" % __license__
+    __doc__ = get_readme_as_rst(os.path.join(parent, 'README.md'))
+    del os, sys, parent, get_license_text, get_readme_as_rst
 
-__author__ = 'Mike McKerns'
 
-__doc__ = """
-""" + __doc__
-
-__license__ = """
-""" + __license__
-
-from ._dill import dump, dumps, load, loads, dump_session, load_session, \
-    Pickler, Unpickler, register, copy, pickle, pickles, check, \
-    HIGHEST_PROTOCOL, DEFAULT_PROTOCOL, PicklingError, UnpicklingError, \
-    HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE, PickleError, PickleWarning, \
-    PicklingWarning, UnpicklingWarning
-from . import source, temp, detect
+from ._dill import (
+    Pickler, Unpickler,
+    check, copy, dump, dumps, load, loads, pickle, pickles, register,
+    DEFAULT_PROTOCOL, HIGHEST_PROTOCOL, CONTENTS_FMODE, FILE_FMODE, HANDLE_FMODE,
+    PickleError, PickleWarning, PicklingError, PicklingWarning, UnpicklingError,
+    UnpicklingWarning,
+)
+from .session import (
+    dump_module, load_module, load_module_asdict,
+    dump_session, load_session # backward compatibility
+)
+from . import detect, logger, session, source, temp
 
 # get global settings
 from .settings import settings
 
 # make sure "trace" is turned off
-detect.trace(False)
+logger.trace(False)
 
-try:
-    from importlib import reload
-except ImportError:
-    try:
-        from imp import reload
-    except ImportError:
-        pass
+from importlib import reload
 
-# put the objects in order, if possible
-try:
-    from collections import OrderedDict as odict
-except ImportError:
-    try:
-        from ordereddict import OrderedDict as odict
-    except ImportError:
-        odict = dict
-objects = odict()
+objects = {}
 # local import of dill._objects
 #from . import _objects
 #objects.update(_objects.succeeds)
@@ -113,6 +106,7 @@ def extend(use_dill=True):
 
 extend()
 
+
 def license():
     """print license"""
     print (__license__)
@@ -122,7 +116,5 @@ def citation():
     """print citation"""
     print (__doc__[-491:-118])
     return
-
-del odict
 
 # end of file
