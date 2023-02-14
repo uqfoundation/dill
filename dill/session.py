@@ -3,7 +3,7 @@
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
 # Author: Leonardo Gama (@leogama)
 # Copyright (c) 2008-2015 California Institute of Technology.
-# Copyright (c) 2016-2022 The Uncertainty Quantification Foundation.
+# Copyright (c) 2016-2023 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 """
@@ -16,6 +16,7 @@ __all__ = [
 ]
 
 import re
+import os
 import sys
 import warnings
 
@@ -128,8 +129,8 @@ def _restore_modules(unpickler, main_module):
 
 #NOTE: 06/03/15 renamed main_module to main
 def dump_module(
-    filename = str(TEMPDIR/'session.pkl'),
-    module: Union[ModuleType, str] = None,
+    filename: Union[str, os.PathLike] = None,
+    module: Optional[Union[ModuleType, str]] = None,
     refimported: bool = False,
     **kwds
 ) -> None:
@@ -141,7 +142,8 @@ def dump_module(
     module can then be restored with the function :py:func:`load_module`.
 
     Parameters:
-        filename: a path-like object or a writable stream.
+        filename: a path-like object or a writable stream. If `None`
+            (the default), write to a named file in a temporary directory.
         module: a module object or the name of an importable module. If `None`
             (the default), :py:mod:`__main__` is saved.
         refimported: if `True`, all objects identified as having been imported
@@ -192,13 +194,29 @@ def dump_module(
           >>> [foo.sin(x) for x in foo.values]
           [0.8414709848078965, 0.9092974268256817, 0.1411200080598672]
 
+        - Use `refimported` to save imported objects by reference:
+
+          >>> import dill
+          >>> from html.entities import html5
+          >>> type(html5), len(html5)
+          (dict, 2231)
+          >>> import io
+          >>> buf = io.BytesIO()
+          >>> dill.dump_module(buf) # saves __main__, with html5 saved by value
+          >>> len(buf.getvalue()) # pickle size in bytes
+          71665
+          >>> buf = io.BytesIO()
+          >>> dill.dump_module(buf, refimported=True) # html5 saved by reference
+          >>> len(buf.getvalue())
+          438
+
     *Changed in version 0.3.6:* Function ``dump_session()`` was renamed to
     ``dump_module()``.  Parameters ``main`` and ``byref`` were renamed to
     ``module`` and ``refimported``, respectively.
 
     Note:
         Currently, ``dill.settings['byref']`` and ``dill.settings['recurse']``
-        don't apply to this function.`
+        don't apply to this function.
     """
     for old_par, par in [('main', 'module'), ('byref', 'refimported')]:
         if old_par in kwds:
@@ -223,6 +241,8 @@ def dump_module(
     if hasattr(filename, 'write'):
         file = filename
     else:
+        if filename is None:
+            filename = str(TEMPDIR/'session.pkl')
         file = open(filename, 'wb')
     original_main = main
     if refimported:
@@ -243,7 +263,7 @@ def dump_module(
     return
 
 # Backward compatibility.
-def dump_session(filename=str(TEMPDIR/'session.pkl'), main=None, byref=False, **kwds):
+def dump_session(filename=None, main=None, byref=False, **kwds):
     warnings.warn("dump_session() has been renamed dump_module()", PendingDeprecationWarning)
     dump_module(filename, module=main, refimported=byref, **kwds)
 dump_session.__doc__ = dump_module.__doc__
@@ -308,8 +328,8 @@ def _identify_module(file, main=None):
         raise UnpicklingError("unable to identify main module") from error
 
 def load_module(
-    filename = str(TEMPDIR/'session.pkl'),
-    module: Union[ModuleType, str] = None,
+    filename: Union[str, os.PathLike] = None,
+    module: Optional[Union[ModuleType, str]] = None,
     **kwds
 ) -> Optional[ModuleType]:
     """Update the selected module (default is :py:mod:`__main__`) with
@@ -326,7 +346,8 @@ def load_module(
     and returned.
 
     Parameters:
-        filename: a path-like object or a readable stream.
+        filename: a path-like object or a readable stream. If `None`
+            (the default), read from a named file in a temporary directory.
         module: a module object or the name of an importable module;
             the module name and kind (i.e. imported or non-imported) must
             match the name and kind of the module stored at ``filename``.
@@ -420,6 +441,8 @@ def load_module(
     if hasattr(filename, 'read'):
         file = filename
     else:
+        if filename is None:
+            filename = str(TEMPDIR/'session.pkl')
         file = open(filename, 'rb')
     try:
         file = _make_peekable(file)
@@ -485,13 +508,13 @@ def load_module(
         return main
 
 # Backward compatibility.
-def load_session(filename=str(TEMPDIR/'session.pkl'), main=None, **kwds):
+def load_session(filename=None, main=None, **kwds):
     warnings.warn("load_session() has been renamed load_module().", PendingDeprecationWarning)
     load_module(filename, module=main, **kwds)
 load_session.__doc__ = load_module.__doc__
 
 def load_module_asdict(
-    filename = str(TEMPDIR/'session.pkl'),
+    filename: Union[str, os.PathLike] = None,
     update: bool = False,
     **kwds
 ) -> dict:
@@ -506,7 +529,8 @@ def load_module_asdict(
     the loaded module is stored in the ``__session__`` attribute.
 
     Parameters:
-        filename: a path-like object or a readable stream
+        filename: a path-like object or a readable stream. If `None`
+            (the default), read from a named file in a temporary directory.
         update: if `True`, initialize the dictionary with the current state
             of the module prior to loading the state stored at filename.
         **kwds: extra keyword arguments passed to :py:class:`Unpickler()`
@@ -550,6 +574,8 @@ def load_module_asdict(
     if hasattr(filename, 'read'):
         file = filename
     else:
+        if filename is None:
+            filename = str(TEMPDIR/'session.pkl')
         file = open(filename, 'rb')
     try:
         file = _make_peekable(file)

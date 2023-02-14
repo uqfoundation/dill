@@ -2,7 +2,7 @@
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
 # Copyright (c) 2008-2016 California Institute of Technology.
-# Copyright (c) 2016-2022 The Uncertainty Quantification Foundation.
+# Copyright (c) 2016-2023 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
@@ -11,10 +11,10 @@ try: # the package is installed
     from .__info__ import __version__, __author__, __doc__, __license__
 except: # pragma: no cover
     import os
-    import sys 
+    import sys
     parent = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
     sys.path.append(parent)
-    # get distribution meta info 
+    # get distribution meta info
     from version import (__version__, __author__,
                          get_license_text, get_readme_as_rst)
     __license__ = get_license_text(os.path.join(parent, 'LICENSE'))
@@ -24,9 +24,9 @@ except: # pragma: no cover
 
 
 from ._dill import (
-    Pickler, Unpickler,
-    check, copy, dump, dumps, load, loads, pickle, pickles, register,
-    DEFAULT_PROTOCOL, HIGHEST_PROTOCOL, CONTENTS_FMODE, FILE_FMODE, HANDLE_FMODE,
+    dump, dumps, load, loads, copy,
+    Pickler, Unpickler, register, pickle, pickles, check,
+    DEFAULT_PROTOCOL, HIGHEST_PROTOCOL, HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE,
     PickleError, PickleWarning, PicklingError, PicklingWarning, UnpicklingError,
     UnpicklingWarning,
 )
@@ -41,8 +41,6 @@ from .settings import settings
 
 # make sure "trace" is turned off
 logger.trace(False)
-
-from importlib import reload
 
 objects = {}
 # local import of dill._objects
@@ -68,6 +66,7 @@ def load_types(pickleable=True, unpickleable=True):
     Returns:
         None
     """
+    from importlib import reload
     # local import of dill.objects
     from . import _objects
     if pickleable:

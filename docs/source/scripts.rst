@@ -5,10 +5,10 @@ get_objgraph script
 -------------------
 
 .. automodule:: _get_objgraph
-    :members:
+..  :exclude-members: +
 
 undill script
 --------------------
 
 .. automodule:: _undill
-    :members:
+..  :exclude-members: +
