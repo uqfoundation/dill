@@ -2,7 +2,7 @@
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
 # Copyright (c) 2008-2016 California Institute of Technology.
-# Copyright (c) 2016-2022 The Uncertainty Quantification Foundation.
+# Copyright (c) 2016-2023 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
@@ -46,7 +46,7 @@ setup_kwds = dict(
     author_email = AUTHOR_EMAIL,
     maintainer = __author__,
     maintainer_email = AUTHOR_EMAIL,
-    license = '3-clause BSD',
+    license = 'BSD-3-Clause',
     platforms = ['Linux', 'Windows', 'Mac'],
     url = 'https://github.com/uqfoundation/dill',
     download_url = 'https://pypi.org/project/dill/#files',
@@ -66,6 +66,7 @@ setup_kwds = dict(
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy',
         'Topic :: Scientific/Engineering',
@@ -73,7 +74,7 @@ setup_kwds = dict(
     ],
     packages = ['dill','dill.tests'],
     package_dir = {'dill':'dill', 'dill.tests':'dill/tests'},
-    scripts=['scripts/undill','scripts/get_objgraph'],
+    scripts=['scripts/undill','scripts/get_objgraph','scripts/get_gprof'],
 )
 
 # force python-, abi-, and platform-specific naming of bdist_wheel

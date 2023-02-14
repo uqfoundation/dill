@@ -2,7 +2,7 @@
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
 # Copyright (c) 2008-2016 California Institute of Technology.
-# Copyright (c) 2016-2022 The Uncertainty Quantification Foundation.
+# Copyright (c) 2016-2023 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
@@ -14,15 +14,7 @@ class _class:
     def _method(self):
         pass
 
-class _class2:
-    def __call__(self):
-        pass
-
-class _newclass(object):
-    def _method(self):
-        pass
-
-class _newclass2(object):
+class _callable_class:
     def __call__(self):
         pass
 
@@ -32,42 +24,33 @@ def _function():
 
 def test_weakref():
     o = _class()
-    oc = _class2()
-    n = _newclass()
-    nc = _newclass2()
+    oc = _callable_class()
     f = _function
-    z = _class
-    x = _newclass
+    x = _class
 
+    # ReferenceType
     r = weakref.ref(o)
-    dr = weakref.ref(_class())
-    p = weakref.proxy(o)
-    dp = weakref.proxy(_class())
-    c = weakref.proxy(oc)
-    dc = weakref.proxy(_class2())
-
-    m = weakref.ref(n)
-    dm = weakref.ref(_newclass())
-    t = weakref.proxy(n)
-    dt = weakref.proxy(_newclass())
-    d = weakref.proxy(nc)
-    dd = weakref.proxy(_newclass2())
-
+    d_r = weakref.ref(_class())
     fr = weakref.ref(f)
-    fp = weakref.proxy(f)
-    #zr = weakref.ref(z) #XXX: weakrefs not allowed for classobj objects
-    #zp = weakref.proxy(z) #XXX: weakrefs not allowed for classobj objects
     xr = weakref.ref(x)
+
+    # ProxyType
+    p = weakref.proxy(o)
+    d_p = weakref.proxy(_class())
+
+    # CallableProxyType
+    cp = weakref.proxy(oc)
+    d_cp = weakref.proxy(_callable_class())
+    fp = weakref.proxy(f)
     xp = weakref.proxy(x)
 
-    objlist = [r,dr,m,dm,fr,xr, p,dp,t,dt, c,dc,d,dd, fp,xp]
+    objlist = [r,d_r,fr,xr, p,d_p, cp,d_cp,fp,xp]
     #dill.detect.trace(True)
 
     for obj in objlist:
       res = dill.detect.errors(obj)
       if res:
-        print ("%s" % res)
-       #print ("%s:\n  %s" % (obj, res))
+        print ("%r:\n  %s" % (obj, res))
     # else:
     #   print ("PASS: %s" % obj)
       assert not res

@@ -2,7 +2,7 @@
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
 # Copyright (c) 2008-2016 California Institute of Technology.
-# Copyright (c) 2016-2022 The Uncertainty Quantification Foundation.
+# Copyright (c) 2016-2023 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 """
@@ -188,10 +188,8 @@ if HAS_CTYPES:
     z['CFloatType'] = ctypes.c_float()
     z['CDoubleType'] = ctypes.c_double()
     z['CSizeTType'] = ctypes.c_size_t()
-    z = (sys.platform[:3] == 'win' or sys.platform[:6] == 'darwin') # non-'nux
-    z = a if (sys.hexversion >= 0x30b00b3 and not z) else x
-    z['CLibraryLoaderType'] = ctypes.cdll
     del z
+    a['CLibraryLoaderType'] = ctypes.cdll
     a['StructureType'] = _Struct
     # if not IS_PYPY:
     #     a['BigEndianStructureType'] = ctypes.BigEndianStructure()
