@@ -1854,7 +1854,7 @@ def save_function(pickler, obj):
             # the duplication of the dictionary. Pickle the unpopulated
             # globals dictionary and set the remaining items after the function
             # is created to correctly handle recursion.
-            if _globals_cache is not None:
+            if _globals_cache is not None and obj.__globals__ is not None:
                 if id(obj.__globals__) not in _globals_cache:
                     globs = {'__name__': obj.__module__}
                     _globals_cache[id(obj.__globals__)] = globs
@@ -1863,16 +1863,17 @@ def save_function(pickler, obj):
             else:
                 globs = {'__name__': obj.__module__}
 
-            # In the case that the globals are copied, we need to ensure that
-            # the globals dictionary is updated when all objects in the
-            # dictionary are already created.
-            glob_ids = {id(g) for g in globs_copy.values()}
-            for stack_element in _postproc:
-                if stack_element in glob_ids:
-                    _postproc[stack_element].append((_setitems, (globs, globs_copy)))
-                    break
-            else:
-                postproc_list.append((_setitems, (globs, globs_copy)))
+            if globs_copy is not None and globs is not globs_copy:
+                # In the case that the globals are copied, we need to ensure that
+                # the globals dictionary is updated when all objects in the
+                # dictionary are already created.
+                glob_ids = {id(g) for g in globs_copy.values()}
+                for stack_element in _postproc:
+                    if stack_element in glob_ids:
+                        _postproc[stack_element].append((_setitems, (globs, globs_copy)))
+                        break
+                else:
+                    postproc_list.append((_setitems, (globs, globs_copy)))
 
         closure = obj.__closure__
         state_dict = {}
