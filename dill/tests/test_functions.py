@@ -134,27 +134,27 @@ def test_code_object():
 
 
 def test_shared_globals():
-	import dill, _globals_dummy as f, sys
+	import dill, test_functors as f, sys
 
 	for recurse in False, True:
 		g, h = dill.copy((f.g, f.h), recurse=recurse)
 		assert f.g.__globals__ is f.h.__globals__
 		assert g.__globals__ is h.__globals__
 		assert f.g.__globals__ is g.__globals__
-		assert g() == h() == 3
-		
-		del sys.modules['_globals_dummy']
+		assert g(1, 2) == h() == 3
+
+		del sys.modules['test_functors']
 
 		g, h = dill.copy((f.g, f.h), recurse=recurse)
 		assert f.g.__globals__ is f.h.__globals__
 		assert g.__globals__ is h.__globals__
 		assert f.g.__globals__ is not g.__globals__
-		assert g() == h() == 3
+		assert g(1, 2) == h() == 3
 		g1, g, g2 = dill.copy((f.__dict__, f.g, f.g.__globals__), recurse=recurse)
 		assert g1 is g.__globals__
 		assert g1 is g2
-		
-		sys.modules['_globals_dummy'] = f
+
+		sys.modules['test_functors'] = f
 
 
 if __name__ == '__main__':
