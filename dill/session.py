@@ -141,7 +141,7 @@ def dump_module(
     built with :py:class:`~types.ModuleType`), to a file. The pickled
     module can then be restored with the function :py:func:`load_module`.
 
-    Parameters:
+    Args:
         filename: a path-like object or a writable stream. If `None`
             (the default), write to a named file in a temporary directory.
         module: a module object or the name of an importable module. If `None`
@@ -344,7 +344,7 @@ def load_module(
     Otherwise, a new instance is created with :py:class:`~types.ModuleType`
     and returned.
 
-    Parameters:
+    Args:
         filename: a path-like object or a readable stream. If `None`
             (the default), read from a named file in a temporary directory.
         module: a module object or the name of an importable module;
@@ -527,7 +527,7 @@ def load_module_asdict(
     however, does not alter the original module. Also, the path of
     the loaded module is stored in the ``__session__`` attribute.
 
-    Parameters:
+    Args:
         filename: a path-like object or a readable stream. If `None`
             (the default), read from a named file in a temporary directory.
         update: if `True`, initialize the dictionary with the current state
