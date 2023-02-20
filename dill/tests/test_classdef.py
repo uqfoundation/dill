@@ -54,6 +54,14 @@ n = _newclass()
 nc = _newclass2()
 m = _mclass()
 
+if sys.hexversion < 0x03090000:
+    import typing
+    class customIntList(typing.List[int]):
+        pass
+else:
+    class customIntList(list[int]):
+        pass
+
 # test pickles for class instances
 def test_class_instances():
     assert dill.pickles(o)
@@ -111,7 +119,7 @@ def test_namedtuple():
     assert tuple(Badi) == tuple(dill.loads(dill.dumps(Badi)))
 
     class A:
-        class B(namedtuple("B", ["one", "two"])):
+        class B(namedtuple("C", ["one", "two"])):
             '''docstring'''
         B.__module__ = 'testing'
 
@@ -122,6 +130,15 @@ def test_namedtuple():
     assert dill.copy(A.B).__qualname__.endswith('.<locals>.A.B')
     assert dill.copy(A.B).__doc__ == 'docstring'
     assert dill.copy(A.B).__module__ == 'testing'
+
+    from typing import NamedTuple
+
+    def A():
+        class B(NamedTuple):
+            x: int
+        return B
+
+    assert type(dill.copy(A()(8))).__qualname__ == type(A()(8)).__qualname__
 
 def test_dtype():
     try:
@@ -210,6 +227,9 @@ def test_slots():
     assert dill.pickles(Y.y)
     assert dill.copy(y).y == value
 
+def test_origbases():
+    assert dill.copy(customIntList).__orig_bases__ == customIntList.__orig_bases__
+
 def test_attr():
     import attr
     @attr.s
@@ -238,7 +258,6 @@ def test_metaclass():
 
     assert dill.copy(subclass_with_new())
 
-
 if __name__ == '__main__':
     test_class_instances()
     test_class_objects()
@@ -249,4 +268,5 @@ if __name__ == '__main__':
     test_array_subclass()
     test_method_decorator()
     test_slots()
+    test_origbases()
     test_metaclass()
