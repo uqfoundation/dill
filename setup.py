@@ -40,7 +40,7 @@ except ImportError:
 setup_kwds = dict(
     name='dill',
     version=__version__,
-    description='serialize all of python',
+    description='serialize all of Python',
     long_description = README.strip(),
     author = __author__,
     author_email = AUTHOR_EMAIL,

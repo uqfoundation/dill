@@ -1,16 +1,16 @@
 dill
 ====
-serialize all of python
+serialize all of Python
 
 About Dill
 ----------
-``dill`` extends python's ``pickle`` module for serializing and de-serializing
-python objects to the majority of the built-in python types. Serialization
+``dill`` extends Python's ``pickle`` module for serializing and de-serializing
+Python objects to the majority of the built-in Python types. Serialization
 is the process of converting an object to a byte stream, and the inverse
-of which is converting a byte stream back to a python object hierarchy.
+of which is converting a byte stream back to a Python object hierarchy.
 
 ``dill`` provides the user the same interface as the ``pickle`` module, and
-also includes some additional features. In addition to pickling python
+also includes some additional features. In addition to pickling Python
 objects, ``dill`` provides the ability to save the state of an interpreter
 session in a single command.  Hence, it would be feasible to save an
 interpreter session, close the interpreter, ship the pickled file to
@@ -18,15 +18,15 @@ another computer, open a new interpreter, unpickle the session and
 thus continue from the 'saved' state of the original interpreter
 session.
 
-``dill`` can be used to store python objects to a file, but the primary
-usage is to send python objects across the network as a byte stream.
+``dill`` can be used to store Python objects to a file, but the primary
+usage is to send Python objects across the network as a byte stream.
 ``dill`` is quite flexible, and allows arbitrary user defined classes
 and functions to be serialized.  Thus ``dill`` is not intended to be
 secure against erroneously or maliciously constructed data. It is
 left to the user to decide whether the data they unpickle is from
 a trustworthy source.
 
-``dill`` is part of ``pathos``, a python framework for heterogeneous computing.
+``dill`` is part of ``pathos``, a Python framework for heterogeneous computing.
 ``dill`` is in active development, so any user feedback, bug reports, comments,
 or suggestions are highly appreciated.  A list of issues is located at
 https://github.com/uqfoundation/dill/issues, with a legacy list maintained at
@@ -39,7 +39,7 @@ Major Features
 
 * none, type, bool, int, float, complex, bytes, str,
 * tuple, list, dict, file, buffer, builtin,
-* python classes, namedtuples, dataclasses, metaclasses,
+* Python classes, namedtuples, dataclasses, metaclasses,
 * instances of classes,
 * set, frozenset, array, functions, exceptions
 
@@ -56,7 +56,7 @@ Major Features
 
 ``dill`` also provides the capability to:
 
-* save and load python interpreter sessions
+* save and load Python interpreter sessions
 * save and extract the source code from functions and classes
 * interactively diagnose pickling errors
 
@@ -201,7 +201,7 @@ More Information
 ----------------
 Probably the best way to get started is to look at the documentation at
 http://dill.rtfd.io. Also see ``dill.tests`` for a set of scripts that
-demonstrate how ``dill`` can serialize different python objects. You can
+demonstrate how ``dill`` can serialize different Python objects. You can
 run the test suite with ``python -m dill.tests``. The contents of any
 pickle file can be examined with ``undill``.  As ``dill`` conforms to
 the ``pickle`` interface, the examples and documentation found at
