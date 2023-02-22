@@ -132,7 +132,20 @@ def test_code_object():
         except Exception as error:
             raise Exception("failed to construct code object with format version {}".format(version)) from error
 
+def test_unloaded_module():
+    # Function should be saved as global until module is *re*loaded.
+    from statistics import mean
+    pickle_loaded = dill.dumps(mean)
+    del sys.modules['statistics']
+    pickle_unloaded = dill.dumps(mean)
+    assert 'statistics' not in sys.modules
+    import statistics
+    pickle_reloaded = dill.dumps(mean)
+    assert pickle_unloaded == pickle_loaded
+    assert pickle_reloaded != pickle_loaded
+
 if __name__ == '__main__':
     test_functions()
     test_issue_510()
     test_code_object()
+    test_unloaded_module()
