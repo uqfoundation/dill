@@ -74,6 +74,7 @@ import gc
 import dataclasses
 from weakref import ReferenceType, ProxyType, CallableProxyType
 from collections import OrderedDict
+from enum import EnumMeta
 from functools import partial
 from operator import itemgetter, attrgetter
 GENERATOR_FAIL = False
@@ -1706,9 +1707,10 @@ def save_type(pickler, obj, postproc_list=None):
     else:
         obj_name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
         _byref = getattr(pickler, '_byref', None)
+        is_enum = isinstance(obj, EnumMeta)
         obj_recursive = id(obj) in getattr(pickler, '_postproc', ())
-        incorrectly_named = not _locate_function(obj, pickler)
-        if not _byref and not obj_recursive and incorrectly_named: # not a function, but the name was held over
+        incorrectly_named = not _locate_function(obj, pickler) # not a function, but the name was held over
+        if not _byref and not is_enum and not obj_recursive and incorrectly_named:
             # thanks to Tom Stepleton pointing out pickler._session unneeded
             logger.trace(pickler, "T2: %s", obj)
             _dict = obj.__dict__.copy() # convert dictproxy to dict
