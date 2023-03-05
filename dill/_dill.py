@@ -1746,7 +1746,6 @@ def save_type(pickler, obj, postproc_list=None):
         logger.trace(pickler, "# T7")
 
     else:
-        obj_name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
         _byref = getattr(pickler, '_byref', None)
         obj_recursive = id(obj) in getattr(pickler, '_postproc', ())
         incorrectly_named = not _locate_function(obj, pickler)
