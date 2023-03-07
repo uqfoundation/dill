@@ -50,7 +50,7 @@ OLD39 = (sys.hexversion < 0x3090000)
 OLD310 = (sys.hexversion < 0x30a0000)
 #XXX: get types from .objtypes ?
 import builtins as __builtin__
-from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
+from picklemagic import SafePickler as StockPickler, SafeUnpickler as StockUnpickler
 from pickle import GLOBAL, POP
 from _thread import LockType
 from _thread import RLock as RLockType
