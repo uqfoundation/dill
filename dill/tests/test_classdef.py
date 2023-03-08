@@ -7,6 +7,7 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 import dill
+from enum import EnumMeta
 import sys
 dill.settings['recurse'] = True
 
@@ -54,6 +55,14 @@ n = _newclass()
 nc = _newclass2()
 m = _mclass()
 
+if sys.hexversion < 0x03090000:
+    import typing
+    class customIntList(typing.List[int]):
+        pass
+else:
+    class customIntList(list[int]):
+        pass
+
 # test pickles for class instances
 def test_class_instances():
     assert dill.pickles(o)
@@ -89,6 +98,7 @@ def test_specialtypes():
     assert dill.pickles(type(None))
     assert dill.pickles(type(NotImplemented))
     assert dill.pickles(type(Ellipsis))
+    assert dill.pickles(type(EnumMeta))
 
 from collections import namedtuple
 Z = namedtuple("Z", ['a','b'])
@@ -99,6 +109,8 @@ X.__qualname__ = "X" #XXX: name must 'match' or fails to pickle
 Xi = X(0,1)
 Bad = namedtuple("FakeName", ['a','b'])
 Badi = Bad(0,1)
+Defaults = namedtuple('Defaults', ['x', 'y'], defaults=[1])
+Defaultsi = Defaults(2)
 
 # test namedtuple
 def test_namedtuple():
@@ -106,12 +118,14 @@ def test_namedtuple():
     assert Zi == dill.loads(dill.dumps(Zi))
     assert X is dill.loads(dill.dumps(X))
     assert Xi == dill.loads(dill.dumps(Xi))
+    assert Defaults is dill.loads(dill.dumps(Defaults))
+    assert Defaultsi == dill.loads(dill.dumps(Defaultsi))
     assert Bad is not dill.loads(dill.dumps(Bad))
     assert Bad._fields == dill.loads(dill.dumps(Bad))._fields
     assert tuple(Badi) == tuple(dill.loads(dill.dumps(Badi)))
 
     class A:
-        class B(namedtuple("B", ["one", "two"])):
+        class B(namedtuple("C", ["one", "two"])):
             '''docstring'''
         B.__module__ = 'testing'
 
@@ -122,6 +136,15 @@ def test_namedtuple():
     assert dill.copy(A.B).__qualname__.endswith('.<locals>.A.B')
     assert dill.copy(A.B).__doc__ == 'docstring'
     assert dill.copy(A.B).__module__ == 'testing'
+
+    from typing import NamedTuple
+
+    def A():
+        class B(NamedTuple):
+            x: int
+        return B
+
+    assert type(dill.copy(A()(8))).__qualname__ == type(A()(8)).__qualname__
 
 def test_dtype():
     try:
@@ -204,11 +227,20 @@ class Y(object):
 value = 123
 y = Y(value)
 
+class Y2(object):
+  __slots__ = 'y'
+  def __init__(self, y):
+    self.y = y
+
 def test_slots():
     assert dill.pickles(Y)
     assert dill.pickles(y)
     assert dill.pickles(Y.y)
     assert dill.copy(y).y == value
+    assert dill.copy(Y2(value)).y == value
+
+def test_origbases():
+    assert dill.copy(customIntList).__orig_bases__ == customIntList.__orig_bases__
 
 def test_attr():
     import attr
@@ -238,6 +270,11 @@ def test_metaclass():
 
     assert dill.copy(subclass_with_new())
 
+def test_enummeta():
+    from http import HTTPStatus
+    import enum
+    assert dill.copy(HTTPStatus.OK) is HTTPStatus.OK
+    assert dill.copy(enum.EnumMeta) is enum.EnumMeta
 
 if __name__ == '__main__':
     test_class_instances()
@@ -249,4 +286,6 @@ if __name__ == '__main__':
     test_array_subclass()
     test_method_decorator()
     test_slots()
+    test_origbases()
     test_metaclass()
+    test_enummeta()

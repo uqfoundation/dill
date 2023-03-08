@@ -65,15 +65,17 @@ NotImplementedType = type(NotImplemented)
 SliceType = slice
 TypeType = type # 'new-style' classes #XXX: unregistered
 XRangeType = range
-from types import MappingProxyType as DictProxyType
+from types import MappingProxyType as DictProxyType, new_class
 from pickle import DEFAULT_PROTOCOL, HIGHEST_PROTOCOL, PickleError, PicklingError, UnpicklingError
 import __main__ as _main_module
 import marshal
 import gc
 # import zlib
+import abc
 import dataclasses
 from weakref import ReferenceType, ProxyType, CallableProxyType
 from collections import OrderedDict
+from enum import Enum, EnumMeta
 from functools import partial
 from operator import itemgetter, attrgetter
 GENERATOR_FAIL = False
@@ -1669,6 +1671,35 @@ def save_module(pickler, obj):
             logger.trace(pickler, "# M2")
     return
 
+# The following function is based on '_extract_class_dict' from 'cloudpickle'
+# Copyright (c) 2012, Regents of the University of California.
+# Copyright (c) 2009 `PiCloud, Inc. <http://www.picloud.com>`_.
+# License: https://github.com/cloudpipe/cloudpickle/blob/master/LICENSE
+def _get_typedict_type(cls, clsdict, attrs, postproc_list):
+    """Retrieve a copy of the dict of a class without the inherited methods"""
+    if len(cls.__bases__) == 1:
+        inherited_dict = cls.__bases__[0].__dict__
+    else:
+        inherited_dict = {}
+        for base in reversed(cls.__bases__):
+            inherited_dict.update(base.__dict__)
+    to_remove = []
+    for name, value in dict.items(clsdict):
+        try:
+            base_value = inherited_dict[name]
+            if value is base_value:
+                to_remove.append(name)
+        except KeyError:
+            pass
+    for name in to_remove:
+        dict.pop(clsdict, name)
+
+    if issubclass(type(cls), type):
+        clsdict.pop('__dict__', None)
+        clsdict.pop('__weakref__', None)
+        # clsdict.pop('__prepare__', None)
+    return clsdict, attrs
+
 @register(TypeType)
 def save_type(pickler, obj, postproc_list=None):
     if obj in _typemap:
@@ -1680,15 +1711,22 @@ def save_type(pickler, obj, postproc_list=None):
     elif obj.__bases__ == (tuple,) and all([hasattr(obj, attr) for attr in ('_fields','_asdict','_make','_replace')]):
         # special case: namedtuples
         logger.trace(pickler, "T6: %s", obj)
+
+        obj_name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
+        if obj.__name__ != obj_name:
+            if postproc_list is None:
+                postproc_list = []
+            postproc_list.append((setattr, (obj, '__qualname__', obj_name)))
+
         if not obj._field_defaults:
-            pickler.save_reduce(_create_namedtuple, (obj.__name__, obj._fields, obj.__module__), obj=obj)
+            _save_with_postproc(pickler, (_create_namedtuple, (obj.__name__, obj._fields, obj.__module__)), obj=obj, postproc_list=postproc_list)
         else:
             defaults = [obj._field_defaults[field] for field in obj._fields if field in obj._field_defaults]
-            pickler.save_reduce(_create_namedtuple, (obj.__name__, obj._fields, obj.__module__, defaults), obj=obj)
+            _save_with_postproc(pickler, (_create_namedtuple, (obj.__name__, obj._fields, obj.__module__, defaults)), obj=obj, postproc_list=postproc_list)
         logger.trace(pickler, "# T6")
         return
 
-    # special cases: NoneType, NotImplementedType, EllipsisType
+    # special cases: NoneType, NotImplementedType, EllipsisType, EnumMeta
     elif obj is type(None):
         logger.trace(pickler, "T7: %s", obj)
         #XXX: pickler.save_reduce(type, (None,), obj=obj)
@@ -1702,35 +1740,63 @@ def save_type(pickler, obj, postproc_list=None):
         logger.trace(pickler, "T7: %s", obj)
         pickler.save_reduce(type, (Ellipsis,), obj=obj)
         logger.trace(pickler, "# T7")
+    elif obj is EnumMeta:
+        logger.trace(pickler, "T7: %s", obj)
+        pickler.write(GLOBAL + b'enum\nEnumMeta\n')
+        logger.trace(pickler, "# T7")
 
     else:
-        obj_name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
         _byref = getattr(pickler, '_byref', None)
         obj_recursive = id(obj) in getattr(pickler, '_postproc', ())
         incorrectly_named = not _locate_function(obj, pickler)
         if not _byref and not obj_recursive and incorrectly_named: # not a function, but the name was held over
+            if postproc_list is None:
+                postproc_list = []
+
             # thanks to Tom Stepleton pointing out pickler._session unneeded
             logger.trace(pickler, "T2: %s", obj)
-            _dict = obj.__dict__.copy() # convert dictproxy to dict
+            _dict, attrs = _get_typedict_type(obj, obj.__dict__.copy(), None, postproc_list) # copy dict proxy to a dict
+
            #print (_dict)
            #print ("%s\n%s" % (type(obj), obj.__name__))
            #print ("%s\n%s" % (obj.__bases__, obj.__dict__))
             slots = _dict.get('__slots__', ())
-            if type(slots) == str: slots = (slots,) # __slots__ accepts a single string
+            if type(slots) == str:
+                # __slots__ accepts a single string
+                slots = (slots,)
+
             for name in slots:
-                del _dict[name]
-            _dict.pop('__dict__', None)
-            _dict.pop('__weakref__', None)
-            _dict.pop('__prepare__', None)
-            if obj_name != obj.__name__:
-                if postproc_list is None:
-                    postproc_list = []
-                postproc_list.append((setattr, (obj, '__qualname__', obj_name)))
-            _save_with_postproc(pickler, (_create_type, (
-                type(obj), obj.__name__, obj.__bases__, _dict
-            )), obj=obj, postproc_list=postproc_list)
+                _dict.pop(name, None)
+
+            qualname = getattr(obj, '__qualname__', None)
+            if attrs is not None:
+                for k, v in attrs.items():
+                    postproc_list.append((setattr, (obj, k, v)))
+                # TODO: Consider using the state argument to save_reduce?
+            if qualname is not None:
+                postproc_list.append((setattr, (obj, '__qualname__', qualname)))
+
+            if not hasattr(obj, '__orig_bases__'):
+                _save_with_postproc(pickler, (_create_type, (
+                    type(obj), obj.__name__, obj.__bases__, _dict
+                )), obj=obj, postproc_list=postproc_list)
+            else:
+                # This case will always work, but might be overkill.
+                _metadict = {
+                    'metaclass': type(obj)
+                }
+
+                if _dict:
+                    _dict_update = PartialType(_setitems, source=_dict)
+                else:
+                    _dict_update = None
+
+                _save_with_postproc(pickler, (new_class, (
+                    obj.__name__, obj.__orig_bases__, _metadict, _dict_update
+                )), obj=obj, postproc_list=postproc_list)
             logger.trace(pickler, "# T2")
         else:
+            obj_name = getattr(obj, '__qualname__', getattr(obj, '__name__', None))
             logger.trace(pickler, "T4: %s", obj)
             if incorrectly_named:
                 warnings.warn(
@@ -1753,14 +1819,17 @@ def save_type(pickler, obj, postproc_list=None):
     return
 
 @register(property)
+@register(abc.abstractproperty)
 def save_property(pickler, obj):
     logger.trace(pickler, "Pr: %s", obj)
-    pickler.save_reduce(property, (obj.fget, obj.fset, obj.fdel, obj.__doc__),
+    pickler.save_reduce(type(obj), (obj.fget, obj.fset, obj.fdel, obj.__doc__),
                         obj=obj)
     logger.trace(pickler, "# Pr")
 
 @register(staticmethod)
 @register(classmethod)
+@register(abc.abstractstaticmethod)
+@register(abc.abstractclassmethod)
 def save_classmethod(pickler, obj):
     logger.trace(pickler, "Cm: %s", obj)
     orig_func = obj.__func__
