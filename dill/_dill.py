@@ -1700,6 +1700,27 @@ def _get_typedict_type(cls, clsdict, attrs, postproc_list):
         # clsdict.pop('__prepare__', None)
     return clsdict, attrs
 
+def _get_typedict_abc(obj, _dict, attrs, postproc_list):
+    if hasattr(abc, '_get_dump'):
+        (registry, _, _, _) = abc._get_dump(obj)
+        register = obj.register
+        postproc_list.extend((register, (reg(),)) for reg in registry)
+    elif hasattr(obj, '_abc_registry'):
+        registry = obj._abc_registry
+        register = obj.register
+        postproc_list.extend((register, (reg,)) for reg in registry)
+    else:
+        raise PicklingError("Cannot find registry of ABC %s", obj)
+
+    if '_abc_registry' in _dict:
+        del _dict['_abc_registry']
+        del _dict['_abc_cache']
+        del _dict['_abc_negative_cache']
+        # del _dict['_abc_negative_cache_version']
+    else:
+        del _dict['_abc_impl']
+    return _dict, attrs
+
 @register(TypeType)
 def save_type(pickler, obj, postproc_list=None):
     if obj in _typemap:
@@ -1767,6 +1788,11 @@ def save_type(pickler, obj, postproc_list=None):
 
             for name in slots:
                 _dict.pop(name, None)
+
+            if isinstance(obj, abc.ABCMeta):
+                logger.trace(pickler, "ABC: %s", obj)
+                _dict, attrs = _get_typedict_abc(obj, _dict, attrs, postproc_list)
+                logger.trace(pickler, "# ABC")
 
             qualname = getattr(obj, '__qualname__', None)
             if attrs is not None:
