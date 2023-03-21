@@ -40,6 +40,7 @@ __module__ = 'dill'
 import warnings
 from .logger import adapter as logger
 from .logger import trace as _trace
+log = logger # backward compatibility (see issue #582)
 
 import os
 import sys
