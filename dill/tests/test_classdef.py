@@ -6,6 +6,7 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
+import abc
 import dill
 from enum import EnumMeta
 import sys
@@ -276,6 +277,24 @@ def test_enummeta():
     assert dill.copy(HTTPStatus.OK) is HTTPStatus.OK
     assert dill.copy(enum.EnumMeta) is enum.EnumMeta
 
+def test_abc_data():
+    class MyMeta(metaclass=abc.ABCMeta):
+      _not_abc_impl = 1
+    # Make sure dill tries to serialise the class, not just pickle it by name.
+    # It needs to be in __main__ for dill to serialise it.
+    MyMeta.__module__ = '__main__'
+    class MyImpl:
+      pass
+    MyMeta.register(MyImpl)
+
+    assert isinstance (MyImpl(), MyMeta)
+    cls = dill.loads(dill.dumps(MyMeta))
+    # Dill doesn't serialise the ABC registry, although it's not clear if
+    # that's on purpose or not.
+    assert not isinstance (MyImpl(), cls)
+    cls.register(MyImpl)
+    assert isinstance (MyImpl(), cls)
+
 if __name__ == '__main__':
     test_class_instances()
     test_class_objects()
@@ -289,3 +308,4 @@ if __name__ == '__main__':
     test_origbases()
     test_metaclass()
     test_enummeta()
+    test_abc_data()

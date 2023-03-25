@@ -1768,6 +1768,8 @@ def save_type(pickler, obj, postproc_list=None):
 
             for name in slots:
                 _dict.pop(name, None)
+            if isinstance(obj, abc.ABCMeta) and '_abc_impl' in _dict:
+              del _dict['_abc_impl']
 
             qualname = getattr(obj, '__qualname__', None)
             if attrs is not None:
