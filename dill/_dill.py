@@ -1714,12 +1714,12 @@ def _get_typedict_abc(obj, _dict, attrs, postproc_list):
         raise PicklingError("Cannot find registry of ABC %s", obj)
 
     if '_abc_registry' in _dict:
-        del _dict['_abc_registry']
-        del _dict['_abc_cache']
-        del _dict['_abc_negative_cache']
-        # del _dict['_abc_negative_cache_version']
+        _dict.pop('_abc_registry', None)
+        _dict.pop('_abc_cache', None)
+        _dict.pop('_abc_negative_cache', None)
+        # _dict.pop('_abc_negative_cache_version', None)
     else:
-        del _dict['_abc_impl']
+        _dict.pop('_abc_impl', None)
     return _dict, attrs
 
 @register(TypeType)
