@@ -666,7 +666,7 @@ def _namespace(obj):
     return qual
 
 
-#NOTE: 05/25/14 broke backward compatability: added 'alias' as 3rd argument
+#NOTE: 05/25/14 broke backward compatibility: added 'alias' as 3rd argument
 def _getimport(head, tail, alias='', verify=True, builtin=False):
     """helper to build a likely import string from head and tail of namespace.
     ('head','tail') are used in the following context: "from head import tail"
@@ -714,7 +714,7 @@ def _getimport(head, tail, alias='', verify=True, builtin=False):
 
 
 #XXX: rename builtin to force? vice versa? verify to force? (as in getsource)
-#NOTE: 05/25/14 broke backward compatability: added 'alias' as 2nd argument
+#NOTE: 05/25/14 broke backward compatibility: added 'alias' as 2nd argument
 def getimport(obj, alias='', verify=True, builtin=False, enclosing=False):
     """get the likely import string for the given object
 
@@ -1001,7 +1001,7 @@ def importable(obj, alias='', source=None, builtin=True):
     return
 
 
-# backward compatability
+# backward compatibility
 def getimportable(obj, alias='', byname=True, explicit=False):
     return importable(obj,alias,source=(not byname),builtin=explicit)
    #return outdent(_importable(obj,alias,source=(not byname),builtin=explicit))

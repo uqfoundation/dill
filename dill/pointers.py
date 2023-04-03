@@ -115,7 +115,7 @@ def find_chain(obj, predicate, edge_func, max_depth=20, extra_ignore=()):
     return [obj] # not found
 
 
-# backward compatability
+# backward compatibility
 refobject = at
 
 
