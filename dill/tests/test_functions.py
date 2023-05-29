@@ -111,9 +111,12 @@ assert dill.loads(dumped_func_e)(1, 2, 3, e2=4) == 12
 assert dill.loads(dumped_func_e)(1, 2, 3, e2=4, e3=5) == 15''')
 
 def test_code_object():
+    import warnings
     from dill._dill import ALL_CODE_PARAMS, CODE_PARAMS, CODE_VERSION, _create_code
     code = function_c.__code__
+    warnings.filterwarnings('ignore', category=DeprecationWarning) # issue 597
     LNOTAB = getattr(code, 'co_lnotab', b'')
+    if warnings.filters: del warnings.filters[0]
     fields = {f: getattr(code, 'co_'+f) for f in CODE_PARAMS}
     fields.setdefault('posonlyargcount', 0)         # python >= 3.8
     fields.setdefault('lnotab', LNOTAB)             # python <= 3.9

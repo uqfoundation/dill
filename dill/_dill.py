@@ -49,6 +49,7 @@ _use_diff = False
 OLD38 = (sys.hexversion < 0x3080000)
 OLD39 = (sys.hexversion < 0x3090000)
 OLD310 = (sys.hexversion < 0x30a0000)
+OLD312a7 = (sys.hexversion < 0x30c00a7)
 #XXX: get types from .objtypes ?
 import builtins as __builtin__
 from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
@@ -989,7 +990,7 @@ def _create_capsule(pointer, name, context, destructor):
             return capsule
         raise UnpicklingError("%s object exists at %s but a PyCapsule object was expected." % (type(capsule), name))
     else:
-        warnings.warn('Creating a new PyCapsule %s for a C data structure that may not be present in memory. Segmentation faults or other memory errors are possible.' % (name,), UnpicklingWarning)
+        #warnings.warn('Creating a new PyCapsule %s for a C data structure that may not be present in memory. Segmentation faults or other memory errors are possible.' % (name,), UnpicklingWarning)
         capsule = _PyCapsule_New(pointer, name, destructor)
         _PyCapsule_SetContext(capsule, context)
         return capsule
@@ -1136,8 +1137,10 @@ def save_code(pickler, obj):
             obj.co_firstlineno, obj.co_linetable, obj.co_endlinetable,
             obj.co_columntable, obj.co_exceptiontable, obj.co_freevars,
             obj.co_cellvars
-    )
+        )
     elif hasattr(obj, "co_exceptiontable"): # python 3.11 (18 args)
+        if not OLD312a7: # issue 597
+            warnings.filterwarnings('ignore', category=DeprecationWarning)
         args = (
             obj.co_lnotab, # for < python 3.10 [not counted in args]
             obj.co_argcount, obj.co_posonlyargcount,
@@ -1146,7 +1149,9 @@ def save_code(pickler, obj):
             obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
             obj.co_firstlineno, obj.co_linetable, obj.co_exceptiontable,
             obj.co_freevars, obj.co_cellvars
-    )
+        )
+        if not OLD312a7 and warnings.filters:
+            del warnings.filters[0] #[::2] == ('ignore', DeprecationWarning, 0)
     elif hasattr(obj, "co_linetable"): # python 3.10 (16 args)
         args = (
             obj.co_lnotab, # for < python 3.10 [not counted in args]
@@ -1156,7 +1161,7 @@ def save_code(pickler, obj):
             obj.co_varnames, obj.co_filename, obj.co_name,
             obj.co_firstlineno, obj.co_linetable, obj.co_freevars,
             obj.co_cellvars
-    )
+        )
     elif hasattr(obj, "co_posonlyargcount"): # python 3.8 (16 args)
         args = (
             obj.co_argcount, obj.co_posonlyargcount,
@@ -1165,7 +1170,7 @@ def save_code(pickler, obj):
             obj.co_varnames, obj.co_filename, obj.co_name,
             obj.co_firstlineno, obj.co_lnotab, obj.co_freevars,
             obj.co_cellvars
-    )
+        )
     else: # python 3.7 (15 args)
         args = (
             obj.co_argcount, obj.co_kwonlyargcount, obj.co_nlocals,
@@ -1173,7 +1178,7 @@ def save_code(pickler, obj):
             obj.co_names, obj.co_varnames, obj.co_filename,
             obj.co_name, obj.co_firstlineno, obj.co_lnotab,
             obj.co_freevars, obj.co_cellvars
-    )
+        )
 
     pickler.save_reduce(_create_code, args, obj=obj)
     logger.trace(pickler, "# Co")
@@ -2023,7 +2028,7 @@ if HAS_CTYPES and hasattr(ctypes, 'pythonapi'):
     def save_capsule(pickler, obj):
         logger.trace(pickler, "Cap: %s", obj)
         name = _PyCapsule_GetName(obj)
-        warnings.warn('Pickling a PyCapsule (%s) does not pickle any C data structures and could cause segmentation faults or other memory errors when unpickling.' % (name,), PicklingWarning)
+        #warnings.warn('Pickling a PyCapsule (%s) does not pickle any C data structures and could cause segmentation faults or other memory errors when unpickling.' % (name,), PicklingWarning)
         pointer = _PyCapsule_GetPointer(obj, name)
         context = _PyCapsule_GetContext(obj)
         destructor = _PyCapsule_GetDestructor(obj)
@@ -2093,9 +2098,9 @@ def pickles(obj,exact=False,safe=False,**kwds):
             #FIXME: should be "(pik == obj).all()" for numpy comparison, though that'll fail if shapes differ
             result = bool(pik.all() == obj.all())
         except (AttributeError, TypeError):
-            warnings.filterwarnings('ignore')
+            warnings.filterwarnings('ignore') #FIXME: be specific
             result = pik == obj
-            warnings.resetwarnings()
+            if warnings.filters: del warnings.filters[0]
         if hasattr(result, 'toarray'): # for unusual types like sparse matrix
             result = result.toarray().all()
         if result: return True

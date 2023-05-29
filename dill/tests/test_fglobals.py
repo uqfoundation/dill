@@ -19,7 +19,7 @@ def get_fun_with_strftime():
 
 def get_fun_with_strftime2():
     import datetime
-    return datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    return datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 
 def test_doc_dill_issue_219():
