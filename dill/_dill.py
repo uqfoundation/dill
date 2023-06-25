@@ -1139,19 +1139,18 @@ def save_code(pickler, obj):
             obj.co_cellvars
         )
     elif hasattr(obj, "co_exceptiontable"): # python 3.11 (18 args)
-        if not OLD312a7: # issue 597
-            warnings.filterwarnings('ignore', category=DeprecationWarning)
-        args = (
-            obj.co_lnotab, # for < python 3.10 [not counted in args]
-            obj.co_argcount, obj.co_posonlyargcount,
-            obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
-            obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
-            obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
-            obj.co_firstlineno, obj.co_linetable, obj.co_exceptiontable,
-            obj.co_freevars, obj.co_cellvars
-        )
-        if not OLD312a7 and warnings.filters:
-            del warnings.filters[0] #[::2] == ('ignore', DeprecationWarning, 0)
+        with warnings.catch_warnings():
+            if not OLD312a7: # issue 597
+                warnings.filterwarnings('ignore', category=DeprecationWarning)
+            args = (
+                obj.co_lnotab, # for < python 3.10 [not counted in args]
+                obj.co_argcount, obj.co_posonlyargcount,
+                obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+                obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+                obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
+                obj.co_firstlineno, obj.co_linetable, obj.co_exceptiontable,
+                obj.co_freevars, obj.co_cellvars
+            )
     elif hasattr(obj, "co_linetable"): # python 3.10 (16 args)
         args = (
             obj.co_lnotab, # for < python 3.10 [not counted in args]
