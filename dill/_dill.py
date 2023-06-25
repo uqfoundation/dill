@@ -1611,6 +1611,7 @@ def save_weakproxy(pickler, obj):
 
 def _is_builtin_module(module):
     if not hasattr(module, "__file__"): return True
+    if module.__file__ is None: return False
     # If a module file name starts with prefix, it should be a builtin
     # module, so should always be pickled as a reference.
     names = ["base_prefix", "base_exec_prefix", "exec_prefix", "prefix", "real_prefix"]
