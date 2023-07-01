@@ -484,7 +484,8 @@ if HAS_CTYPES:
     z = a if IS_PYPY else x
     z['FieldType'] = _field = _Struct._field
     z['CFUNCTYPEType'] = _cfunc = ctypes.CFUNCTYPE(ctypes.c_char)
-    x['CFunctionType'] = _cfunc(str)
+    if sys.hexversion < 0x30c00b3:
+        x['CFunctionType'] = _cfunc(str)
     del z
 # numeric and mathematical types (CH 9)
 a['MethodCallerType'] = operator.methodcaller('mro') # 2.6
