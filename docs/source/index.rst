@@ -3,15 +3,16 @@
 dill package documentation
 ==========================
 
-.. automodule:: dill
-..  :exclude-members: +
-
 .. toctree::
+    :hidden:
     :maxdepth: 2
-    :caption: Contents:
 
+    self
     dill
     scripts
+
+.. automodule:: dill
+..  :exclude-members: +
 
 Indices and tables
 ==================
