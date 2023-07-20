@@ -10,7 +10,7 @@ importlib-metadata==4.11.3
 jinja2==3.1.1
 markupsafe==2.1.1
 packaging==21.3
-pygments==2.11.2
+pygments==2.15.0
 pyparsing==3.0.8
 readthedocs-sphinx-search==0.1.1
 requests==2.31.0
