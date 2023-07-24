@@ -24,6 +24,7 @@ sys.path.insert(0, scripts)
 try:
     os.symlink(scripts+os.sep+'undill', scripts+os.sep+'_undill.py')
     os.symlink(scripts+os.sep+'get_objgraph', scripts+os.sep+'_get_objgraph.py')
+    os.symlink(scripts+os.sep+'get_gprof', scripts+os.sep+'_get_gprof.py')
 except:
     pass
 

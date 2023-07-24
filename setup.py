@@ -86,13 +86,14 @@ class BinaryDistribution(Distribution):
 # define dependencies
 ctypes_version = 'ctypes>=1.0.1'
 objgraph_version = 'objgraph>=1.7.2'
+gprof2dot_version = 'gprof2dot>=2022.7.29'
 pyreadline_version = 'pyreadline>=1.7.1'
 # add dependencies
 depend = [ctypes_version]
 if sys.platform[:3] == 'win':
-    extras = {'readline': [pyreadline_version], 'graph': [objgraph_version]}
+    extras = {'readline': [pyreadline_version], 'graph': [objgraph_version], 'profile': [gprof2dot_version]}
 else:
-    extras = {'readline': [], 'graph': [objgraph_version]}
+    extras = {'readline': [], 'graph': [objgraph_version], 'profile': [gprof2dot_version]}
 # update setup kwds
 if has_setuptools:
     setup_kwds.update(
@@ -110,12 +111,14 @@ try:
     pass
     #import ctypes
     #import objgraph
+    #import gprof2dot
     #import readline
 except ImportError:
     print ("\n***********************************************************")
     print ("WARNING: One of the following dependencies is unresolved:")
 #   print ("    %s" % ctypes_version)
     print ("    %s (optional)" % objgraph_version)
+    print ("    %s (optional)" % gprof2dot_version)
     if sys.platform[:3] == 'win':
         print ("    %s (optional)" % pyreadline_version)
     print ("***********************************************************\n")

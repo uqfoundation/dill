@@ -94,6 +94,10 @@ To optionally include the ``objgraph`` diagnostic tool in the install::
 
     $ pip install dill[graph]
 
+To optionally include the ``gprof2dot`` diagnostic tool in the install::
+
+    $ pip install dill[profile]
+
 For windows users, to optionally install session history tools::
 
     $ pip install dill[readline]
@@ -109,6 +113,7 @@ Requirements
 Optional requirements:
 
 * ``objgraph``, **>=1.7.2**
+* ``gprof2dot``, **>=2022.7.29**
 * ``pyreadline``, **>=1.7.1** (on windows)
 
 
