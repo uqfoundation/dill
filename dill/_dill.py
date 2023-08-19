@@ -1693,7 +1693,7 @@ def _get_typedict_type(cls, clsdict, attrs, postproc_list):
     for name, value in dict.items(clsdict):
         try:
             base_value = inherited_dict[name]
-            if value is base_value:
+            if value is base_value and hasattr(value, '__qualname__'):
                 to_remove.append(name)
         except KeyError:
             pass

@@ -276,6 +276,31 @@ def test_enummeta():
     assert dill.copy(HTTPStatus.OK) is HTTPStatus.OK
     assert dill.copy(enum.EnumMeta) is enum.EnumMeta
 
+def test_inherit(): #NOTE: see issue #612
+    class Foo:
+        w = 0
+        x = 1
+        y = 1.1
+
+    class Bar(Foo):
+        w = 2
+        x = 1
+        y = 1.1
+        z = 0.2
+
+    Baz = dill.copy(Bar)
+
+    assert Bar.__dict__ == Baz.__dict__
+    assert 'w' in Bar.__dict__ and 'w' in Baz.__dict__
+    assert Bar.__dict__['w'] is Baz.__dict__['w']
+    assert 'x' in Bar.__dict__ and 'x' in Baz.__dict__
+    assert Bar.__dict__['x'] is Baz.__dict__['x']
+    assert 'y' in Bar.__dict__ and 'y' in Baz.__dict__
+    assert Bar.__dict__['y'] is not Baz.__dict__['y']
+    assert 'z' in Bar.__dict__ and 'z' in Baz.__dict__
+    assert Bar.__dict__['z'] is not Baz.__dict__['z']
+
+
 if __name__ == '__main__':
     test_class_instances()
     test_class_objects()
@@ -289,3 +314,4 @@ if __name__ == '__main__':
     test_origbases()
     test_metaclass()
     test_enummeta()
+    test_inherit()
