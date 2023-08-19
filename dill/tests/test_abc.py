@@ -77,7 +77,8 @@ def test_abc_non_local():
     # Set a property that StockPickle can't preserve
     instance.bar = lambda x: x**2
     depickled = dill.copy(instance)
-    assert type(depickled) is not type(instance)
+    assert type(depickled) is type(instance) #NOTE: issue #612, test_abc_local
+    #NOTE: dill.copy of local (or non-local) classes should (not) be the same?
     assert type(depickled.bar) is FunctionType
     assert depickled.bar(3) == 9
     assert depickled.sfoo() == "Static Method SFOO"
@@ -99,7 +100,7 @@ def test_abc_local():
     labc = dill.copy(LocalABC)
     assert labc is not LocalABC
     assert type(labc) is type(LocalABC)
-    # TODO should work like it does for non local classes
+    #NOTE: dill.copy of local (or non-local) classes should (not) be the same?
     # <class '__main__.LocalABC'>
     # <class '__main__.test_abc_local.<locals>.LocalABC'>
 
