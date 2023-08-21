@@ -9,8 +9,8 @@
 import os
 import sys
 # drop support for older python
-if sys.version_info < (3, 7):
-    unsupported = 'Versions of Python before 3.7 are not supported'
+if sys.version_info < (3, 8):
+    unsupported = 'Versions of Python before 3.8 are not supported'
     raise ValueError(unsupported)
 
 # get distribution meta info
@@ -55,14 +55,13 @@ setup_kwds = dict(
         'Source Code':'https://github.com/uqfoundation/dill',
         'Bug Tracker':'https://github.com/uqfoundation/dill/issues',
     },
-    python_requires = '>=3.7',
+    python_requires = '>=3.8',
     classifiers = [
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: BSD License',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
