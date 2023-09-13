@@ -7,8 +7,7 @@
 """
 to run this test suite, first build and install `dill`.
 
-  $ python setup.py build
-  $ python setup.py install
+  $ python -m pip install ../..
 
 
 then run the tests with:
