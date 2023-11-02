@@ -1023,9 +1023,12 @@ def _import_module(import_name, safe=False):
             items = import_name.split('.')
             module = '.'.join(items[:-1])
             obj = items[-1]
+            submodule = getattr(__import__(module, None, None, [obj]), obj)
+            if isinstance(submodule, (ModuleType, type)):
+                return submodule
+            return __import__(import_name, None, None, [obj])
         else:
             return __import__(import_name)
-        return getattr(__import__(module, None, None, [obj]), obj)
     except (ImportError, AttributeError, KeyError):
         if safe:
             return None
