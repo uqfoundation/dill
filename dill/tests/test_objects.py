@@ -35,7 +35,7 @@ special['MethodType'] = _method = _class()._method
 special['UnboundMethodType'] = _class._method
 objects.update(special)
 
-def pickles(name, exact=False):
+def pickles(name, exact=False, verbose=True):
     """quick check if object pickles with dill"""
     obj = objects[name]
     try:
@@ -45,19 +45,19 @@ def pickles(name, exact=False):
                 assert pik == obj
             except AssertionError:
                 assert type(obj) == type(pik)
-                print ("weak: %s %s" % (name, type(obj)))
+                if verbose: print ("weak: %s %s" % (name, type(obj)))
         else:
             assert type(obj) == type(pik)
     except Exception:
-        print ("fails: %s %s" % (name, type(obj)))
+        if verbose: print ("fails: %s %s" % (name, type(obj)))
 
 
-def test_objects():
+def test_objects(verbose=True):
     for member in objects.keys():
-       #pickles(member, exact=True)
-        pickles(member, exact=False)
+       #pickles(member, exact=True, verbose=verbose)
+        pickles(member, exact=False, verbose=verbose)
 
 if __name__ == '__main__':
     import warnings
     warnings.simplefilter('ignore')
-    test_objects()
+    test_objects(verbose=False)

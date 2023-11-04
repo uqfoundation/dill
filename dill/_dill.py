@@ -2018,9 +2018,11 @@ if HAS_CTYPES and hasattr(ctypes, 'pythonapi'):
     _PyCapsule_SetName.argtypes = (ctypes.py_object, ctypes.c_char_p)
     _PyCapsule_SetPointer = ctypes.pythonapi.PyCapsule_SetPointer
     _PyCapsule_SetPointer.argtypes = (ctypes.py_object, ctypes.c_void_p)
+    #from _socket import CAPI as _testcapsule
+    _testcapsule_name = b'dill._dill._testcapsule'
     _testcapsule = _PyCapsule_New(
         ctypes.cast(_PyCapsule_New, ctypes.c_void_p),
-        ctypes.create_string_buffer(b'dill._dill._testcapsule'),
+        ctypes.c_char_p(_testcapsule_name),
         None
     )
     PyCapsuleType = type(_testcapsule)

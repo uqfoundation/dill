@@ -150,7 +150,7 @@ def nestedglobals(func, recurse=True):
         if '_GLOBAL' in line:
             name = line.split('(')[-1].split(')')[0]
             if CAN_NULL:
-                names.add(name.replace('NULL + ', ''))
+                names.add(name.replace('NULL + ', '').replace(' + NULL', ''))
             else:
                 names.add(name)
     for co in getattr(func, 'co_consts', tuple()):
