@@ -109,7 +109,10 @@ if HAS_CTYPES:
         pass
     _Struct._fields_ = [("_field", ctypes.c_int),("next", ctypes.POINTER(_Struct))]
 _filedescrip, _tempfile = tempfile.mkstemp('r') # deleted in cleanup
-_tmpf = tempfile.TemporaryFile('w') #FIXME: _tmpf.close() in cleanup?
+if sys.hexversion < 0x30d00a1:
+    _tmpf = tempfile.TemporaryFile('w') # emits OSError 9 in python 3.13
+else:
+    _tmpf = tempfile.NamedTemporaryFile('w').file # for > python 3.9
 
 # objects used by dill for type declaration
 registered = d = {}
