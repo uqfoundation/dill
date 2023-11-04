@@ -39,7 +39,6 @@ import zlib
 import gzip
 import zipfile
 import tarfile
-import xdrlib
 import csv
 import hashlib
 import hmac
@@ -110,7 +109,10 @@ if HAS_CTYPES:
         pass
     _Struct._fields_ = [("_field", ctypes.c_int),("next", ctypes.POINTER(_Struct))]
 _filedescrip, _tempfile = tempfile.mkstemp('r') # deleted in cleanup
-_tmpf = tempfile.TemporaryFile('w')
+if sys.hexversion < 0x30d00a1:
+    _tmpf = tempfile.TemporaryFile('w') # emits OSError 9 in python 3.13
+else:
+    _tmpf = tempfile.NamedTemporaryFile('w').file # for > python 3.9
 
 # objects used by dill for type declaration
 registered = d = {}
@@ -313,7 +315,9 @@ if HAS_ALL:
 a['TarFileType'] = tarfile.open(fileobj=_fileW,mode='w')
 # file formats (CH 13)
 x['DialectType'] = csv.get_dialect('excel')
-a['PackerType'] = xdrlib.Packer()
+if sys.hexversion < 0x30d00a1:
+    import xdrlib
+    a['PackerType'] = xdrlib.Packer()
 # optional operating system services (CH 16)
 a['LockType'] = threading.Lock()
 a['RLockType'] = threading.RLock()
