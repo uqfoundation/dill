@@ -200,8 +200,8 @@ class TraceFormatter(logging.Formatter):
             if not self.is_utf8:
                 prefix = prefix.translate(ASCII_MAP) + "-"
             fields['prefix'] = prefix + " "
-        if hasattr(record, 'size'):
-            # Show object size in human-redable form.
+        if hasattr(record, 'size') and record.size is not None and record.size >= 1:
+            # Show object size in human-readable form.
             power = int(math.log(record.size, 2)) // 10
             size = record.size >> power*10
             fields['suffix'] = " [%d %sB]" % (size, "KMGTP"[power] + "i" if power else "")
