@@ -158,15 +158,17 @@ def get_file_type(*args, **kwargs):
     f.close()
     return t
 
+IS_PYODIDE = sys.platform == 'emscripten'
+
 FileType = get_file_type('rb', buffering=0)
 TextWrapperType = get_file_type('r', buffering=-1)
-BufferedRandomType = get_file_type('r+b', buffering=-1)
+BufferedRandomType = None if IS_PYODIDE else get_file_type('r+b', buffering=-1)
 BufferedReaderType = get_file_type('rb', buffering=-1)
 BufferedWriterType = get_file_type('wb', buffering=-1)
 try:
     from _pyio import open as _open
     PyTextWrapperType = get_file_type('r', buffering=-1, open=_open)
-    PyBufferedRandomType = get_file_type('r+b', buffering=-1, open=_open)
+    PyBufferedRandomType = None if IS_PYODIDE else get_file_type('r+b', buffering=-1, open=_open)
     PyBufferedReaderType = get_file_type('rb', buffering=-1, open=_open)
     PyBufferedWriterType = get_file_type('wb', buffering=-1, open=_open)
 except ImportError:
@@ -1356,7 +1358,6 @@ def _save_file(pickler, obj, open_):
 
 
 @register(FileType) #XXX: in 3.x has buffer=0, needs different _create?
-@register(BufferedRandomType)
 @register(BufferedReaderType)
 @register(BufferedWriterType)
 @register(TextWrapperType)
@@ -1366,8 +1367,15 @@ def save_file(pickler, obj):
     logger.trace(pickler, "# Fi")
     return f
 
+if BufferedRandomType:
+    @register(BufferedRandomType)
+    def save_file(pickler, obj):
+        logger.trace(pickler, "Fi: %s", obj)
+        f = _save_file(pickler, obj, open)
+        logger.trace(pickler, "# Fi")
+        return f
+
 if PyTextWrapperType:
-    @register(PyBufferedRandomType)
     @register(PyBufferedReaderType)
     @register(PyBufferedWriterType)
     @register(PyTextWrapperType)
@@ -1376,6 +1384,15 @@ if PyTextWrapperType:
         f = _save_file(pickler, obj, _open)
         logger.trace(pickler, "# Fi")
         return f
+
+    if PyBufferedRandomType:
+        @register(PyBufferedRandomType)
+        def save_file(pickler, obj):
+            logger.trace(pickler, "Fi: %s", obj)
+            f = _save_file(pickler, obj, _open)
+            logger.trace(pickler, "# Fi")
+            return f
+
 
 # The following two functions are based on 'saveCStringIoInput'
 # and 'saveCStringIoOutput' from spickle
