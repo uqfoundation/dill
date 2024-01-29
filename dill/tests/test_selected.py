@@ -45,7 +45,8 @@ _newclass = objects['ClassObjectType']
 # some clean-up #FIXME: should happen internal to dill
 objects['TemporaryFileType'].close()
 objects['TextWrapperType'].close()
-objects['BufferedRandomType'].close()
+if 'BufferedRandomType' in objects:
+    objects['BufferedRandomType'].close()
 objects['BufferedReaderType'].close()
 objects['BufferedWriterType'].close()
 objects['FileType'].close()
