@@ -16,7 +16,7 @@ __all__ = ['registered','failures','succeeds']
 import warnings; warnings.filterwarnings("ignore", category=DeprecationWarning)
 import sys
 import queue as Queue
-import dbm as anydbm
+#import dbm as anydbm #XXX: delete foo
 from io import BytesIO as StringIO
 import re
 import array
