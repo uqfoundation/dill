@@ -23,8 +23,8 @@ import warnings
 from dill import _dill, Pickler, Unpickler
 from ._dill import (
     BuiltinMethodType, FunctionType, MethodType, ModuleType, TypeType,
-    _import_module, _is_builtin_module, _is_imported_module, _main_module,
-    _reverse_typemap, __builtin__,
+    _getopt, _import_module, _is_builtin_module, _is_imported_module,
+    _main_module, _reverse_typemap, __builtin__,
 )
 
 # Type hints.
@@ -229,8 +229,10 @@ def dump_module(
     refimported = kwds.pop('byref', refimported)
     module = kwds.pop('main', module)
 
-    from .settings import settings
-    protocol = settings['protocol']
+    from .settings import settings as dill_settings
+    protocol = dill_settings['protocol']
+    refimported = _getopt(settings, 'refimported', refimported)
+
     main = module
     if main is None:
         main = _main_module
@@ -601,6 +603,12 @@ def load_module_asdict(
             pass
     main.__session__ = str(filename)
     return main.__dict__
+
+## Session settings ##
+
+settings = {
+    'refimported': False,
+}
 
 
 # Internal exports for backward compatibility with dill v0.3.5.1
