@@ -22,7 +22,7 @@ import warnings
 
 from dill import _dill, Pickler, Unpickler
 from ._dill import (
-    BuiltinMethodType, FunctionType, MethodType, ModuleType, TypeType,
+    BuiltinMethodType, FunctionType, MethodType, ModuleType, TypeType, UnpicklingError,
     _import_module, _is_builtin_module, _is_imported_module, _main_module,
     _reverse_typemap, __builtin__,
 )
