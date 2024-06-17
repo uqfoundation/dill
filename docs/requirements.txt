@@ -37,4 +37,4 @@ sphinx-prompt==1.6.0
 sphinx-rtd-theme==1.2.2
 sphinx-tabs==3.4.1
 tornado==6.4.1
-urllib3==2.0.7
+urllib3==2.2.2
