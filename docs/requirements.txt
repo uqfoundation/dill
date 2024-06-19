@@ -50,7 +50,7 @@ sphinxcontrib-serializinghtml==1.1.10
 starlette==0.37.2
 tomli==2.0.1
 typing-extensions==4.12.1
-urllib3==2.2.1
+urllib3==2.2.2
 uvicorn==0.30.0
 watchfiles==0.22.0
 websockets==12.0
