@@ -19,21 +19,20 @@ import re
 import os
 import sys
 import warnings
-
-from dill import _dill, Pickler, Unpickler
-from ._dill import (
-    BuiltinMethodType, FunctionType, MethodType, ModuleType, TypeType, UnpicklingError,
-    _import_module, _is_builtin_module, _is_imported_module, _main_module,
-    _reverse_typemap, __builtin__,
-)
-
-# Type hints.
-from typing import Optional, Union
-
 import pathlib
 import tempfile
 
 TEMPDIR = pathlib.PurePath(tempfile.gettempdir())
+
+# Type hints.
+from typing import Optional, Union
+
+from dill import _dill, Pickler, Unpickler
+from ._dill import (
+    BuiltinMethodType, FunctionType, MethodType, ModuleType, TypeType,
+    _import_module, _is_builtin_module, _is_imported_module, _main_module,
+    _reverse_typemap, __builtin__, UnpicklingError,
+)
 
 def _module_map():
     """get map of imported modules"""
