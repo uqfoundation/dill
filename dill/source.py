@@ -150,7 +150,7 @@ def findsource(object):
         if err:
             raise IOError(err)
         lbuf = readline.get_current_history_length()
-        lines = [readline.get_history_item(i)+'\n' for i in range(1,lbuf)]
+        lines = [readline.get_history_item(i)+'\n' for i in range(1,lbuf+1)]
     else:
         try: # special handling for class instances
             if not isclass(object) and isclass(type(object)): # __class__
