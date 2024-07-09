@@ -201,6 +201,20 @@ With trace, we see how ``dill`` stored the lambda (``F1``) by first storing
 the global dict (``D2``) plus other dictionaries (``D1`` and ``D2``) that
 save the lambda object's state. A ``#`` marks when the object is actually stored.
 
+Custom pickling
+
+```python
+import dill
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
+
+@dill.register(Engine)
+def save_sqlalchemy_engine(pickler, obj):
+    pickler._byref = getattr(pickler, '_byref', False)
+    pickler._recurse = getattr(pickler, '_recurse', False)
+    pickler.save_reduce(create_engine, (obj.url,), obj=obj)
+```
+
 
 More Information
 ----------------
