@@ -29,7 +29,8 @@ def test_bad_things():
     s = set([(err.__class__.__name__,err.args[0]) for err in list(errors(f, 1).values())])
     a = dict(s)
     if not os.environ.get('COVERAGE'): #XXX: travis-ci
-        assert len(s) is len(a) # TypeError (and possibly PicklingError)
+        proxy = 0 if type(f.f_locals) is dict else 1
+        assert len(s) == len(a) + proxy # TypeError (and possibly PicklingError)
     n = 2
     assert len(a) is n if 'PicklingError' in a.keys() else n-1
 
