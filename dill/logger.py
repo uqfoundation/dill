@@ -253,7 +253,7 @@ def trace(arg: Union[bool, TextIO, str, os.PathLike] = None, *, mode: str = 'a')
         arg: a boolean value, or an optional file-like or path-like object for the context manager
         mode: mode string for ``open()`` if a file name is passed as the first argument
     """
-    if not isinstance(arg, bool):
+    if repr(arg) not in ('False', 'True'):
         return TraceManager(file=arg, mode=mode)
     logger.setLevel(logging.INFO if arg else logging.WARNING)
 
