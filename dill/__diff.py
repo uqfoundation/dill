@@ -15,7 +15,7 @@ import os
 import sys
 import types
 try:
-    import numpy
+    import numpy.ma
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
