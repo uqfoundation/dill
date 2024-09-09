@@ -481,7 +481,8 @@ def _isstring(object): #XXX: isstringlike better?
 def indent(code, spaces=4):
     '''indent a block of code with whitespace (default is 4 spaces)'''
     indent = indentsize(code)
-    if type(spaces) is int: spaces = ' '*spaces
+    from numbers import Integral
+    if isinstance(spaces, Integral): spaces = ' '*spaces
     # if '\t' is provided, will indent with a tab
     nspaces = indentsize(spaces)
     # blank lines (etc) need to be ignored
