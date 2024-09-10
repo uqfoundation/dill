@@ -148,7 +148,9 @@ def test_numpy():
     import warnings
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category=FutureWarning)
-        b = 'bool' if hasattr(np, 'bool') else 'bool_'
+        warnings.filterwarnings('ignore', category=DeprecationWarning)
+        if hasattr(np, 'bool'): b = 'bool_' if np.bool is bool else 'bool'
+        else: b = 'bool_'
     assert getimportable(x) == 'from numpy import %s\n%s(False)\n' % (b,b)
     assert getimportable(y) == 'from %s import %s\n' % (y.__module__,b)
     assert getimportable(x, byname=False) == 'from numpy import %s\n%s(False)\n' % (b,b)
