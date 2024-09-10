@@ -130,12 +130,29 @@ def test_importable():
 
 def test_numpy():
   try:
-    from numpy import array
-    x = array([1,2,3])
+    import numpy as np
+    y = np.array
+    x = y([1,2,3])
     assert getimportable(x) == 'from numpy import array\narray([1, 2, 3])\n'
-    assert getimportable(array) == 'from %s import array\n' % array.__module__
+    assert getimportable(y) == 'from %s import array\n' % y.__module__
     assert getimportable(x, byname=False) == 'from numpy import array\narray([1, 2, 3])\n'
-    assert getimportable(array, byname=False) == 'from %s import array\n' % array.__module__
+    assert getimportable(y, byname=False) == 'from %s import array\n' % y.__module__
+    y = np.int64
+    x = y(0)
+    assert getimportable(x) == 'from numpy import int64\nint64(0)\n'
+    assert getimportable(y) == 'from %s import int64\n' % y.__module__
+    assert getimportable(x, byname=False) == 'from numpy import int64\nint64(0)\n'
+    assert getimportable(y, byname=False) == 'from %s import int64\n' % y.__module__
+    y = np.bool_
+    x = y(0)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=FutureWarning)
+        b = 'bool' if hasattr(np, 'bool') else 'bool_'
+    assert getimportable(x) == 'from numpy import %s\n%s(False)\n' % (b,b)
+    assert getimportable(y) == 'from %s import %s\n' % (y.__module__,b)
+    assert getimportable(x, byname=False) == 'from numpy import %s\n%s(False)\n' % (b,b)
+    assert getimportable(y, byname=False) == 'from %s import %s\n' % (y.__module__,b)
   except ImportError: pass
 
 #NOTE: if before likely_import(pow), will cause pow to throw AssertionError

@@ -602,10 +602,13 @@ def dumpsource(object, alias='', new=False, enclose=True):
 
 def getname(obj, force=False, fqn=False): #XXX: throw(?) to raise error on fail?
     """get the name of the object. for lambdas, get the name of the pointer """
-    if fqn: return '.'.join(_namespace(obj))
+    if fqn: return '.'.join(_namespace(obj)) #NOTE: returns 'type'
     module = getmodule(obj)
     if not module: # things like "None" and "1"
-        if not force: return None
+        if not force: return None #NOTE: returns 'instance' NOT 'type' #FIXME?
+        # handle some special cases
+        if hasattr(obj, 'dtype') and not obj.shape:
+            return getname(obj.__class__) + "(" + repr(obj.tolist()) + ")" 
         return repr(obj)
     try:
         #XXX: 'wrong' for decorators and curried functions ?
@@ -740,6 +743,8 @@ def getimport(obj, alias='', verify=True, builtin=False, enclosing=False):
     except Exception: # it's probably something 'importable'
         if head in ['builtins','__builtin__']:
             name = repr(obj) #XXX: catch [1,2], (1,2), set([1,2])... others?
+        elif _isinstance(obj):
+            name = getname(obj, force=True).split('(')[0]
         else:
             name = repr(obj).split('(')[0]
    #if not repr(obj).startswith('<'): name = repr(obj).split('(')[0]
