@@ -54,9 +54,12 @@ OLD312a7 = (sys.hexversion < 0x30c00a7)
 import builtins as __builtin__
 from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
 from pickle import GLOBAL, POP
-from _thread import _ExceptHookArgs as ExceptHookArgsType
 from _thread import LockType
 from _thread import RLock as RLockType
+try:
+    from _thread import _ExceptHookArgs as ExceptHookArgsType
+except ImportError:
+    ExceptHookArgsType = None
 try:
     from _thread import _ThreadHandle as ThreadHandleType
 except ImportError:
@@ -1812,9 +1815,9 @@ def save_type(pickler, obj, postproc_list=None):
         logger.trace(pickler, "T7: %s", obj)
         pickler.write(GLOBAL + b'enum\nEnumMeta\n')
         logger.trace(pickler, "# T7")
-    elif obj is ExceptHookArgsType:
+    elif obj is ExceptHookArgsType: #NOTE: must be after NoneType for pypy
         logger.trace(pickler, "T7: %s", obj)
-        pickler.write(GLOBAL + b'_thread\n_ExceptHookArgs\n')
+        pickler.write(GLOBAL + b'threading\nExceptHookArgs\n')
         logger.trace(pickler, "# T7")
 
     else:
