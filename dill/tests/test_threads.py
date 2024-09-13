@@ -8,6 +8,7 @@
 import dill
 dill.settings['recurse'] = True
 
+
 def test_new_thread():
     import threading
     t = threading.Thread()
