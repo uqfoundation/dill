@@ -13,18 +13,20 @@ def test_new_thread():
     import threading
     t = threading.Thread()
     t_ = dill.copy(t)
+    assert t.is_alive() == t_.is_alive()
     for i in ['daemon','name','ident','native_id']:
-        assert getattr(t, i) == getattr(t_, i)
-        assert t.is_alive() == t_.is_alive()
+        if hasattr(t, i):
+            assert getattr(t, i) == getattr(t_, i)
 
 def test_run_thread():
     import threading
     t = threading.Thread()
     t.start()
     t_ = dill.copy(t)
+    assert t.is_alive() == t_.is_alive()
     for i in ['daemon','name','ident','native_id']:
-        assert getattr(t, i) == getattr(t_, i)
-        assert t.is_alive() == t_.is_alive()
+        if hasattr(t, i):
+            assert getattr(t, i) == getattr(t_, i)
 
 def test_join_thread():
     import threading
@@ -32,9 +34,10 @@ def test_join_thread():
     t.start()
     t.join()
     t_ = dill.copy(t)
+    assert t.is_alive() == t_.is_alive()
     for i in ['daemon','name','ident','native_id']:
-        assert getattr(t, i) == getattr(t_, i)
-        assert t.is_alive() == t_.is_alive()
+        if hasattr(t, i):
+            assert getattr(t, i) == getattr(t_, i)
 
 
 if __name__ == '__main__':
