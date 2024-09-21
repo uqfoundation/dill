@@ -6,8 +6,8 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
-from dill.source import getsource, getname, _wrap, likely_import
-from dill.source import getimportable
+from dill.source import getsource, getname, _wrap, getimport
+from dill.source import importable
 from dill._dill import IS_PYPY
 
 import sys
@@ -55,31 +55,31 @@ def test_getsource():
 
 # test itself
 def test_itself():
-  assert likely_import(likely_import)=='from dill.source import likely_import\n'
+  assert getimport(getimport)=='from dill.source import getimport\n'
 
 # builtin functions and objects
 def test_builtin():
-  assert likely_import(pow) == 'pow\n'
-  assert likely_import(100) == '100\n'
-  assert likely_import(True) == 'True\n'
-  assert likely_import(pow, explicit=True) == 'from builtins import pow\n'
-  assert likely_import(100, explicit=True) == '100\n'
-  assert likely_import(True, explicit=True) == 'True\n'
+  assert getimport(pow) == 'pow\n'
+  assert getimport(100) == '100\n'
+  assert getimport(True) == 'True\n'
+  assert getimport(pow, builtin=True) == 'from builtins import pow\n'
+  assert getimport(100, builtin=True) == '100\n'
+  assert getimport(True, builtin=True) == 'True\n'
   # this is kinda BS... you can't import a None
-  assert likely_import(None) == 'None\n'
-  assert likely_import(None, explicit=True) == 'None\n'
+  assert getimport(None) == 'None\n'
+  assert getimport(None, builtin=True) == 'None\n'
 
 
 # other imported functions
 def test_imported():
   from math import sin
-  assert likely_import(sin) == 'from math import sin\n'
+  assert getimport(sin) == 'from math import sin\n'
 
 # interactively defined functions
 def test_dynamic():
-  assert likely_import(add) == 'from %s import add\n' % __name__
+  assert getimport(add) == 'from %s import add\n' % __name__
   # interactive lambdas
-  assert likely_import(squared) == 'from %s import squared\n' % __name__
+  assert getimport(squared) == 'from %s import squared\n' % __name__
 
 # classes and class instances
 def test_classes():
@@ -88,44 +88,44 @@ def test_classes():
   x = y if (IS_PYPY or sys.hexversion >= PY310b) else "from io import BytesIO\n"
   s = StringIO()
 
-  assert likely_import(StringIO) == x
-  assert likely_import(s) == y
+  assert getimport(StringIO) == x
+  assert getimport(s) == y
   # interactively defined classes and class instances
-  assert likely_import(Foo) == 'from %s import Foo\n' % __name__
-  assert likely_import(_foo) == 'from %s import Foo\n' % __name__
+  assert getimport(Foo) == 'from %s import Foo\n' % __name__
+  assert getimport(_foo) == 'from %s import Foo\n' % __name__
 
 
-# test getimportable
+# test importable
 def test_importable():
-  assert getimportable(add) == 'from %s import add\n' % __name__
-  assert getimportable(squared) == 'from %s import squared\n' % __name__
-  assert getimportable(Foo) == 'from %s import Foo\n' % __name__
-  assert getimportable(Foo.bar) == 'from %s import bar\n' % __name__
-  assert getimportable(_foo.bar) == 'from %s import bar\n' % __name__
-  assert getimportable(None) == 'None\n'
-  assert getimportable(100) == '100\n'
+  assert importable(add, source=False) == 'from %s import add\n' % __name__
+  assert importable(squared, source=False) == 'from %s import squared\n' % __name__
+  assert importable(Foo, source=False) == 'from %s import Foo\n' % __name__
+  assert importable(Foo.bar, source=False) == 'from %s import bar\n' % __name__
+  assert importable(_foo.bar, source=False) == 'from %s import bar\n' % __name__
+  assert importable(None, source=False) == 'None\n'
+  assert importable(100, source=False) == '100\n'
 
-  assert getimportable(add, byname=False) == 'def add(x,y):\n  return x+y\n'
-  assert getimportable(squared, byname=False) == 'squared = lambda x:x**2\n'
-  assert getimportable(None, byname=False) == 'None\n'
-  assert getimportable(Bar, byname=False) == 'class Bar:\n  pass\n'
-  assert getimportable(Foo, byname=False) == 'class Foo(object):\n  def bar(self, x):\n    return x*x+x\n'
-  assert getimportable(Foo.bar, byname=False) == 'def bar(self, x):\n  return x*x+x\n'
-  assert getimportable(Foo.bar, byname=True) == 'from %s import bar\n' % __name__
-  assert getimportable(Foo.bar, alias='memo', byname=True) == 'from %s import bar as memo\n' % __name__
-  assert getimportable(Foo, alias='memo', byname=True) == 'from %s import Foo as memo\n' % __name__
-  assert getimportable(squared, alias='memo', byname=True) == 'from %s import squared as memo\n' % __name__
-  assert getimportable(squared, alias='memo', byname=False) == 'memo = squared = lambda x:x**2\n'
-  assert getimportable(add, alias='memo', byname=False) == 'def add(x,y):\n  return x+y\n\nmemo = add\n'
-  assert getimportable(None, alias='memo', byname=False) == 'memo = None\n'
-  assert getimportable(100, alias='memo', byname=False) == 'memo = 100\n'
-  assert getimportable(add, explicit=True) == 'from %s import add\n' % __name__
-  assert getimportable(squared, explicit=True) == 'from %s import squared\n' % __name__
-  assert getimportable(Foo, explicit=True) == 'from %s import Foo\n' % __name__
-  assert getimportable(Foo.bar, explicit=True) == 'from %s import bar\n' % __name__
-  assert getimportable(_foo.bar, explicit=True) == 'from %s import bar\n' % __name__
-  assert getimportable(None, explicit=True) == 'None\n'
-  assert getimportable(100, explicit=True) == '100\n'
+  assert importable(add, source=True) == 'def add(x,y):\n  return x+y\n'
+  assert importable(squared, source=True) == 'squared = lambda x:x**2\n'
+  assert importable(None, source=True) == 'None\n'
+  assert importable(Bar, source=True) == 'class Bar:\n  pass\n'
+  assert importable(Foo, source=True) == 'class Foo(object):\n  def bar(self, x):\n    return x*x+x\n'
+  assert importable(Foo.bar, source=True) == 'def bar(self, x):\n  return x*x+x\n'
+  assert importable(Foo.bar, source=False) == 'from %s import bar\n' % __name__
+  assert importable(Foo.bar, alias='memo', source=False) == 'from %s import bar as memo\n' % __name__
+  assert importable(Foo, alias='memo', source=False) == 'from %s import Foo as memo\n' % __name__
+  assert importable(squared, alias='memo', source=False) == 'from %s import squared as memo\n' % __name__
+  assert importable(squared, alias='memo', source=True) == 'memo = squared = lambda x:x**2\n'
+  assert importable(add, alias='memo', source=True) == 'def add(x,y):\n  return x+y\n\nmemo = add\n'
+  assert importable(None, alias='memo', source=True) == 'memo = None\n'
+  assert importable(100, alias='memo', source=True) == 'memo = 100\n'
+  assert importable(add, builtin=True, source=False) == 'from %s import add\n' % __name__
+  assert importable(squared, builtin=True, source=False) == 'from %s import squared\n' % __name__
+  assert importable(Foo, builtin=True, source=False) == 'from %s import Foo\n' % __name__
+  assert importable(Foo.bar, builtin=True, source=False) == 'from %s import bar\n' % __name__
+  assert importable(_foo.bar, builtin=True, source=False) == 'from %s import bar\n' % __name__
+  assert importable(None, builtin=True, source=False) == 'None\n'
+  assert importable(100, builtin=True, source=False) == '100\n'
 
 
 def test_numpy():
@@ -133,16 +133,16 @@ def test_numpy():
     import numpy as np
     y = np.array
     x = y([1,2,3])
-    assert getimportable(x) == 'from numpy import array\narray([1, 2, 3])\n'
-    assert getimportable(y) == 'from %s import array\n' % y.__module__
-    assert getimportable(x, byname=False) == 'from numpy import array\narray([1, 2, 3])\n'
-    assert getimportable(y, byname=False) == 'from %s import array\n' % y.__module__
+    assert importable(x, source=False) == 'from numpy import array\narray([1, 2, 3])\n'
+    assert importable(y, source=False) == 'from %s import array\n' % y.__module__
+    assert importable(x, source=True) == 'from numpy import array\narray([1, 2, 3])\n'
+    assert importable(y, source=True) == 'from %s import array\n' % y.__module__
     y = np.int64
     x = y(0)
-    assert getimportable(x) == 'from numpy import int64\nint64(0)\n'
-    assert getimportable(y) == 'from %s import int64\n' % y.__module__
-    assert getimportable(x, byname=False) == 'from numpy import int64\nint64(0)\n'
-    assert getimportable(y, byname=False) == 'from %s import int64\n' % y.__module__
+    assert importable(x, source=False) == 'from numpy import int64\nint64(0)\n'
+    assert importable(y, source=False) == 'from %s import int64\n' % y.__module__
+    assert importable(x, source=True) == 'from numpy import int64\nint64(0)\n'
+    assert importable(y, source=True) == 'from %s import int64\n' % y.__module__
     y = np.bool_
     x = y(0)
     import warnings
@@ -151,15 +151,15 @@ def test_numpy():
         warnings.filterwarnings('ignore', category=DeprecationWarning)
         if hasattr(np, 'bool'): b = 'bool_' if np.bool is bool else 'bool'
         else: b = 'bool_'
-    assert getimportable(x) == 'from numpy import %s\n%s(False)\n' % (b,b)
-    assert getimportable(y) == 'from %s import %s\n' % (y.__module__,b)
-    assert getimportable(x, byname=False) == 'from numpy import %s\n%s(False)\n' % (b,b)
-    assert getimportable(y, byname=False) == 'from %s import %s\n' % (y.__module__,b)
+    assert importable(x, source=False) == 'from numpy import %s\n%s(False)\n' % (b,b)
+    assert importable(y, source=False) == 'from %s import %s\n' % (y.__module__,b)
+    assert importable(x, source=True) == 'from numpy import %s\n%s(False)\n' % (b,b)
+    assert importable(y, source=True) == 'from %s import %s\n' % (y.__module__,b)
   except ImportError: pass
 
-#NOTE: if before likely_import(pow), will cause pow to throw AssertionError
+#NOTE: if before getimport(pow), will cause pow to throw AssertionError
 def test_foo():
-  assert getimportable(_foo, byname=False).startswith("import dill\nclass Foo(object):\n  def bar(self, x):\n    return x*x+x\ndill.loads(")
+  assert importable(_foo, source=True).startswith("import dill\nclass Foo(object):\n  def bar(self, x):\n    return x*x+x\ndill.loads(")
 
 if __name__ == '__main__':
     test_getsource()

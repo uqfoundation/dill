@@ -530,7 +530,7 @@ def outdent(code, spaces=None, all=True):
     return '\n'.join(_outdent(code.split('\n'), spaces=spaces, all=all))
 
 
-#XXX: not sure what the point of _wrap is...
+# _wrap provides an wrapper to correctly exec and load into locals
 __globals__ = globals()
 __locals__ = locals()
 def _wrap(f):
