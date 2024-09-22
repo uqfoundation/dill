@@ -20,21 +20,20 @@ matrix:
         - python: '3.12'
           env:
 
-        - python: '3.13-dev'
+        - python: '3.13'
           env:
 
         - python: 'pypy3.8-7.3.9' # at 7.3.11
           env:
 
-        - python: 'pypy3.9-7.3.9' # at 7.3.15
+        - python: 'pypy3.9-7.3.9' # at 7.3.16
           env:
 
-        - python: 'pypy3.10-7.3.15'
+        - python: 'pypy3.10-7.3.17'
           env:
 
     allow_failures:
-        - python: '3.13-dev'
-        - python: 'pypy3.10-7.3.15' # CI missing
+        - python: 'pypy3.10-7.3.17' # CI missing
     fast_finish: true
 
 cache:
