@@ -20,7 +20,7 @@ matrix:
         - python: '3.12'
           env:
 
-        - python: '3.13'
+        - python: '3.13-dev'
           env:
 
         - python: 'pypy3.8-7.3.9' # at 7.3.11
