@@ -135,7 +135,33 @@ def test_code_object():
         except Exception as error:
             raise Exception("failed to construct code object with format version {}".format(version)) from error
 
+
+def test_shared_globals():
+	import dill, test_functors as f, sys
+
+	for recurse in False, True:
+		g, h = dill.copy((f.g, f.h), recurse=recurse)
+		assert f.g.__globals__ is f.h.__globals__
+		assert g.__globals__ is h.__globals__
+		assert f.g.__globals__ is g.__globals__
+		assert g(1, 2) == h() == 3
+
+		del sys.modules['test_functors']
+
+		g, h = dill.copy((f.g, f.h), recurse=recurse)
+		assert f.g.__globals__ is f.h.__globals__
+		assert g.__globals__ is h.__globals__
+		assert f.g.__globals__ is not g.__globals__
+		assert g(1, 2) == h() == 3
+		g1, g, g2 = dill.copy((f.__dict__, f.g, f.g.__globals__), recurse=recurse)
+		assert g1 is g.__globals__
+		assert g1 is g2
+
+		sys.modules['test_functors'] = f
+
+
 if __name__ == '__main__':
     test_functions()
     test_issue_510()
     test_code_object()
+    test_shared_globals()
