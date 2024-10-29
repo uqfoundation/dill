@@ -123,9 +123,3 @@ except ImportError:
     if sys.platform[:3] == 'win':
         print ("    %s (optional)" % pyreadline_version)
     print ("***********************************************************\n")
-
-
-if __name__=='__main__':
-    pass
-
-# end of file
