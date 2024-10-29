@@ -164,7 +164,6 @@ a['DateTimeType'] = datetime.datetime.today()
 a['CalendarType'] = calendar.Calendar()
 # numeric and mathematical types (CH 9)
 a['DecimalType'] = decimal.Decimal(1)
-a['CountType'] = itertools.count(0)
 # data compression and archiving (CH 12)
 a['TarInfoType'] = tarfile.TarInfo()
 # generic operating system services (CH 15)
@@ -298,7 +297,6 @@ a['QueueType'] = Queue.Queue()
 # numeric and mathematical types (CH 9)
 d['PartialType'] = functools.partial(int,base=2)
 a['IzipType'] = zip('0','1')
-a['ChainType'] = itertools.chain('0','1')
 d['ItemGetterType'] = operator.itemgetter(0)
 d['AttrGetterType'] = operator.attrgetter('__repr__')
 # file and directory access (CH 10)
@@ -349,8 +347,6 @@ try: # numpy #FIXME: slow... 0.05 to 0.1 sec to import numpy
     a['NumpyInt32Type'] = _numpy_int32
 except ImportError:
     pass
-# numeric and mathematical types (CH 9)
-a['ProductType'] = itertools.product('0','1')
 # generic operating system services (CH 15)
 a['FileHandlerType'] = logging.FileHandler(os.devnull)
 a['RotatingFileHandlerType'] = logging.handlers.RotatingFileHandler(os.devnull)
@@ -413,8 +409,6 @@ if sys.hexversion >= 0x30b00b0:
 
 # data types (CH 8)
 a['PrettyPrinterType'] = pprint.PrettyPrinter()
-# numeric and mathematical types (CH 9)
-a['CycleType'] = itertools.cycle('0')
 # file and directory access (CH 10)
 a['TemporaryFileType'] = _tmpf
 # data compression and archiving (CH 12)
@@ -422,10 +416,16 @@ x['GzipFileType'] = gzip.GzipFile(fileobj=_fileW)
 # generic operating system services (CH 15)
 a['StreamHandlerType'] = logging.StreamHandler()
 # numeric and mathematical types (CH 9)
-a['PermutationsType'] = itertools.permutations('0')
-a['CombinationsType'] = itertools.combinations('0',1)
-a['RepeatType'] = itertools.repeat(0)
-a['CompressType'] = itertools.compress('0',[1])
+z = a if sys.hexversion < 0x30e00a1 else x
+z['CountType'] = itertools.count(0) #FIXME: __reduce__ removed in 3.14.0a1
+z['ChainType'] = itertools.chain('0','1')
+z['ProductType'] = itertools.product('0','1')
+z['CycleType'] = itertools.cycle('0')
+z['PermutationsType'] = itertools.permutations('0')
+z['CombinationsType'] = itertools.combinations('0',1)
+z['RepeatType'] = itertools.repeat(0)
+z['CompressType'] = itertools.compress('0',[1])
+del z
 #XXX: ...and etc
 
 # -- dill fails on all below here -------------------------------------------

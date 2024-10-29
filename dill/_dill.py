@@ -1125,7 +1125,10 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
                 dest, source = reduction[1]
                 if source:
                     pickler.write(pickler.get(pickler.memo[id(dest)][0]))
-                    pickler._batch_setitems(iter(source.items()))
+                    if sys.hexversion < 0x30e00a1:
+                        pickler._batch_setitems(iter(source.items()))
+                    else:
+                        pickler._batch_setitems(iter(source.items()), obj=obj)
                 else:
                     # Updating with an empty dictionary. Same as doing nothing.
                     continue

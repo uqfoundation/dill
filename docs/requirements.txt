@@ -1,11 +1,11 @@
 # Packages required to build docs
 # dependencies pinned as:
-# https://github.com/readthedocs/readthedocs.org/blob/d3606da9907bb4cd933abcf71c7bab9eb20435cd/requirements/docs.txt
+# https://github.com/readthedocs/readthedocs.org/blob/71a82c94adbacf87b4630288f91f1a56e05f54f2/requirements/docs.txt
 
 alabaster==0.7.16
 anyio==4.4.0
 babel==2.15.0
-certifi==2024.7.4
+certifi==2024.2.2
 charset-normalizer==3.3.2
 click==8.1.7
 colorama==0.4.6
@@ -47,10 +47,11 @@ sphinxcontrib-jquery==4.1
 sphinxcontrib-jsmath==1.0.1
 sphinxcontrib-qthelp==1.0.7
 sphinxcontrib-serializinghtml==1.1.10
+phinxext-opengraph==0.9.1
 starlette==0.37.2
 tomli==2.0.1
 typing-extensions==4.12.1
-urllib3==2.2.2
+urllib3==2.2.1
 uvicorn==0.30.0
 watchfiles==0.22.0
 websockets==12.0
