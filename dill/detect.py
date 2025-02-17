@@ -145,7 +145,10 @@ def nestedglobals(func, recurse=True):
     CAN_NULL = sys.hexversion >= 0x30b00a7 # NULL may be prepended >= 3.11a7
     names = set()
     with capture('stdout') as out:
-        dis.dis(func) #XXX: dis.dis(None) disassembles last traceback
+        try:
+            dis.dis(func) #XXX: dis.dis(None) disassembles last traceback
+        except IndexError:
+            pass #FIXME: HACK for IS_PYPY (3.11)
     for line in out.getvalue().splitlines():
         if '_GLOBAL' in line:
             name = line.split('(')[-1].split(')')[0]
