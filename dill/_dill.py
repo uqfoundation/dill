@@ -571,7 +571,7 @@ if sys.hexversion >= 0x30a00a0:
     _incedental_reverse_typemap['LineIteratorType'] = type(compile('3', '', 'eval').co_lines())
 '''
 
-if sys.hexversion >= 0x30b00b0:
+if sys.hexversion >= 0x30b00b0 and not IS_PYPY:
     from types import GenericAlias
     _incedental_reverse_typemap["GenericAliasIteratorType"] = type(iter(GenericAlias(list, (int,))))
     '''

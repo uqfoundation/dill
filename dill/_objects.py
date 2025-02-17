@@ -402,7 +402,7 @@ except ImportError:
 if sys.hexversion >= 0x30a00a0 and not IS_PYPY:
     x['LineIteratorType'] = compile('3', '', 'eval').co_lines()
 
-if sys.hexversion >= 0x30b00b0:
+if sys.hexversion >= 0x30b00b0 and not IS_PYPY:
     from types import GenericAlias
     d["GenericAliasIteratorType"] = iter(GenericAlias(list, (int,)))
     x['PositionsIteratorType'] = compile('3', '', 'eval').co_positions()
