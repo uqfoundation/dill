@@ -248,7 +248,7 @@ def findsource(object):
     except AttributeError: pass
     if isclass(object):
         _, lineno = get_outer_frame()
-        start_lineno = lineno if lineno else len(lines)-1
+        start_lineno = lineno-1 if lineno else len(lines)-1
         name = object.__name__
         pat = re.compile(r'^(\s*)class\s*' + name + r'\b')
         # make some effort to find the best matching class definition:
