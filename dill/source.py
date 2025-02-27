@@ -101,16 +101,15 @@ def _matchlambda(func, line):
         return True
     return False
 
-def get_outer_frame():
+def get_outer_frame(sourcefile):
     """
     Get the outermost frame that is not inside source.py.
     Returns the frame and its line number.
     """
     frame = currentframe()
     if not frame: return None, None
-    source_file = __file__
     while frame:
-        if frame.f_code.co_filename != source_file:
+        if frame.f_code.co_filename == sourcefile:
             return frame, frame.f_lineno
         frame = frame.f_back
     return None, None
@@ -247,7 +246,7 @@ def findsource(object):
             #XXX: we don't find how the instance was built
     except AttributeError: pass
     if isclass(object):
-        _, lineno = get_outer_frame()
+        _, lineno = get_outer_frame(sourcefile)
         start_lineno = lineno-1 if lineno else len(lines)-1
         name = object.__name__
         pat = re.compile(r'^(\s*)class\s*' + name + r'\b')
