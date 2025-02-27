@@ -26,7 +26,7 @@ import linecache
 import re
 from inspect import (getblock, getfile, getmodule, getsourcefile, indentsize,
                      isbuiltin, isclass, iscode, isframe, isfunction, ismethod,
-                     ismodule, istraceback)
+                     ismodule, istraceback, currentframe)
 from tokenize import TokenError
 
 from ._dill import IS_IPYTHON
@@ -101,6 +101,19 @@ def _matchlambda(func, line):
         return True
     return False
 
+def get_outer_frame():
+    """
+    Get the outermost frame that is not inside source.py.
+    Returns the frame and its line number.
+    """
+    frame = currentframe()
+    if not frame: return None, None
+    source_file = __file__
+    while frame:
+        if frame.f_code.co_filename != source_file:
+            return frame, frame.f_lineno
+        frame = frame.f_back
+    return None, None
 
 def findsource(object):
     """Return the entire source file and starting line number for an object.
@@ -234,25 +247,27 @@ def findsource(object):
             #XXX: we don't find how the instance was built
     except AttributeError: pass
     if isclass(object):
+        _, lineno = get_outer_frame()
+        start_lineno = lineno if lineno else len(lines)-1
         name = object.__name__
         pat = re.compile(r'^(\s*)class\s*' + name + r'\b')
         # make some effort to find the best matching class definition:
         # use the one with the least indentation, which is the one
         # that's most probably not inside a function definition.
         candidates = []
-        for i in range(len(lines)-1,-1,-1):
+        for i in range(start_lineno,-1,-1):
             match = pat.match(lines[i])
             if match:
                 # if it's at toplevel, it's already the best one
                 if lines[i][0] == 'c':
                     return lines, i
                 # else add whitespace to candidate list
-                candidates.append((match.group(1), i))
+                candidates.append((match.group(1), -i))
         if candidates:
             # this will sort by whitespace, and by line number,
             # less whitespace first  #XXX: should sort high lnum before low
             candidates.sort()
-            return lines, candidates[0][1]
+            return lines, -candidates[0][1]
         else:
             raise IOError('could not find class definition')
     raise IOError('could not find code object')

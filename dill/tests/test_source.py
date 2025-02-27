@@ -53,6 +53,17 @@ def test_getsource():
   assert getsource(Foo) == 'class Foo(object):\n  def bar(self, x):\n    return x*x+x\n'
   #XXX: add getsource for  _foo, _bar
 
+def test_getsource_redefine():
+  class Foobar:
+    def bar(self,x):
+      return x*x+x
+  assert getsource(Foobar) == '  class Foobar:\n    def bar(self,x):\n      return x*x+x\n'
+
+  class Foobar:
+    def bar(self,x):
+      return x*x+x+1
+  assert getsource(Foobar) == '  class Foobar:\n    def bar(self,x):\n      return x*x+x+1\n'
+
 # test itself
 def test_itself():
   assert getimport(getimport)=='from dill.source import getimport\n'
@@ -163,6 +174,7 @@ def test_foo():
 
 if __name__ == '__main__':
     test_getsource()
+    test_getsource_redefine()
     test_itself()
     test_builtin()
     test_imported()
