@@ -101,18 +101,6 @@ def _matchlambda(func, line):
         return True
     return False
 
-def get_outer_frame(sourcefile):
-    """
-    Get the outermost frame that is not inside source.py.
-    Returns the frame and its line number.
-    """
-    frame = currentframe()
-    if not frame: return None, None
-    while frame:
-        if frame.f_code.co_filename == sourcefile:
-            return frame, frame.f_lineno
-        frame = frame.f_back
-    return None, None
 
 def findsource(object):
     """Return the entire source file and starting line number for an object.
@@ -246,27 +234,49 @@ def findsource(object):
             #XXX: we don't find how the instance was built
     except AttributeError: pass
     if isclass(object):
-        _, lineno = get_outer_frame(sourcefile)
-        start_lineno = lineno-1 if lineno else len(lines)-1
         name = object.__name__
         pat = re.compile(r'^(\s*)class\s*' + name + r'\b')
+
+        # find the first frame that inside sourcefile
+        frame = currentframe()
+        while frame and frame.f_code.co_filename != sourcefile:
+            frame = frame.f_back
+
+        # Starting from the found frame, search upward level by level.
+        while frame and frame.f_code.co_filename == sourcefile:
+            lineno = frame.f_lineno if hasattr(frame, 'f_lineno') else None
+            start_lineno = lineno - 1 if lineno is not None else len(lines) - 1
+            candidates = []
+            for i in range(start_lineno, -1, -1):
+                match = pat.match(lines[i])
+                if match:
+                    # if it's at toplevel, it's already the best one
+                    if lines[i][0] == 'c':
+                        return lines, i
+                    candidates.append((match.group(1), -i))
+            if candidates:
+                candidates.sort()
+                return lines, -candidates[0][1]
+            # If no match is found in the current frame, move up to the previous frame.
+            frame = frame.f_back
+        
         # make some effort to find the best matching class definition:
         # use the one with the least indentation, which is the one
         # that's most probably not inside a function definition.
         candidates = []
-        for i in range(start_lineno,-1,-1):
+        for i in range(len(lines)-1,-1,-1):
             match = pat.match(lines[i])
             if match:
                 # if it's at toplevel, it's already the best one
                 if lines[i][0] == 'c':
                     return lines, i
                 # else add whitespace to candidate list
-                candidates.append((match.group(1), -i))
+                candidates.append((match.group(1), i))
         if candidates:
             # this will sort by whitespace, and by line number,
             # less whitespace first  #XXX: should sort high lnum before low
             candidates.sort()
-            return lines, -candidates[0][1]
+            return lines, candidates[0][1]
         else:
             raise IOError('could not find class definition')
     raise IOError('could not find code object')

@@ -35,6 +35,9 @@ class Bar:
   pass
 _bar = Bar()
 
+def _wrap_getsource(obj):
+  return getsource(obj)
+
                        # inspect.getsourcelines # dill.source.getblocks
 def test_getsource():
   assert getsource(f) == 'f = lambda x: x**2\n'
@@ -58,11 +61,13 @@ def test_getsource_redefine():
     def bar(self,x):
       return x*x+x
   assert getsource(Foobar) == '  class Foobar:\n    def bar(self,x):\n      return x*x+x\n'
+  assert _wrap_getsource(Foobar) == '  class Foobar:\n    def bar(self,x):\n      return x*x+x\n'
 
   class Foobar:
     def bar(self,x):
       return x*x+x+1
   assert getsource(Foobar) == '  class Foobar:\n    def bar(self,x):\n      return x*x+x+1\n'
+  assert _wrap_getsource(Foobar) == '  class Foobar:\n    def bar(self,x):\n      return x*x+x+1\n'
 
 # test itself
 def test_itself():
