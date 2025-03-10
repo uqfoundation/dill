@@ -665,6 +665,7 @@ ALL_CODE_PARAMS = [
     # Version     New attribute         CodeType parameters
     ((3,11,'a'), 'co_endlinetable',    'argcount posonlyargcount kwonlyargcount nlocals stacksize flags code consts names varnames filename name qualname firstlineno linetable endlinetable columntable exceptiontable freevars cellvars'),
     ((3,11),     'co_exceptiontable',  'argcount posonlyargcount kwonlyargcount nlocals stacksize flags code consts names varnames filename name qualname firstlineno linetable                          exceptiontable freevars cellvars'),
+    ((3,11,'p'), 'co_qualname',        'argcount posonlyargcount kwonlyargcount nlocals stacksize flags code consts names varnames filename name qualname firstlineno linetable                                         freevars cellvars'),
     ((3,10),     'co_linetable',       'argcount posonlyargcount kwonlyargcount nlocals stacksize flags code consts names varnames filename name          firstlineno linetable                                         freevars cellvars'),
     ((3,8),      'co_posonlyargcount', 'argcount posonlyargcount kwonlyargcount nlocals stacksize flags code consts names varnames filename name          firstlineno lnotab                                            freevars cellvars'),
     ((3,7),      'co_kwonlyargcount',  'argcount                 kwonlyargcount nlocals stacksize flags code consts names varnames filename name          firstlineno lnotab                                            freevars cellvars'),
@@ -699,6 +700,22 @@ def _create_code(*args):
                     args[15].encode() if hasattr(args[15], 'encode') else args[15], # exceptiontable
                     args[16],
                     args[17],
+                )
+            fields = m.fields
+        # PyPy 3.11 7.3.19+ (17 members)
+        elif m.case((
+            'argcount', 'posonlyargcount', 'kwonlyargcount', 'nlocals', 'stacksize', 'flags', # args[0:6]
+            'code', 'consts', 'names', 'varnames', 'filename', 'name', 'qualname',            # args[6:13]
+            'firstlineno', 'linetable', 'freevars', 'cellvars'                                # args[13:]
+        )):
+            if CODE_VERSION == (3,11,'p'):
+                return CodeType(
+                    *args[:6],
+                    args[6].encode() if hasattr(args[6], 'encode') else args[6], # code
+                    *args[7:14],
+                    args[14].encode() if hasattr(args[14], 'encode') else args[14], # linetable
+                    args[15],
+                    args[16],
                 )
             fields = m.fields
         # Python 3.10 or 3.8/3.9 (16 members)
@@ -1175,6 +1192,15 @@ def save_code(pickler, obj):
                 obj.co_firstlineno, obj.co_linetable, obj.co_exceptiontable,
                 obj.co_freevars, obj.co_cellvars
             )
+    elif hasattr(obj, "co_qualname"): # pypy 3.11 7.3.19+ (17 args)
+        args = (
+            obj.co_lnotab, obj.co_argcount, obj.co_posonlyargcount,
+            obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+            obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+            obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
+            obj.co_firstlineno, obj.co_linetable, obj.co_freevars,
+            obj.co_cellvars
+        )
     elif hasattr(obj, "co_linetable"): # python 3.10 (16 args)
         args = (
             obj.co_lnotab, # for < python 3.10 [not counted in args]
