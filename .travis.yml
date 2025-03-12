@@ -7,6 +7,7 @@ matrix:
           env:
 
         - python: '3.9'
+          dist: focal
           env:
             - COVERAGE="true"
             - NUMPY="true"
@@ -32,16 +33,16 @@ matrix:
         - python: 'pypy3.9-7.3.9' # at 7.3.16
           env:
 
-        - python: 'pypy3.10-7.3.18'
+        - python: 'pypy3.10-7.3.19'
           env:
 
-        - python: 'pypy3.11-7.3.18'
+        - python: 'pypy3.11-7.3.19'
           env:
 
     allow_failures:
         - python: '3.14-dev' # CI missing
-        - python: 'pypy3.10-7.3.18' # CI missing
-        - python: 'pypy3.11-7.3.18' # CI missing
+        - python: 'pypy3.10-7.3.19' # CI missing
+        - python: 'pypy3.11-7.3.19' # CI missing
     fast_finish: true
 
 cache:
