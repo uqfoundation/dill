@@ -107,7 +107,7 @@ Requirements
 ------------
 ``dill`` requires:
 
-* ``python`` (or ``pypy``), **>=3.8**
+* ``python`` (or ``pypy``), **>=3.9**
 * ``setuptools``, **>=42**
 
 Optional requirements:
