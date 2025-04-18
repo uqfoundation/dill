@@ -3,9 +3,6 @@ language: python
 
 matrix:
     include:
-        - python: '3.8'
-          env:
-
         - python: '3.9'
           dist: focal
           env:
@@ -25,9 +22,6 @@ matrix:
           env:
 
         - python: '3.14-dev'
-          env:
-
-        - python: 'pypy3.8-7.3.9' # at 7.3.11
           env:
 
         - python: 'pypy3.9-7.3.9' # at 7.3.16
