@@ -31,7 +31,7 @@ from ._dill import (
     UnpicklingWarning,
 )
 from .session import (
-    dump_module, load_module, load_module_asdict,
+    dump_module, load_module, load_module_asdict, is_pickled_module,
     dump_session, load_session # backward compatibility
 )
 from . import detect, logger, session, source, temp
