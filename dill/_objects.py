@@ -50,6 +50,7 @@ import optparse
 import threading
 import socket
 import contextlib
+import contextvars
 try:
     import bz2
     import sqlite3
@@ -250,20 +251,22 @@ a['ModuleType'] = datetime
 a['NotImplementedType'] = NotImplemented
 a['SliceType'] = slice(1)
 a['UnboundMethodType'] = _class._method #XXX: works when not imported!
-d['TextWrapperType'] = open(os.devnull, 'r') # same as mode='w','w+','r+'
+from dill._dill import get_file_type as openfile
+d['TextWrapperType'] = openfile('r', buffering=-1) # same as mode='w','w+','r+'
 if not IS_PYODIDE:
-    d['BufferedRandomType'] = open(os.devnull, 'r+b') # same as mode='w+b'
-d['BufferedReaderType'] = open(os.devnull, 'rb') # (default: buffering=-1)
-d['BufferedWriterType'] = open(os.devnull, 'wb')
+    d['BufferedRandomType'] = openfile('r+b', buffering=-1) # same as mode='w+b'
+d['BufferedReaderType'] = openfile('rb', buffering=-1) # (default: buffering=-1)
+d['BufferedWriterType'] = openfile('wb', buffering=-1)
 try: # oddities: deprecated
     from _pyio import open as _open
-    d['PyTextWrapperType'] = _open(os.devnull, 'r', buffering=-1)
+    d['PyTextWrapperType'] = openfile('r', buffering=-1, open=_open)
     if not IS_PYODIDE:
-        d['PyBufferedRandomType'] = _open(os.devnull, 'r+b', buffering=-1)
-    d['PyBufferedReaderType'] = _open(os.devnull, 'rb', buffering=-1)
-    d['PyBufferedWriterType'] = _open(os.devnull, 'wb', buffering=-1)
+        d['PyBufferedRandomType'] = openfile('r+b', buffering=-1, open=_open)
+    d['PyBufferedReaderType'] = openfile('rb', buffering=-1, open=_open)
+    d['PyBufferedWriterType'] = openfile('wb', buffering=-1, open=_open)
 except ImportError:
     pass
+del openfile
 # other (concrete) object types
 z = d if sys.hexversion < 0x30800a2 else a
 z['CellType'] = (_lambda)(0).__closure__[0]
@@ -331,6 +334,7 @@ x['SocketType'] = _socket = socket.socket()
 x['SocketPairType'] = socket.socketpair()[0]
 # python runtime services (CH 27)
 a['GeneratorContextManagerType'] = contextlib.contextmanager(max)([1])
+#a['ContextType'] = contextvars.Context() #XXX: ContextVar
 
 try: # ipython
     __IPYTHON__ is True # is ipython
