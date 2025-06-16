@@ -1,16 +1,15 @@
 # Packages required to build docs
 # dependencies pinned as:
-# https://github.com/readthedocs/readthedocs.org/blob/543f389ddd184ff91dac6a7b808dd21697292fd5/requirements/docs.txt
+# https://github.com/readthedocs/readthedocs.org/blob/fb39b974889b35ff39f0282407f19475b9bb9bb2/requirements/docs.txt
 
 alabaster==1.0.0
-anyio==4.8.0
+anyio==4.9.0
 babel==2.17.0
-certifi==2025.1.31
-charset-normalizer==3.4.1
-click==8.1.8
+certifi==2025.4.26
+charset-normalizer==3.4.2
+click==8.2.1
 colorama==0.4.6
 docutils==0.21.2
-exceptiongroup==1.2.2
 h11==0.16.0
 idna==3.10
 imagesize==1.4.1
@@ -19,15 +18,16 @@ markdown-it-py==3.0.0
 markupsafe==3.0.2
 mdit-py-plugins==0.4.2
 mdurl==0.1.2
-myst-parser==4.0.0
-packaging==24.2
+myst-parser==4.0.1
+packaging==25.0
 pygments==2.19.1
 pyyaml==6.0.2
-requests==2.32.3
+requests==2.32.4
+roman-numerals-py==3.1.0
 six==1.17.0
 sniffio==1.3.1
-snowballstemmer==2.2.0
-sphinx==8.1.3
+snowballstemmer==3.0.1
+sphinx==8.2.3
 sphinx-autobuild==2024.10.3
 sphinx-copybutton==0.5.2
 sphinx-design==0.6.1
@@ -45,11 +45,10 @@ sphinxcontrib-jquery==4.1
 sphinxcontrib-jsmath==1.0.1
 sphinxcontrib-qthelp==2.0.0
 sphinxcontrib-serializinghtml==2.0.0
-sphinxext-opengraph==0.9.1
-starlette==0.45.3
-tomli==2.2.1
-typing-extensions==4.12.2
-urllib3==2.3.0
-uvicorn==0.34.0
-watchfiles==1.0.4
-websockets==14.2
+sphinxext-opengraph==0.10.0
+starlette==0.47.0
+typing-extensions==4.13.2
+urllib3==2.4.0
+uvicorn==0.34.2
+watchfiles==1.0.5
+websockets==15.0.1
