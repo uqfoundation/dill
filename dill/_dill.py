@@ -54,6 +54,7 @@ OLD312a7 = (sys.hexversion < 0x30c00a7)
 import builtins as __builtin__
 from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
 from pickle import GLOBAL, POP
+from _contextvars import Context as ContextType
 from _thread import LockType
 from _thread import RLock as RLockType
 try:
@@ -2118,6 +2119,12 @@ if HAS_CTYPES and hasattr(ctypes, 'pythonapi'):
     _incedental_types.add(PyCapsuleType)
 else:
     _testcapsule = None
+
+@register(ContextType)
+def save_context(pickler, obj):
+    logger.trace(pickler, "Cx: %s", obj)
+    pickler.save_reduce(ContextType, tuple(obj.items()), obj=obj)
+    logger.trace(pickler, "# Cx")
 
 
 #############################
