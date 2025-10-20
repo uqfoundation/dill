@@ -1040,7 +1040,10 @@ def _getattr(objclass, name, repr_str):
         try:
             attr = objclass.__dict__
             if type(attr) is DictProxyType:
-                attr = attr[name]
+                if sys.hexversion > 0x30f00a0 and name in ('__weakref__','__dict__'):
+                    attr = _dictproxy_helper.__dict__[name]
+                else:
+                    attr = attr[name]
             else:
                 attr = getattr(objclass,name)
         except (AttributeError, KeyError):
