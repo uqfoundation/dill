@@ -46,7 +46,7 @@ sphinxcontrib-jsmath==1.0.1
 sphinxcontrib-qthelp==2.0.0
 sphinxcontrib-serializinghtml==2.0.0
 sphinxext-opengraph==0.10.0
-starlette==0.47.2
+starlette==0.49.1
 typing-extensions==4.13.2
 urllib3==2.5.0
 uvicorn==0.34.2
