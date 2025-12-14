@@ -388,6 +388,8 @@ def getsource(object, alias='', lstrip=False, enclosing=False, \
             # now we are dealing with an instance...
             name = object.__class__.__name__
             module = object.__module__
+            if not name.isidentifier() or not all(i.isidentifier() for i in module.split('.')): #XXX: does exclusing malicious code exclude valid use?
+                raise SyntaxError('invalid syntax')
             if module in ['builtins','__builtin__']:
                 return getimport(object, alias, builtin=builtin)
             else: #FIXME: leverage getimport? use 'from module import name'?

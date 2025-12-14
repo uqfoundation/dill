@@ -54,7 +54,7 @@ OLD312a7 = (sys.hexversion < 0x30c00a7)
 import builtins as __builtin__
 from pickle import _Pickler as StockPickler, Unpickler as StockUnpickler
 from pickle import GLOBAL, POP
-from _contextvars import Context
+from _contextvars import Context as ContextType
 from _thread import LockType
 from _thread import RLock as RLockType
 try:
@@ -1040,7 +1040,10 @@ def _getattr(objclass, name, repr_str):
         try:
             attr = objclass.__dict__
             if type(attr) is DictProxyType:
-                attr = attr[name]
+                if sys.hexversion > 0x30f00a0 and name in ('__weakref__','__dict__'):
+                    attr = _dictproxy_helper.__dict__[name]
+                else:
+                    attr = attr[name]
             else:
                 attr = getattr(objclass,name)
         except (AttributeError, KeyError):
@@ -2120,10 +2123,10 @@ if HAS_CTYPES and hasattr(ctypes, 'pythonapi'):
 else:
     _testcapsule = None
 
-@register(Context)
+@register(ContextType)
 def save_context(pickler, obj):
     logger.trace(pickler, "Cx: %s", obj)
-    pickler.save_reduce(Context, tuple(obj.items()), obj=obj)
+    pickler.save_reduce(ContextType, tuple(obj.items()), obj=obj)
     logger.trace(pickler, "# Cx")
 
 

@@ -161,6 +161,18 @@ def test_numpy():
 def test_foo():
   assert importable(_foo, source=True).startswith("import dill\nclass Foo(object):\n  def bar(self, x):\n    return x*x+x\ndill.loads(")
 
+def test_safe():
+  import abc
+  obj = abc.ABC()
+  obj.__class__.__name__ = "(abc' + print('foo')]) # "
+  try:
+    source = getsource(obj, force=True)
+    assert False
+  except TypeError:
+    assert False
+  except SyntaxError:
+    pass
+
 if __name__ == '__main__':
     test_getsource()
     test_itself()
@@ -171,3 +183,4 @@ if __name__ == '__main__':
     test_importable()
     test_numpy()
     test_foo()
+    test_safe()
