@@ -47,7 +47,7 @@ sphinxcontrib-serializinghtml==2.0.0
 sphinxext-opengraph==0.13.0
 starlette==0.50.0
 typing-extensions==4.15.0
-urllib3==2.6.2
+urllib3==2.6.3
 uvicorn==0.38.0
 watchfiles==1.1.1
 websockets==15.0.1
