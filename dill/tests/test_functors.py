@@ -10,17 +10,18 @@ import functools
 import dill
 dill.settings['recurse'] = True
 
+x = 3
 
 def f(a, b, c):  # without keywords
     pass
 
 
 def g(a, b, c=2):  # with keywords
-    pass
+    return h(a=a, b=b, c=c)
 
 
 def h(a=1, b=2, c=3):  # without args
-    pass
+    return x
 
 
 def test_functools():

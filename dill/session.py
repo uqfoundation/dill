@@ -243,17 +243,18 @@ def dump_module(
         if filename is None:
             filename = str(TEMPDIR/'session.pkl')
         file = open(filename, 'wb')
+    original_main = main
+    if refimported:
+        main = _stash_modules(main)
     try:
         pickler = Pickler(file, protocol, **kwds)
-        pickler._original_main = main
-        if refimported:
-            main = _stash_modules(main)
         pickler._main = main     #FIXME: dill.settings are disabled
         pickler._byref = False   # disable pickling by name reference
         pickler._recurse = False # disable pickling recursion for globals
         pickler._session = True  # is best indicator of when pickling a session
         pickler._first_pass = True
-        pickler._main_modified = main is not pickler._original_main
+        if main is not original_main:
+            pickler._original_main = original_main
         pickler.dump(main)
     finally:
         if file is not filename:  # if newly opened file
