@@ -1,4 +1,4 @@
-dist: jammy
+dist: noble
 language: python
 
 matrix:
@@ -6,13 +6,15 @@ matrix:
         - python: '3.9'
           dist: focal
           env:
+
+        - python: '3.10'
+          dist: jammy
+          env:
             - COVERAGE="true"
             - NUMPY="true"
 
-        - python: '3.10'
-          env:
-
         - python: '3.11'
+          dist: jammy
           env:
 
         - python: '3.12'
@@ -21,10 +23,10 @@ matrix:
         - python: '3.13'
           env:
 
-        - python: '3.14-dev'
+        - python: '3.14'
           env:
 
-        - python: '3.15-dev'
+        - python: '3.15t-dev'
           env:
 
         - python: 'pypy3.9-7.3.15' # at 7.3.16
@@ -37,8 +39,7 @@ matrix:
           env:
 
     allow_failures:
-        - python: '3.15-dev' # prerelease; CI missing
-        - python: 'pypy3.11-7.3.20' # CI missing
+        - python: '3.15t-dev' # prerelease
     fast_finish: true
 
 cache:

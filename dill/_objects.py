@@ -176,7 +176,7 @@ a['OptionParserType'] = _oparser = optparse.OptionParser() # pickle ok
 a['OptionGroupType'] = optparse.OptionGroup(_oparser,"foo") # pickle ok
 a['OptionType'] = optparse.Option('--foo') # pickle ok
 if HAS_CTYPES:
-    z = x if IS_PYPY else a
+    z = x if (IS_PYPY and sys.hexversion < 0x30b0df0) else a
     z['CCharType'] = _cchar = ctypes.c_char()
     z['CWCharType'] = ctypes.c_wchar() # fail == 2.6
     z['CByteType'] = ctypes.c_byte()
@@ -218,7 +218,7 @@ a['BufferedIOBaseType'] = io.BufferedIOBase()
 a['UnicodeIOType'] = TextIO() # the new StringIO
 a['LoggerAdapterType'] = logging.LoggerAdapter(_logger,_dict) # pickle ok
 if HAS_CTYPES:
-    z = x if IS_PYPY else a
+    z = x if (IS_PYPY and sys.hexversion < 0x30b0df0) else a
     z['CBoolType'] = ctypes.c_bool(1)
     z['CLongDoubleType'] = ctypes.c_longdouble()
     del z
@@ -227,7 +227,7 @@ import argparse
 a['OrderedDictType'] = collections.OrderedDict(_dict)
 a['CounterType'] = collections.Counter(_dict)
 if HAS_CTYPES:
-    z = x if IS_PYPY else a
+    z = x if (IS_PYPY and sys.hexversion < 0x30b0df0) else a
     z['CSSizeTType'] = ctypes.c_ssize_t()
     del z
 # generic operating system services (CH 15)
