@@ -75,18 +75,6 @@ ReferenceError: weakly-referenced object no longer exists
 >>> 
 
 
-
-########################################
-approach to pickling weakrefs:
-
-*) register the weakref types ?  (see line ~228 of dill.py)
-
-*) use hash to create hard copy of ref object
-   then upon unpickle, create new weakref
-
-*) propose that pickling a weakref will always provide a dead reference
-   unless the reference object is pickled along with the weakref
-
 ########################################
 pickling generators:
 
