@@ -49,6 +49,7 @@ import optparse
 #import __hello__
 import threading
 import socket
+import atexit
 import contextlib
 import contextvars
 try:
@@ -330,8 +331,13 @@ a['RLockType'] = threading.RLock()
 a['NamedLoggerType'] = _logger = logging.getLogger(__name__)
 #a['FrozenModuleType'] = __hello__ #FIXME: prints "Hello world..."
 # interprocess communication (CH 17)
-x['SocketType'] = _socket = socket.socket()
-x['SocketPairType'] = socket.socketpair()[0]
+_socket = socket.socket()
+x['SocketType'] = _socket
+atexit.register(_socket.close)
+_socket_pair = socket.socketpair()
+x['SocketPairType'] = _socket_pair[0]
+_socket_pair[1].close()
+atexit.register(_socket_pair[0].close)
 # python runtime services (CH 27)
 a['GeneratorContextManagerType'] = contextlib.contextmanager(max)([1])
 #a['ContextType'] = contextvars.Context() #XXX: ContextVar

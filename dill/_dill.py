@@ -87,7 +87,7 @@ import dataclasses
 from weakref import ReferenceType, ProxyType, CallableProxyType
 from collections import OrderedDict
 from enum import Enum, EnumMeta
-from functools import partial
+from functools import partial, wraps
 from operator import itemgetter, attrgetter
 GENERATOR_FAIL = False
 import importlib.machinery
@@ -372,6 +372,16 @@ class Pickler(StockPickler):
         self._recurse = settings['recurse'] if _recurse is None else _recurse
         self._postproc = OrderedDict()
         self._file = file
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        _ensure_legacy_batch_setitems_support(cls)
+
+    def _batch_setitems(self, items, obj=None):
+        parent_method = super()._batch_setitems
+        if _batch_setitems_accepts_obj(parent_method):
+            return parent_method(items, obj)
+        return parent_method(items)
 
     def save(self, obj, save_persistent_id=True):
         # numpy hack
@@ -955,6 +965,7 @@ del __d
 # to _create_cell) once breaking changes are allowed.
 _CELL_REF = None
 _CELL_EMPTY = Sentinel('_CELL_EMPTY')
+_BATCH_SETITEMS_OBJ_SENTINEL = Sentinel('_dill_batch_setitems_obj')
 
 def _create_cell(contents=None):
     if contents is not _CELL_EMPTY:
@@ -1109,6 +1120,87 @@ def _setitems(dest, source):
         dest[k] = v
 
 
+def _ensure_legacy_batch_setitems_support(cls):
+    """Wrap subclasses overriding `_batch_setitems` with the legacy signature."""
+    method = cls.__dict__.get('_batch_setitems')
+    if method is None:
+        return
+
+    if getattr(method, '__dill_legacy_batch_setitems__', False):
+        return
+
+    try:
+        params = list(inspect.signature(method).parameters.values())
+    except (TypeError, ValueError):
+        return
+
+    # For unbound methods the signature includes ``self`` as the first entry.
+    if len(params) != 2:
+        return
+
+    _, items_param = params
+    if items_param.kind not in (
+        inspect.Parameter.POSITIONAL_ONLY,
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+    ):
+        return
+
+    @wraps(method)
+    def wrapper(self, items, obj=None):
+        previous = getattr(self, '_dill_batch_setitems_obj', _BATCH_SETITEMS_OBJ_SENTINEL)
+        self._dill_batch_setitems_obj = obj
+        try:
+            return method(self, items)
+        finally:
+            if previous is _BATCH_SETITEMS_OBJ_SENTINEL:
+                delattr(self, '_dill_batch_setitems_obj')
+            else:
+                self._dill_batch_setitems_obj = previous
+
+    wrapper.__dill_legacy_batch_setitems__ = True
+    setattr(cls, '_batch_setitems', wrapper)
+
+
+def _batch_setitems_accepts_obj(batch_setitems):
+    """Return True if ``batch_setitems`` supports an ``obj`` argument."""
+    try:
+        params = list(inspect.signature(batch_setitems).parameters.values())
+    except (TypeError, ValueError):
+        # Built-in or C-implemented callables may not expose a signature.
+        return sys.hexversion >= 0x30e00a1
+
+    if not params:
+        return False
+
+    # Bound methods drop ``self`` from the signature, so the first parameter
+    # represents the ``items`` iterator. Any additional parameter (or varargs)
+    # means the callable can accept ``obj``.
+    extras = params[1:]
+    if not extras:
+        return False
+
+    for param in extras:
+        if param.kind in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.KEYWORD_ONLY,
+            inspect.Parameter.VAR_KEYWORD,
+        ):
+            return True
+
+    return False
+
+
+def _call_batch_setitems(pickler, items_iter, obj):
+    """Invoke ``pickler._batch_setitems`` with compatibility for older overrides."""
+    batch_setitems = pickler._batch_setitems
+    if _batch_setitems_accepts_obj(batch_setitems):
+        batch_setitems(items_iter, obj=obj)
+    else:
+        batch_setitems(items_iter)
+
+
 def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO_DEFAULT, postproc_list=None):
     if obj is Getattr.NO_DEFAULT:
         obj = Reduce(reduction) # pragma: no cover
@@ -1149,7 +1241,7 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
                     if sys.hexversion < 0x30e00a1:
                         pickler._batch_setitems(iter(source.items()))
                     else:
-                        pickler._batch_setitems(iter(source.items()), obj=obj)
+                        _call_batch_setitems(pickler, iter(source.items()), obj=obj)
                 else:
                     # Updating with an empty dictionary. Same as doing nothing.
                     continue

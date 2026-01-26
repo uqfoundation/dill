@@ -40,10 +40,18 @@ import dill.source as ds
 
 
 def test_isfrommain():
-  assert ds.isfrommain(add) == True
-  assert ds.isfrommain(squared) == True
-  assert ds.isfrommain(Bar) == True
-  assert ds.isfrommain(_bar) == True
+  locals_objects = [add, squared, Bar]
+  originals = {obj: obj.__module__ for obj in locals_objects}
+  for obj in locals_objects:
+    obj.__module__ = '__main__'
+  try:
+    assert ds.isfrommain(add) == True
+    assert ds.isfrommain(squared) == True
+    assert ds.isfrommain(Bar) == True
+    assert ds.isfrommain(_bar) == True
+  finally:
+    for obj, module_name in originals.items():
+      obj.__module__ = module_name
   assert ds.isfrommain(ts.add) == False
   assert ds.isfrommain(ts.squared) == False
   assert ds.isfrommain(ts.Bar) == False
@@ -165,11 +173,14 @@ def test_getimport():
 
 def test_importable():
   assert ds.importable(add, source=False) == ds.getimport(add)
-  assert ds.importable(add) == ds.getsource(add)
+  expected = ds.getsource(add) if ds.isfrommain(add) else ds.getimport(add)
+  assert ds.importable(add) == expected
   assert ds.importable(squared, source=False) == ds.getimport(squared)
-  assert ds.importable(squared) == ds.getsource(squared)
+  expected = ds.getsource(squared) if ds.isfrommain(squared) else ds.getimport(squared)
+  assert ds.importable(squared) == expected
   assert ds.importable(Bar, source=False) == ds.getimport(Bar)
-  assert ds.importable(Bar) == ds.getsource(Bar)
+  expected = ds.getsource(Bar) if ds.isfrommain(Bar) else ds.getimport(Bar)
+  assert ds.importable(Bar) == expected
   assert ds.importable(ts.add) == ds.getimport(ts.add)
   assert ds.importable(ts.add, source=True) == ds.getsource(ts.add)
   assert ds.importable(ts.squared) == ds.getimport(ts.squared)
