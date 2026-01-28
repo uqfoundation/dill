@@ -826,10 +826,28 @@ def _create_rlock(count, owner, *args): #XXX: ignores 'blocking'
     return lock
 
 # thanks to matsjoyce for adding all the different file modes
-def _create_filehandle(name, mode, position, closed, open, strictio, fmode, fdata): # buffering=0
+def _create_filehandle(name, mode, position, closed, open, strictio, fmode, fdata, owner_id=None): # buffering=0
     # only pickles the handle, not the file contents... good? or StringIO(data)?
     # (for file contents see: http://effbot.org/librarybook/copy-reg.htm)
     # NOTE: handle special cases first (are there more special cases?)
+    if owner_id:
+        # Handle unnamed temporary file in Linux
+        #NOTE: Windows doesn't have it, other *nixes require C extensions.
+        self_pid = os.getpid()
+        self_id = (self_pid, _process_create_time(self_pid))
+        if owner_id != self_id:
+            # If the fd is from this process, go on, else:
+            owner_pid = owner_id[0]
+            if owner_id[1] == _process_create_time(owner_pid):
+                # Creation times are equal or both are None.
+                # The fd is likely from a process in this machine.
+                name = '/proc/%d/fd/%s' % (owner_pid, name)
+                if not os.path.exists(name):
+                    name = '<fdopen>'
+            else:
+                # The fd is from a finished process or not from this machine.
+                name = '<fdopen>'
+
     names = {'<stdin>':sys.__stdin__, '<stdout>':sys.__stdout__,
              '<stderr>':sys.__stderr__} #XXX: better fileno=(0,1,2) ?
     if name in list(names.keys()):
@@ -1387,6 +1405,39 @@ def save_socket(pickler, obj):
     logger.trace(pickler, "# So")
     return
 
+def _process_create_time(pid):
+    """process creation time in seconds since boot"""
+    try:
+        return _process_create_time.cache[pid]
+    except KeyError:
+        pass
+    try:
+        import math
+        ticks_per_second = os.sysconf('SC_CLK_TCK')
+        ndigits = math.ceil(math.log10(ticks_per_second))
+        try:
+            import psutil
+            psutil_time = psutil.Process(pid).create_time()
+            # psutil adds the boot_time to create_time.
+            # We don't care (and it could potentially drift with NTP).
+            create_time = psutil_time - psutil.boot_time()
+        except ImportError:
+            with open('/proc/%d/stat' % pid) as file:
+                stat = file.read()
+            # based on psutil and man proc
+            fields = stat.rpartition(')')[2].split()
+            starttime = float(fields[19])
+            create_time = starttime / ticks_per_second
+    except Exception as error:
+        log.debug("_process_create_time() exception: %s", error)
+        create_time = None
+    if create_time:
+        # Deal with float imprecision and time drift, we don't need full precision.
+        create_time = math.trunc(round(create_time, ndigits))
+    _process_create_time.cache[pid] = create_time
+    return create_time
+_process_create_time.cache = {}
+
 def _save_file(pickler, obj, open_):
     if obj.closed:
         position = 0
@@ -1408,11 +1459,12 @@ def _save_file(pickler, obj, open_):
     else:
         strictio = False
         fmode = 0 # HANDLE_FMODE
-    pickler.save_reduce(_create_filehandle, (obj.name, obj.mode, position,
-                                             obj.closed, open_, strictio,
-                                             fmode, fdata), obj=obj)
+    args = (obj.name, obj.mode, position, obj.closed, open_, strictio, fmode, fdata)
+    if isinstance(obj.name, int):
+        pid = os.getpid()
+        args += ((pid, _process_create_time(pid)),)
+    pickler.save_reduce(_create_filehandle, args, obj=obj)
     return
-
 
 @register(FileType) #XXX: in 3.x has buffer=0, needs different _create?
 @register(BufferedReaderType)
