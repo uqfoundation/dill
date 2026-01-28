@@ -26,7 +26,7 @@ import linecache
 import re
 from inspect import (getblock, getfile, getmodule, getsourcefile, indentsize,
                      isbuiltin, isclass, iscode, isframe, isfunction, ismethod,
-                     ismodule, istraceback)
+                     ismodule, istraceback, currentframe)
 from tokenize import TokenError
 
 from ._dill import IS_IPYTHON
@@ -236,6 +236,30 @@ def findsource(object):
     if isclass(object):
         name = object.__name__
         pat = re.compile(r'^(\s*)class\s*' + name + r'\b')
+
+        # find the first frame that inside sourcefile
+        frame = currentframe()
+        while frame and frame.f_code.co_filename != sourcefile:
+            frame = frame.f_back
+
+        # Starting from the found frame, search upward level by level.
+        while frame and frame.f_code.co_filename == sourcefile:
+            lineno = frame.f_lineno if hasattr(frame, 'f_lineno') else None
+            start_lineno = lineno - 1 if lineno is not None else len(lines) - 1
+            candidates = []
+            for i in range(start_lineno, -1, -1):
+                match = pat.match(lines[i])
+                if match:
+                    # if it's at toplevel, it's already the best one
+                    if lines[i][0] == 'c':
+                        return lines, i
+                    candidates.append((match.group(1), -i))
+            if candidates:
+                candidates.sort()
+                return lines, -candidates[0][1]
+            # If no match is found in the current frame, move up to the previous frame.
+            frame = frame.f_back
+        
         # make some effort to find the best matching class definition:
         # use the one with the least indentation, which is the one
         # that's most probably not inside a function definition.
