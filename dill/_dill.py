@@ -2031,7 +2031,7 @@ def save_function(pickler, obj):
             fattr = getattr(obj, fattrname, None)
             if fattr is not None:
                 state_dict[fattrname] = fattr
-        if obj.__qualname__ != obj.__code__.co_qualname:
+        if obj.__qualname__ != getattr(obj.__code__, "co_qualname", obj.__code__.co_name):
             state_dict['__qualname__'] = obj.__qualname__
         if '__name__' not in globs or obj.__module__ != globs['__name__']:
             state_dict['__module__'] = obj.__module__
