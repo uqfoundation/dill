@@ -20,7 +20,7 @@ mdit-py-plugins==0.5.0
 mdurl==0.1.2
 myst-parser==4.0.1
 packaging==25.0
-pygments==2.19.2
+pygments==2.20.0
 pyyaml==6.0.3
 requests==2.32.5
 roman-numerals-py==3.1.0
