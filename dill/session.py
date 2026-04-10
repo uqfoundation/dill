@@ -24,8 +24,52 @@ import tempfile
 
 TEMPDIR = pathlib.PurePath(tempfile.gettempdir())
 
+
+class SecurityWarning(UserWarning):
+    """Warning for insecure operations."""
+    pass
+
+
 # Type hints.
 from typing import Optional, Union
+
+
+def _check_symlink(path):
+    """Raise OSError if *path* is a symlink (TOCTOU-safe stat check)."""
+    try:
+        st = os.lstat(path)
+    except FileNotFoundError:
+        return
+    import stat
+    if stat.S_ISLNK(st.st_mode):
+        raise OSError("refusing to open symlink at %r" % path)
+
+
+def _safe_open_for_writing(path):
+    """Open *path* for writing with exclusive-create or symlink check.
+
+    If the file does not yet exist, create it with mode 0o600 using
+    ``O_CREAT | O_EXCL`` so that no other process can race us.  If the
+    file already exists, verify it is **not** a symlink before opening.
+    """
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        _check_symlink(path)
+        fd = os.open(path, os.O_WRONLY | os.O_TRUNC, 0o600)
+    return os.fdopen(fd, 'wb')
+
+
+def _warn_if_default_path(filename):
+    """Emit a SecurityWarning when using the shared default temp path."""
+    if filename is not None:
+        return
+    warnings.warn(
+        "Using default shared path %s is insecure. "
+        "Pass an explicit filename." % str(TEMPDIR / 'session.pkl'),
+        SecurityWarning,
+        stacklevel=3,
+    )
 
 from dill import _dill, Pickler, Unpickler
 from ._dill import (
@@ -240,9 +284,10 @@ def dump_module(
     if hasattr(filename, 'write'):
         file = filename
     else:
+        _warn_if_default_path(filename)
         if filename is None:
             filename = str(TEMPDIR/'session.pkl')
-        file = open(filename, 'wb')
+        file = _safe_open_for_writing(filename)
     try:
         pickler = Pickler(file, protocol, **kwds)
         pickler._original_main = main
@@ -439,8 +484,10 @@ def load_module(
     if hasattr(filename, 'read'):
         file = filename
     else:
+        _warn_if_default_path(filename)
         if filename is None:
             filename = str(TEMPDIR/'session.pkl')
+        _check_symlink(filename)
         file = open(filename, 'rb')
     try:
         file = _make_peekable(file)
@@ -572,8 +619,10 @@ def load_module_asdict(
     if hasattr(filename, 'read'):
         file = filename
     else:
+        _warn_if_default_path(filename)
         if filename is None:
             filename = str(TEMPDIR/'session.pkl')
+        _check_symlink(filename)
         file = open(filename, 'rb')
     try:
         file = _make_peekable(file)
