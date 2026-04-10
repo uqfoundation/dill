@@ -271,6 +271,56 @@ def test_load_module_asdict():
         assert 'y' not in main_vars
         assert 'empty' in main_vars
 
+def test_symlink_rejected(tmp_path=None):
+    """dump_module/load_module/load_module_asdict must reject symlinks (issue #749)"""
+    import tempfile, shutil
+    tmp_dir = tmp_path or tempfile.mkdtemp()
+    try:
+        real_file = os.path.join(tmp_dir, 'real.pkl')
+        link_file = os.path.join(tmp_dir, 'link.pkl')
+
+        # Create a real session file, then a symlink to it.
+        dill.dump_module(real_file)
+        os.symlink(real_file, link_file)
+
+        # load_module must refuse the symlink.
+        try:
+            dill.load_module(link_file)
+            assert False, "load_module should have raised OSError for symlink"
+        except OSError:
+            pass
+
+        # load_module_asdict must refuse the symlink.
+        try:
+            dill.load_module_asdict(link_file)
+            assert False, "load_module_asdict should have raised OSError for symlink"
+        except OSError:
+            pass
+
+        # dump_module must refuse to overwrite a symlink.
+        try:
+            dill.dump_module(link_file)
+            assert False, "dump_module should have raised OSError for symlink"
+        except OSError:
+            pass
+    finally:
+        if tmp_path is None:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+def test_default_path_warning():
+    """Using default path should emit SecurityWarning (issue #749)"""
+    from dill.session import SecurityWarning as _SecurityWarning
+    import warnings as _warnings
+    with _warnings.catch_warnings(record=True) as caught:
+        _warnings.simplefilter("always")
+        dill.dump_module()  # default path
+    security_warnings = [w for w in caught if issubclass(w.category, _SecurityWarning)]
+    assert len(security_warnings) >= 1, "expected SecurityWarning for default path"
+    # Clean up the default file.
+    from dill.session import TEMPDIR
+    with suppress(OSError):
+        os.remove(str(TEMPDIR / 'session.pkl'))
+
 if __name__ == '__main__':
     test_session_main(refimported=False)
     test_session_main(refimported=True)
@@ -278,3 +328,5 @@ if __name__ == '__main__':
     test_runtime_module()
     test_refimported_imported_as()
     test_load_module_asdict()
+    test_symlink_rejected()
+    test_default_path_warning()
