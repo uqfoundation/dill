@@ -15,6 +15,10 @@ __all__ = [
     'dump_session', 'load_session' # backward compatibility
 ]
 
+class SecurityWarning(UserWarning):
+    """Warning for insecure default temp file paths."""
+    pass
+
 import re
 import os
 import sys
@@ -23,6 +27,7 @@ import pathlib
 import tempfile
 
 TEMPDIR = pathlib.PurePath(tempfile.gettempdir())
+SESSION_TEMPFILE = str(TEMPDIR/'session.pkl')
 
 # Type hints.
 from typing import Optional, Union
@@ -33,6 +38,42 @@ from ._dill import (
     _import_module, _is_builtin_module, _is_imported_module, _main_module,
     _reverse_typemap, __builtin__, UnpicklingError,
 )
+
+def _check_symlink(path):
+    """Raise OSError if *path* is a symlink."""
+    try:
+        st = os.lstat(path)
+    except OSError:
+        return  # file does not exist yet – nothing to check
+    import stat
+    if stat.S_ISLNK(st.st_mode):
+        raise OSError("refusing to operate on symlink: %r" % path)
+
+def _safe_open_for_writing(path):
+    """Open *path* for exclusive creation with restricted permissions.
+
+    Uses ``O_CREAT | O_EXCL | O_WRONLY`` so the call is atomic – it will
+    fail if the file already exists rather than silently following a
+    symlink.  When the file *does* already exist, fall back to a regular
+    open after verifying that it is not a symlink.
+    """
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    try:
+        fd = os.open(path, flags, 0o600)
+    except FileExistsError:
+        _check_symlink(path)
+        fd = os.open(path, os.O_WRONLY | os.O_TRUNC, 0o600)
+    return os.fdopen(fd, 'wb')
+
+_DEFAULT_PATH_WARNING = (
+    "using the default session file %r which is in a world-writable "
+    "directory.  Pass an explicit filename to avoid a security risk."
+) % SESSION_TEMPFILE
+
+def _warn_if_default_path(filename):
+    """Emit a SecurityWarning when the caller relies on the default path."""
+    if filename is None:
+        warnings.warn(_DEFAULT_PATH_WARNING, SecurityWarning, stacklevel=3)
 
 def _module_map():
     """get map of imported modules"""
@@ -240,9 +281,10 @@ def dump_module(
     if hasattr(filename, 'write'):
         file = filename
     else:
+        _warn_if_default_path(filename)
         if filename is None:
-            filename = str(TEMPDIR/'session.pkl')
-        file = open(filename, 'wb')
+            filename = SESSION_TEMPFILE
+        file = _safe_open_for_writing(filename)
     try:
         pickler = Pickler(file, protocol, **kwds)
         pickler._original_main = main
@@ -439,8 +481,10 @@ def load_module(
     if hasattr(filename, 'read'):
         file = filename
     else:
+        _warn_if_default_path(filename)
         if filename is None:
-            filename = str(TEMPDIR/'session.pkl')
+            filename = SESSION_TEMPFILE
+        _check_symlink(filename)
         file = open(filename, 'rb')
     try:
         file = _make_peekable(file)
@@ -572,8 +616,10 @@ def load_module_asdict(
     if hasattr(filename, 'read'):
         file = filename
     else:
+        _warn_if_default_path(filename)
         if filename is None:
-            filename = str(TEMPDIR/'session.pkl')
+            filename = SESSION_TEMPFILE
+        _check_symlink(filename)
         file = open(filename, 'rb')
     try:
         file = _make_peekable(file)
