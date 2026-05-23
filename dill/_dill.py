@@ -1187,8 +1187,8 @@ def save_code(pickler, obj):
         with warnings.catch_warnings():
             if not OLD312a7: # issue 597
                 warnings.filterwarnings('ignore', category=DeprecationWarning)
-            args = (
-                obj.co_lnotab, # for < python 3.10 [not counted in args]
+            args = (                            # [not counted in args]
+                getattr(obj, 'co_lnotab', b''), # for < python 3.10; 3.15.0b1+
                 obj.co_argcount, obj.co_posonlyargcount,
                 obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
                 obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
