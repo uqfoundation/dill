@@ -11,6 +11,7 @@ import sys
 import __main__
 from contextlib import suppress
 from io import BytesIO
+from types import ModuleType
 
 import dill
 
@@ -271,6 +272,36 @@ def test_load_module_asdict():
         assert 'y' not in main_vars
         assert 'empty' in main_vars
 
+def test_is_pickled_module():
+    import tempfile
+    import warnings
+
+    # Module saved with dump().
+    pickle_file = tempfile.NamedTemporaryFile(mode='wb')
+    dill.dump(os, pickle_file)
+    pickle_file.flush()
+    assert not dill.is_pickled_module(pickle_file.name)
+    assert not dill.is_pickled_module(pickle_file.name, importable=False)
+    pickle_file.close()
+
+    # Importable module saved with dump_module().
+    pickle_file = tempfile.NamedTemporaryFile(mode='wb')
+    dill.dump_module(pickle_file, local_mod)
+    pickle_file.flush()
+    assert dill.is_pickled_module(pickle_file.name)
+    assert not dill.is_pickled_module(pickle_file.name, importable=False)
+    assert dill.is_pickled_module(pickle_file.name, identify=True) == local_mod.__name__
+    pickle_file.close()
+
+    # Module-type object saved with dump_module().
+    pickle_file = tempfile.NamedTemporaryFile(mode='wb')
+    dill.dump_module(pickle_file, ModuleType('runtime'))
+    pickle_file.flush()
+    assert not dill.is_pickled_module(pickle_file.name)
+    assert dill.is_pickled_module(pickle_file.name, importable=False)
+    assert dill.is_pickled_module(pickle_file.name, importable=False, identify=True) == 'runtime'
+    pickle_file.close()
+
 if __name__ == '__main__':
     test_session_main(refimported=False)
     test_session_main(refimported=True)
@@ -278,3 +309,4 @@ if __name__ == '__main__':
     test_runtime_module()
     test_refimported_imported_as()
     test_load_module_asdict()
+    test_is_pickled_module()
