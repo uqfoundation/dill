@@ -271,6 +271,70 @@ def test_load_module_asdict():
         assert 'y' not in main_vars
         assert 'empty' in main_vars
 
+def test_symlink_rejected():
+    """symlinks must be rejected by dump_module, load_module, load_module_asdict"""
+    import tempfile, warnings
+    tmpdir = tempfile.mkdtemp()
+    real_file = os.path.join(tmpdir, 'real.pkl')
+    link_file = os.path.join(tmpdir, 'link.pkl')
+
+    # Create a real file and a symlink pointing to it.
+    with open(real_file, 'wb') as f:
+        f.write(b'')
+    os.symlink(real_file, link_file)
+
+    try:
+        # dump_module must refuse to write through a symlink.
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                dill.dump_module(link_file)
+            raise AssertionError("dump_module should have raised OSError for symlink")
+        except OSError:
+            pass
+
+        # Dump a valid session to the real file so load tests have something to read.
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            dill.dump_module(real_file)
+
+        # load_module must refuse to read through a symlink.
+        try:
+            dill.load_module(link_file)
+            raise AssertionError("load_module should have raised OSError for symlink")
+        except OSError:
+            pass
+
+        # load_module_asdict must refuse to read through a symlink.
+        try:
+            dill.load_module_asdict(link_file)
+            raise AssertionError("load_module_asdict should have raised OSError for symlink")
+        except OSError:
+            pass
+    finally:
+        with suppress(OSError):
+            os.remove(link_file)
+        with suppress(OSError):
+            os.remove(real_file)
+        with suppress(OSError):
+            os.rmdir(tmpdir)
+
+def test_default_path_warning():
+    """a SecurityWarning must be emitted when the default path is used"""
+    import warnings
+    from dill.session import SecurityWarning
+    for func in (dill.dump_module, dill.load_module, dill.load_module_asdict):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            try:
+                func()  # uses the default path
+            except Exception:
+                pass  # we only care about the warning, not success
+            security_warnings = [x for x in w if issubclass(x.category, SecurityWarning)]
+            assert security_warnings, (
+                "%s() did not emit SecurityWarning for the default path" % func.__name__
+            )
+
 if __name__ == '__main__':
     test_session_main(refimported=False)
     test_session_main(refimported=True)
@@ -278,3 +342,5 @@ if __name__ == '__main__':
     test_runtime_module()
     test_refimported_imported_as()
     test_load_module_asdict()
+    test_symlink_rejected()
+    test_default_path_warning()
