@@ -335,6 +335,51 @@ def test_default_path_warning():
                 "%s() did not emit SecurityWarning for the default path" % func.__name__
             )
 
+def test_symlink_toctou():
+    """a symlink swapped in after the lstat check must still be refused"""
+    if not hasattr(os, 'O_NOFOLLOW'):
+        return  # platform without symlink-safe open semantics
+    import stat, tempfile, warnings
+    from dill import session as _session
+    tmpdir = tempfile.mkdtemp()
+    target = os.path.join(tmpdir, 'secret')
+    session_path = os.path.join(tmpdir, 'session.pkl')
+    with open(target, 'w') as f:
+        f.write('secret')
+    with open(session_path, 'wb') as f:
+        f.write(b'benign')
+
+    # Simulate an attacker that wins the race in the window between the
+    # symlink check and the open by swapping the file for a symlink at the
+    # instant lstat() confirms it is a regular file.
+    orig_lstat = os.lstat
+    swapped = []
+    def racing_lstat(path, *a, **k):
+        st = orig_lstat(path, *a, **k)
+        if not swapped and str(path) == session_path and not stat.S_ISLNK(st.st_mode):
+            os.remove(session_path)
+            os.symlink(target, session_path)
+            swapped.append(True)
+        return st
+
+    _session.os.lstat = racing_lstat
+    try:
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                dill.load_module(session_path)
+            raise AssertionError("read followed a symlink swapped in at the TOCTOU window")
+        except OSError:
+            pass
+    finally:
+        _session.os.lstat = orig_lstat
+        with suppress(OSError):
+            os.remove(session_path)
+        with suppress(OSError):
+            os.remove(target)
+        with suppress(OSError):
+            os.rmdir(tmpdir)
+
 if __name__ == '__main__':
     test_session_main(refimported=False)
     test_session_main(refimported=True)
@@ -344,3 +389,4 @@ if __name__ == '__main__':
     test_load_module_asdict()
     test_symlink_rejected()
     test_default_path_warning()
+    test_symlink_toctou()

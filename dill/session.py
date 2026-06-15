@@ -39,6 +39,9 @@ from ._dill import (
     _reverse_typemap, __builtin__, UnpicklingError,
 )
 
+# O_NOFOLLOW is POSIX-only; degrade to a no-op flag elsewhere (e.g. Windows).
+_O_NOFOLLOW = getattr(os, 'O_NOFOLLOW', 0)
+
 def _check_symlink(path):
     """Raise OSError if *path* is a symlink."""
     try:
@@ -54,16 +57,27 @@ def _safe_open_for_writing(path):
 
     Uses ``O_CREAT | O_EXCL | O_WRONLY`` so the call is atomic – it will
     fail if the file already exists rather than silently following a
-    symlink.  When the file *does* already exist, fall back to a regular
-    open after verifying that it is not a symlink.
+    symlink.  When the file *does* already exist, fall back to a truncating
+    open that carries ``O_NOFOLLOW`` so the kernel itself refuses a symlink
+    in a single syscall, leaving no window between the check and the open.
     """
-    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | _O_NOFOLLOW
     try:
         fd = os.open(path, flags, 0o600)
     except FileExistsError:
         _check_symlink(path)
-        fd = os.open(path, os.O_WRONLY | os.O_TRUNC, 0o600)
+        fd = os.open(path, os.O_WRONLY | os.O_TRUNC | _O_NOFOLLOW, 0o600)
     return os.fdopen(fd, 'wb')
+
+def _safe_open_for_reading(path):
+    """Open *path* read-only, refusing to follow a final symlink.
+
+    ``O_NOFOLLOW`` makes the symlink rejection part of the open syscall so
+    there is no time-of-check/time-of-use gap with the preceding lstat.
+    """
+    _check_symlink(path)
+    fd = os.open(path, os.O_RDONLY | _O_NOFOLLOW)
+    return os.fdopen(fd, 'rb')
 
 _DEFAULT_PATH_WARNING = (
     "using the default session file %r which is in a world-writable "
@@ -484,8 +498,7 @@ def load_module(
         _warn_if_default_path(filename)
         if filename is None:
             filename = SESSION_TEMPFILE
-        _check_symlink(filename)
-        file = open(filename, 'rb')
+        file = _safe_open_for_reading(filename)
     try:
         file = _make_peekable(file)
         #FIXME: dill.settings are disabled
@@ -619,8 +632,7 @@ def load_module_asdict(
         _warn_if_default_path(filename)
         if filename is None:
             filename = SESSION_TEMPFILE
-        _check_symlink(filename)
-        file = open(filename, 'rb')
+        file = _safe_open_for_reading(filename)
     try:
         file = _make_peekable(file)
         main_name = _identify_module(file)
