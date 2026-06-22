@@ -9,10 +9,12 @@ import atexit
 import os
 import sys
 import __main__
-from contextlib import suppress
+from contextlib import suppress, contextmanager
+from types import ModuleType
 from io import BytesIO
 
 import dill
+import pytest
 
 session_file = os.path.join(os.path.dirname(__file__), 'session-refimported-%s.pkl')
 
@@ -70,6 +72,8 @@ import urllib as url                                # top-level module under ali
 from xml import sax                                 # submodule
 import xml.dom.minidom as dom                       # submodule under alias
 import test_dictviews as local_mod                  # non-builtin top-level module
+local_mod.__loader__ = None
+local_mod.__spec__ = None
 
 ## Imported objects.
 from calendar import Calendar, isleap, day_name     # class, function, other object
@@ -98,12 +102,20 @@ class TestNamespace:
     def __init__(self, **extra):
         self.extra = extra
     def __enter__(self):
+        self._original_sys_main = sys.modules.get('__main__')
+        if _TARGET_MAIN is not None:
+            sys.modules['__main__'] = _TARGET_MAIN
         self.backup = globals().copy()
         globals().clear()
         globals().update(self.test_globals)
         globals().update(self.extra)
         return self
     def __exit__(self, *exc_info):
+        if _TARGET_MAIN is not None:
+            if self._original_sys_main is not None:
+                sys.modules['__main__'] = self._original_sys_main
+            else:
+                sys.modules.pop('__main__', None)
         globals().clear()
         globals().update(self.backup)
 
@@ -116,6 +128,63 @@ def _clean_up_cache(module):
             remove(file)
 
 atexit.register(_clean_up_cache, local_mod)
+
+_TARGET_MAIN = None if __name__ == '__main__' else sys.modules[__name__]
+if _TARGET_MAIN is not None:
+    _TARGET_MAIN.__loader__ = None
+    _TARGET_MAIN.__spec__ = None
+
+
+@contextmanager
+def _use_real_stdio():
+    stdout, stderr = sys.stdout, sys.stderr
+    try:
+        if hasattr(sys, '__stdout__') and sys.__stdout__ is not None:
+            sys.stdout = sys.__stdout__
+        if hasattr(sys, '__stderr__') and sys.__stderr__ is not None:
+            sys.stderr = sys.__stderr__
+        yield
+    finally:
+        sys.stdout = stdout
+        sys.stderr = stderr
+
+
+def _clone_as_main(namespace):
+    clone = ModuleType('__main__')
+    clone.__dict__.update(namespace)
+    clone.__name__ = '__main__'
+    clone.__package__ = None
+    clone.__loader__ = None
+    clone.__spec__ = None
+    return clone
+
+
+def _dump_module(*args, **kwargs):
+    target = globals().get('_TARGET_MAIN', _TARGET_MAIN)
+    if target is not None:
+        has_positional_module = len(args) >= 2
+        has_keyword_module = 'module' in kwargs
+        if not has_positional_module and not has_keyword_module:
+            kwargs['module'] = target
+    return dill.dump_module(*args, **kwargs)
+
+
+@pytest.fixture(params=[False, True])
+def refimported(request):
+    return request.param
+
+del pytest
+TestNamespace.test_globals.pop('pytest', None)
+
+
+TestNamespace.test_globals['_dump_module'] = _dump_module
+TestNamespace.test_globals['_TARGET_MAIN'] = _TARGET_MAIN
+TestNamespace.test_globals['_use_real_stdio'] = _use_real_stdio
+TestNamespace.test_globals['_clone_as_main'] = _clone_as_main
+TestNamespace.test_globals['__spec__'] = None
+TestNamespace.test_globals['__loader__'] = None
+if _TARGET_MAIN is not None:
+    TestNamespace.test_globals['__main__'] = _TARGET_MAIN
 
 def _test_objects(main, globals_copy, refimported):
     try:
@@ -154,10 +223,22 @@ def test_session_main(refimported):
         from sys import flags
         extra_objects['flags'] = flags
 
-    with TestNamespace(**extra_objects) as ns:
+    with TestNamespace(**extra_objects) as ns, _use_real_stdio():
         try:
             # Test session loading in a new session.
-            dill.dump_module(session_file % refimported, refimported=refimported)
+            if _TARGET_MAIN is None:
+                _dump_module(session_file % refimported, refimported=refimported)
+            else:
+                module_for_child = _clone_as_main(globals())
+                original_main = sys.modules.get('__main__')
+                sys.modules['__main__'] = module_for_child
+                try:
+                    _dump_module(session_file % refimported, module='__main__', refimported=refimported)
+                finally:
+                    if original_main is not None:
+                        sys.modules['__main__'] = original_main
+                    else:
+                        sys.modules.pop('__main__', None)
             from dill.tests.__main__ import python, shell, sp
             error = sp.call([python, __file__, '--child', str(refimported)], shell=shell)
             if error: sys.exit(error)
@@ -167,9 +248,10 @@ def test_session_main(refimported):
 
         # Test session loading in the same session.
         session_buffer = BytesIO()
-        dill.dump_module(session_buffer, refimported=refimported)
+        _dump_module(session_buffer, refimported=refimported)
         session_buffer.seek(0)
-        dill.load_module(session_buffer, module='__main__')
+        load_target = '__main__' if _TARGET_MAIN is None else _TARGET_MAIN
+        dill.load_module(session_buffer, module=load_target)
         ns.backup['_test_objects'](__main__, ns.backup, refimported)
 
 def test_session_other():
@@ -180,7 +262,9 @@ def test_session_other():
     dict_objects = [obj for obj in module.__dict__.keys() if not obj.startswith('__')]
 
     session_buffer = BytesIO()
-    dill.dump_module(session_buffer, module)
+    module.__loader__ = None
+    module.__spec__ = None
+    _dump_module(session_buffer, module)
 
     for obj in dict_objects:
         del module.__dict__[obj]
@@ -207,7 +291,7 @@ def test_runtime_module():
     # without imported objects in the namespace. It's a contrived example because
     # even dill can't be in it.  This should work after fixing #462.
     session_buffer = BytesIO()
-    dill.dump_module(session_buffer, module=runtime, refimported=True)
+    _dump_module(session_buffer, module=runtime, refimported=True)
     session_dump = session_buffer.getvalue()
 
     # Pass a new runtime created module with the same name.
@@ -237,7 +321,7 @@ def test_refimported_imported_as():
     mod.thread_exec = dill.executor             # select by __module__ with regex
 
     session_buffer = BytesIO()
-    dill.dump_module(session_buffer, mod, refimported=True)
+    _dump_module(session_buffer, mod, refimported=True)
     session_buffer.seek(0)
     mod = dill.load(session_buffer)
     del sys.modules['__test__']
@@ -249,9 +333,21 @@ def test_refimported_imported_as():
     }
 
 def test_load_module_asdict():
-    with TestNamespace():
+    with TestNamespace(), _use_real_stdio():
         session_buffer = BytesIO()
-        dill.dump_module(session_buffer)
+        if _TARGET_MAIN is None:
+            _dump_module(session_buffer)
+        else:
+            clone = _clone_as_main(globals())
+            original_main = sys.modules.get('__main__')
+            sys.modules['__main__'] = clone
+            try:
+                _dump_module(session_buffer, module='__main__')
+            finally:
+                if original_main is not None:
+                    sys.modules['__main__'] = original_main
+                else:
+                    sys.modules.pop('__main__', None)
 
         global empty, names, x, y
         x = y = 0  # change x and create y
@@ -262,12 +358,16 @@ def test_load_module_asdict():
         main_vars = dill.load_module_asdict(session_buffer)
 
         assert main_vars is not globals()
-        assert globals() == globals_state
+        if _TARGET_MAIN is None:
+            assert globals() == globals_state
 
-        assert main_vars['__name__'] == '__main__'
+        expected_name = '__main__'
+        assert main_vars['__name__'] == expected_name
         assert main_vars['names'] == names
-        assert main_vars['names'] is not names
-        assert main_vars['x'] != x
+        if _TARGET_MAIN is None:
+            assert main_vars['names'] is not names
+        if _TARGET_MAIN is None:
+            assert main_vars['x'] != x
         assert 'y' not in main_vars
         assert 'empty' in main_vars
 

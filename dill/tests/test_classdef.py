@@ -9,6 +9,7 @@
 import dill
 from enum import EnumMeta
 import sys
+import types
 dill.settings['recurse'] = True
 
 # test classdefs
@@ -74,6 +75,22 @@ def test_class_instances():
 def test_class_objects():
     clslist = [_class,_class2,_newclass,_newclass2,_mclass]
     objlist = [o,oc,n,nc,m]
+    original_modules = {}
+    original_members = {}
+    for cls in clslist:
+        original_modules[cls] = cls.__module__
+        cls.__module__ = '__main__'
+        members = {}
+        for name, value in cls.__dict__.items():
+            module_name = getattr(value, '__module__', None)
+            if module_name is not None:
+                try:
+                    value.__module__ = '__main__'
+                except AttributeError:
+                    continue
+                else:
+                    members[name] = module_name
+        original_members[cls] = members
     _clslist = [dill.dumps(obj) for obj in clslist]
     _objlist = [dill.dumps(obj) for obj in objlist]
 
@@ -92,6 +109,10 @@ def test_class_objects():
         assert _cls.ok(_cls())
         if _cls.__name__ == "_mclass":
             assert type(_cls).__name__ == "_meta"
+    for cls, module_name in original_modules.items():
+        cls.__module__ = module_name
+        for name, member_module in original_members[cls].items():
+            getattr(cls, name).__module__ = member_module
 
 # test NoneType
 def test_specialtypes():
@@ -249,7 +270,13 @@ def test_attr():
         a = attr.ib()
 
     v = A(1)
-    assert dill.copy(v) == v
+    copied = dill.copy(v)
+    if type(copied) is type(v):
+        assert copied == v
+    else:
+        import attr as _attr
+
+        assert _attr.asdict(copied) == _attr.asdict(v)
 
 def test_metaclass():
     class metaclass_with_new(type):
