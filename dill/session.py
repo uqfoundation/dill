@@ -39,7 +39,9 @@ from ._dill import (
     _reverse_typemap, __builtin__, UnpicklingError,
 )
 
-# O_NOFOLLOW is POSIX-only; degrade to a no-op flag elsewhere (e.g. Windows).
+# O_NOFOLLOW is POSIX-only; elsewhere (e.g. Windows) fall back to 0, the
+# bitwise-OR identity, so the flag drops out.  Each os.open below sets its
+# own access mode, so 0 -- not O_RDONLY -- is the correct neutral value.
 _O_NOFOLLOW = getattr(os, 'O_NOFOLLOW', 0)
 
 def _check_symlink(path):
