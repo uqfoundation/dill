@@ -388,7 +388,7 @@ def getsource(object, alias='', lstrip=False, enclosing=False, \
             # now we are dealing with an instance...
             name = object.__class__.__name__
             module = object.__module__
-            if not name.isidentifier() or not all(i.isidentifier() for i in module.split('.')): #XXX: does exclusing malicious code exclude valid use?
+            if not name.isidentifier() or not all(i.isidentifier() for i in module.split('.')): #XXX: does excluding malicious code exclude valid use?
                 raise SyntaxError('invalid syntax')
             if module in ['builtins','__builtin__']:
                 return getimport(object, alias, builtin=builtin)
@@ -812,7 +812,7 @@ def _importable(obj, alias='', source=None, enclosing=False, force=True, \
                                  verify=(not force), builtin=builtin)
         name = getname(obj, force=True)
         if not name:
-            raise AttributeError("object has no atribute '__name__'")
+            raise AttributeError("object has no attribute '__name__'")
         _alias = "%s = " % alias if alias else ""
         if alias == name: _alias = ""
         return _import+_alias+"%s\n" % name

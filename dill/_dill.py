@@ -15,7 +15,7 @@ and :func:`loads` for deserialization ("unpickling"),
 similarly, from a file or from a string. Other notable
 functions are :func:`~dill.dump_module` and
 :func:`~dill.load_module`, which are used to save and
-restore module objects, including an intepreter session.
+restore module objects, including an interpreter session.
 
 Based on code written by Oren Tirosh and Armin Ronacher.
 Extended to a (near) full set of the builtin types (in types module),
@@ -619,7 +619,7 @@ def _create_function(fcode, fglobals, fname=None, fdefaults=None,
 
 class match:
     """
-    Make avaialable a limited structural pattern matching-like syntax for Python < 3.10
+    Make available a limited structural pattern matching-like syntax for Python < 3.10
 
     Patterns can be only tuples (without types) currently.
     Inspired by the package pattern-matching-PEP634.
@@ -1567,7 +1567,7 @@ def save_cell(pickler, obj):
 
         # When breaking changes are made to dill, (_shims._CELL_EMPTY,) can
         # be replaced by () OR the delattr function can be removed repending on
-        # whichever is more convienient.
+        # whichever is more convenient.
         pickler.save_reduce(_create_cell, (_shims._CELL_EMPTY,), obj=obj)
         # Call the function _delattr on the cell's cell_contents attribute
         # The result of this function call will be None

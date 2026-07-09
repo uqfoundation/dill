@@ -7,7 +7,7 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 """
-Pickle and restore the intepreter session.
+Pickle and restore the interpreter session.
 """
 
 __all__ = [
@@ -377,7 +377,7 @@ def _identify_module(file, main=None):
         else:
             raise UnpicklingError("reached STOP without finding main module")
     except (NotImplementedError, ValueError) as error:
-        # ValueError occours when the end of the chunk is reached (without a STOP).
+        # ValueError occurs when the end of the chunk is reached (without a STOP).
         if isinstance(error, NotImplementedError) and main is not None:
             # file is not peekable, but we have main.
             return None

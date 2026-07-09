@@ -93,7 +93,7 @@ def referrednested(func, recurse=True): #XXX: return dict of {__name__: obj} ?
     """
     import gc
     funcs = set()
-    # get the code objects, and try to track down by referrence
+    # get the code objects, and try to track down by reference
     for co in nestedcode(func, recurse):
         # look for function objects that refer to the code object
         for obj in gc.get_referrers(co):
@@ -181,7 +181,7 @@ def globalvars(func, recurse=True, builtin=False):
                 pass
             else:
                 _vars = globalvars(cell_contents, recurse, builtin) or {}
-                func.update(_vars) #XXX: (above) be wary of infinte recursion?
+                func.update(_vars) #XXX: (above) be wary of infinite recursion?
                 globs.update(_vars)
         # get globals
         globs.update(orig_func.__globals__ or {})
@@ -221,7 +221,7 @@ def globalvars(func, recurse=True, builtin=False):
 def varnames(func):
     """get names of variables defined by func
 
-    returns a tuple (local vars, local vars referrenced by nested functions)"""
+    returns a tuple (local vars, local vars referenced by nested functions)"""
     func = code(func)
     if not iscode(func):
         return () #XXX: better ((),())? or None?
