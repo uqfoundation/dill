@@ -94,6 +94,7 @@ selfref = __main__
 
 # Setup global namespace for session saving tests.
 class TestNamespace:
+    __test__ = False
     test_globals = globals().copy()
     def __init__(self, **extra):
         self.extra = extra
