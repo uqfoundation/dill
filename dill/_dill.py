@@ -1355,6 +1355,22 @@ def save_generic_alias(pickler, obj):
         logger.trace(pickler, "# Ga2")
     return
 
+def _create_typevar(args, kwargs):
+    return typing.TypeVar(*args, **kwargs)
+
+@register(typing.TypeVar)
+def save_typevar(pickler, obj):
+    logger.trace(pickler, "Tv: %s", obj)
+    args = (obj.__name__,) + obj.__constraints__
+    kwargs = {
+        "bound": obj.__bound__,
+        "covariant": obj.__covariant__,
+        "contravariant": obj.__contravariant__,
+        "infer_variance": getattr(obj, "__infer_variance__", False),
+    }
+    pickler.save_reduce(_create_typevar, (args, kwargs), obj=obj)
+    logger.trace(pickler, "# Tv")
+
 if ThreadHandleType:
     @register(ThreadHandleType)
     def save_thread_handle(pickler, obj):

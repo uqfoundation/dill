@@ -110,6 +110,10 @@ def test_typing():
   assert x == dill.copy(x)
   x = typing.Tuple[()].copy_with(())
   assert x == dill.copy(x)
+  x = typing.TypeVar("T", bound=int)
+  assert isinstance(x, typing.TypeVar)
+  assert x.__name__ == "T"
+  assert x.__bound__ == int
   return
 
 
