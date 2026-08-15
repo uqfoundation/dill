@@ -139,7 +139,8 @@ def test_lambdify():
     try:
         from sympy import symbols, lambdify
         from numpy import __version__ as numversion
-        if numversion < '2.4.0' and sys.hexversion == 0x30f00a3:
+        if (numversion < '2.4.0' and sys.hexversion == 0x30f00a3) or (
+            numversion < '2.5.2' and sys.hexversion >= 0x30f00a0):
             return #NOTE: numpy Segfaults for the above combination
     except ImportError:
         return
