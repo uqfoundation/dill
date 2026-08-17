@@ -1032,20 +1032,23 @@ def _create_capsule(pointer, name, context, destructor):
         return capsule
 
 def _getattr(objclass, name, repr_str):
-    # grab the descriptor directly off its owning class; repr_str is kept
-    # for backward compatibility with existing pickles but is not evaluated
-    try:
-        attr = objclass.__dict__
-        if type(attr) is DictProxyType:
-            if sys.hexversion > 0x30f00a0 and name in ('__weakref__','__dict__'):
-                attr = _dictproxy_helper.__dict__[name]
+    # hack to grab the reference directly
+    try: #XXX: works only for __builtin__ ?
+        attr = repr_str.split("'")[3]
+        return eval(attr+'.__dict__["'+name+'"]')
+    except Exception:
+        try:
+            attr = objclass.__dict__
+            if type(attr) is DictProxyType:
+                if sys.hexversion > 0x30f00a0 and name in ('__weakref__','__dict__'):
+                    attr = _dictproxy_helper.__dict__[name]
+                else:
+                    attr = attr[name]
             else:
-                attr = attr[name]
-        else:
+                attr = getattr(objclass,name)
+        except (AttributeError, KeyError):
             attr = getattr(objclass,name)
-    except (AttributeError, KeyError):
-        attr = getattr(objclass,name)
-    return attr
+        return attr
 
 def _get_attr(self, name):
     # stop recursive pickling

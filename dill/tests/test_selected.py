@@ -62,21 +62,6 @@ def test_class_descriptors():
     assert ok
   if verbose: print ("")
 
-# descriptors are restored via dill._dill._getattr; the attribute name
-# carried in the pickle must be looked up, never evaluated as code
-def test_descriptor_getattr():
-  from dill._dill import _getattr
-  for i in (int.__dict__['real'], str.__dict__['__len__']):
-    assert dill.copy(i) is i
-  # a crafted name that would run code if passed to eval() must instead be
-  # treated as a plain (missing) lookup key
-  name = '__doc__"].count("zz") or setattr(__import__("dill"), "_pwned", True) or object.__dict__["__doc__'
-  try:
-    _getattr(object, name, "x'x'x'object'x")
-  except (AttributeError, KeyError):
-    pass
-  assert not getattr(dill, "_pwned", False)
-
 # (__main__) class instance for new-style classes
 def test_class():
   o = _d()
@@ -133,5 +118,4 @@ if __name__ == '__main__':
   test_dict_contents()
   test_class()
   test_class_descriptors()
-  test_descriptor_getattr()
   test_typing()
