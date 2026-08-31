@@ -64,6 +64,45 @@ def test_issue_510():
     assert f1.f2() is f1
 
 
+@functools.wraps(function_a)
+def function_wrapped(a):
+    return function_a(a)
+
+def test_issue_602():
+    # Check that __qualname__ is set correctly when functools.wraps is used.
+    # Different code paths are used for module-level and local functions, so
+    # we test the various combinations.
+
+    # Global wrapping global
+
+    copied_global = dill.copy(function_wrapped)
+    assert copied_global.__name__ == function_a.__name__
+    assert copied_global.__qualname__ == function_a.__qualname__
+
+    # Local wrapping global
+
+    @functools.wraps(function_a)
+    def function_wrapped_local(a):
+        return function_a(a)
+
+    copied_local = dill.copy(function_wrapped_local)
+    assert copied_local.__name__ == function_a.__name__
+    assert copied_local.__qualname__ == function_a.__qualname__
+
+    # Local wrapping local
+
+    def local():
+        pass
+
+    @functools.wraps(local)
+    def wrapped_local():
+        local()
+
+    copied_local = dill.copy(wrapped_local)
+    assert copied_local.__name__ == local.__name__
+    assert copied_local.__qualname__ == local.__qualname__
+
+
 def test_functions():
     dumped_func_a = dill.dumps(function_a)
     assert dill.loads(dumped_func_a)(0) == 0
@@ -138,4 +177,5 @@ def test_code_object():
 if __name__ == '__main__':
     test_functions()
     test_issue_510()
+    test_issue_602()
     test_code_object()
