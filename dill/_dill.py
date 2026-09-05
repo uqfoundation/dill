@@ -1032,11 +1032,14 @@ def _create_capsule(pointer, name, context, destructor):
         return capsule
 
 def _getattr(objclass, name, repr_str):
-    # hack to grab the reference directly
-    try: #XXX: works only for __builtin__ ?
-        attr = repr_str.split("'")[3]
-        return eval(attr+'.__dict__["'+name+'"]')
-    except Exception:
+    attr = None
+    if IS_PYPY:
+        try: # hack to grab the reference directly
+            attr = repr_str.split("'")[3]
+            attr = eval(attr+'.__dict__["'+name+'"]')
+        except Exception: pass
+    if attr is None:
+        # grab the descriptor off its owning class, repr_str is not evaluated
         try:
             attr = objclass.__dict__
             if type(attr) is DictProxyType:
@@ -1048,7 +1051,7 @@ def _getattr(objclass, name, repr_str):
                 attr = getattr(objclass,name)
         except (AttributeError, KeyError):
             attr = getattr(objclass,name)
-        return attr
+    return attr
 
 def _get_attr(self, name):
     # stop recursive pickling
