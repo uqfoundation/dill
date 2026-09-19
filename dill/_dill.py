@@ -1256,7 +1256,7 @@ def save_module_dict(pickler, obj):
         pickler.write(bytes('c__main__\n__dict__\n', 'UTF-8'))  #XXX: works in general?
         logger.trace(pickler, "# D3")
     elif '__name__' in obj and obj != _main_module.__dict__ \
-            and type(obj['__name__']) is str \
+            and type(obj['__name__']) is str and obj['__name__'] \
             and obj is getattr(_import_module(obj['__name__'],True), '__dict__', None):
         logger.trace(pickler, "D4: %s", _repr_dict(obj)) # obj
         pickler.write(bytes('c%s\n__dict__\n' % obj['__name__'], 'UTF-8'))
