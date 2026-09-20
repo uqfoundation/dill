@@ -173,6 +173,25 @@ def test_safe():
   except SyntaxError:
     pass
 
+def test_python314_repl_filename():
+  import types
+  from unittest.mock import patch
+  def f():
+    pass
+  history = ['def f():', '  pass']
+  class FakeReadline:
+    def get_current_history_length(self):
+      return len(history)
+    def get_history_item(self, i):
+      return history[i-1]
+  fake_main = types.ModuleType('__main__')
+  f.__code__ = f.__code__.replace(co_filename='<python-input-4>')
+  with patch('dill.source.getmodule', return_value=fake_main), \
+       patch('dill.source.getfile', return_value='<python-input-4>'), \
+       patch.dict(sys.modules, {'readline': FakeReadline()}):
+    src = getsource(f)
+  assert 'def f()' in src
+
 if __name__ == '__main__':
     test_getsource()
     test_itself()
@@ -184,3 +203,4 @@ if __name__ == '__main__':
     test_numpy()
     test_foo()
     test_safe()
+    test_python314_repl_filename()
