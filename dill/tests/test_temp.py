@@ -53,6 +53,7 @@ class Foo(object):
   def bar(self, x):
     return x*x+x
 _foo = Foo()
+bar = Foo.bar
 
 def add(x,y):
   return x+y
