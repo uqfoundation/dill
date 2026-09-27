@@ -49,6 +49,7 @@ _use_diff = False
 OLD38 = (sys.hexversion < 0x3080000)
 OLD39 = (sys.hexversion < 0x3090000)
 OLD310 = (sys.hexversion < 0x30a0000)
+OLD31116 = (sys.hexversion < 0x30b10f0)
 OLD312a7 = (sys.hexversion < 0x30c00a7)
 #XXX: get types from .objtypes ?
 import builtins as __builtin__
@@ -686,13 +687,15 @@ def _create_code(*args):
         LNOTAB = b''
 
     with match(args) as m:
-        # Python 3.11/3.12a (18 members)
+        # Python 3.11/3.12a PyPy 3.12 (18 members)
         if m.case((
             'argcount', 'posonlyargcount', 'kwonlyargcount', 'nlocals', 'stacksize', 'flags',     # args[0:6]
             'code', 'consts', 'names', 'varnames', 'filename', 'name', 'qualname', 'firstlineno', # args[6:14]
             'linetable', 'exceptiontable', 'freevars', 'cellvars'                                 # args[14:]
         )):
             if CODE_VERSION == (3,11):
+                if IS_PYPY and OLD312a7 and not OLD31116: # 3.11.16 (v8.0.0)
+                    args = tuple(args[:15]) + tuple(args[16:18]) + (args[15],)
                 return CodeType(
                     *args[:6],
                     args[6].encode() if hasattr(args[6], 'encode') else args[6], # code
@@ -700,10 +703,10 @@ def _create_code(*args):
                     args[14].encode() if hasattr(args[14], 'encode') else args[14], # linetable
                     args[15].encode() if hasattr(args[15], 'encode') else args[15], # exceptiontable
                     args[16],
-                    args[17],
+                    args[17].encode() if hasattr(args[17], 'encode') else args[17], # pypy-3.11.16
                 )
             fields = m.fields
-        # PyPy 3.11 7.3.19+ (17 members)
+        # PyPy 3.11 7.3.19-7.3.21* (17 members)
         elif m.case((
             'argcount', 'posonlyargcount', 'kwonlyargcount', 'nlocals', 'stacksize', 'flags', # args[0:6]
             'code', 'consts', 'names', 'varnames', 'filename', 'name', 'qualname',            # args[6:13]
@@ -762,13 +765,15 @@ def _create_code(*args):
             'linetable', 'endlinetable', 'columntable', 'exceptiontable', 'freevars', 'cellvars'  # args[14:]
         )):
             if CODE_VERSION == (3,11,'a'):
+                if IS_PYPY and OLD312a7 and not OLD31116: # 3.11.16 (v8.0.0)
+                    args = tuple(args[:17]) + tuple(args[18:20]) + (args[17],)
                 return CodeType(
                     *args[:6],
                     args[6].encode() if hasattr(args[6], 'encode') else args[6], # code
                     *args[7:14],
                     *(a.encode() if hasattr(a, 'encode') else a for a in args[14:18]), # linetable-exceptiontable
                     args[18],
-                    args[19],
+                    args[19].encode() if hasattr(args[19], 'encode') else args[19], # pypy-3.11.6
                 )
             fields = m.fields
         else:
@@ -783,8 +788,11 @@ def _create_code(*args):
     fields.setdefault('endlinetable', None)         # from python != 3.11a
     fields.setdefault('columntable', None)          # from python != 3.11a
 
-    args = (fields[k].encode() if k in ENCODE_PARAMS and hasattr(fields[k], 'encode') else fields[k]
+    args = tuple(fields[k].encode() if k in ENCODE_PARAMS and hasattr(fields[k], 'encode') else fields[k]
             for k in CODE_PARAMS)
+    if IS_PYPY and OLD312a7 and not OLD31116: # 3.11.16 (v8.0.0)
+        if len(args) > 17:
+            args = tuple(args[:-3]) + tuple(args[-2:]) + (args[-3],)
     return CodeType(*args)
 
 def _create_ftype(ftypeobj, func, args, kwds):
