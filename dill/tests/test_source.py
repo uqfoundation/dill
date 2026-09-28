@@ -173,6 +173,18 @@ def test_safe():
   except SyntaxError:
     pass
 
+def test_safe_import():
+  import dill
+  def obj(): pass
+  obj.__module__ = 'os'
+  obj.__name__ = "path\nimport dill; dill._injected = True\n#"
+  try:
+    source = getimport(obj)
+    assert False
+  except SyntaxError:
+    pass
+  assert not hasattr(dill, '_injected')
+
 if __name__ == '__main__':
     test_getsource()
     test_itself()
@@ -184,3 +196,4 @@ if __name__ == '__main__':
     test_numpy()
     test_foo()
     test_safe()
+    test_safe_import()
