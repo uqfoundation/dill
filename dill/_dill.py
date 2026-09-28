@@ -49,7 +49,6 @@ _use_diff = False
 OLD38 = (sys.hexversion < 0x3080000)
 OLD39 = (sys.hexversion < 0x3090000)
 OLD310 = (sys.hexversion < 0x30a0000)
-OLD31116 = (sys.hexversion < 0x30b10f0)
 OLD312a7 = (sys.hexversion < 0x30c00a7)
 #XXX: get types from .objtypes ?
 import builtins as __builtin__
@@ -101,6 +100,7 @@ try:
 except ImportError:
     HAS_CTYPES = False
     IS_PYPY = False
+OLDPYPY7323 = IS_PYPY and (sys.pypy_version_info[:3] < (7,3,23))
 NumpyUfuncType = None
 NumpyDType = None
 NumpyArrayType = None
@@ -694,7 +694,7 @@ def _create_code(*args):
             'linetable', 'exceptiontable', 'freevars', 'cellvars'                                 # args[14:]
         )):
             if CODE_VERSION == (3,11):
-                if IS_PYPY and OLD312a7 and not OLD31116: # 3.11.16 (v8.0.0)
+                if IS_PYPY and OLD312a7 and not OLDPYPY7323: # v7.3.23 - v8.0.0
                     args = tuple(args[:15]) + tuple(args[16:18]) + (args[15],)
                 return CodeType(
                     *args[:6],
@@ -765,7 +765,7 @@ def _create_code(*args):
             'linetable', 'endlinetable', 'columntable', 'exceptiontable', 'freevars', 'cellvars'  # args[14:]
         )):
             if CODE_VERSION == (3,11,'a'):
-                if IS_PYPY and OLD312a7 and not OLD31116: # 3.11.16 (v8.0.0)
+                if IS_PYPY and OLD312a7 and not OLDPYPY7323: # v7.3.23 - v8.0.0
                     args = tuple(args[:17]) + tuple(args[18:20]) + (args[17],)
                 return CodeType(
                     *args[:6],
@@ -790,7 +790,7 @@ def _create_code(*args):
 
     args = tuple(fields[k].encode() if k in ENCODE_PARAMS and hasattr(fields[k], 'encode') else fields[k]
             for k in CODE_PARAMS)
-    if IS_PYPY and OLD312a7 and not OLD31116: # 3.11.16 (v8.0.0)
+    if IS_PYPY and OLD312a7 and not OLDPYPY7323: # v7.3.23 - v8.0.0
         if len(args) > 17:
             args = tuple(args[:-3]) + tuple(args[-2:]) + (args[-3],)
     return CodeType(*args)
