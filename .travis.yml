@@ -31,8 +31,12 @@ matrix:
         - python: 'pypy3.11-7.3.20'
           env:
 
+        - python: 'pypy3.12-8.0.0'
+          env:
+
     allow_failures:
         - python: '3.15t-dev' # prerelease
+        - python: 'pypy3.12-8.0.0' # missing
     fast_finish: true
 
 cache:
