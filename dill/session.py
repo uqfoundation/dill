@@ -44,6 +44,12 @@ from ._dill import (
 # own access mode, so 0 -- not O_RDONLY -- is the correct neutral value.
 _O_NOFOLLOW = getattr(os, 'O_NOFOLLOW', 0)
 
+# fchmod is POSIX-only.  Where it is unavailable (e.g. Windows) there is
+# nothing further to tighten: the mode argument to os.open() is only
+# honoured together with O_CREAT, and Windows has no equivalent POSIX
+# permission bits to apply.
+_fchmod = getattr(os, 'fchmod', None)
+
 def _check_symlink(path):
     """Raise OSError if *path* is a symlink."""
     try:
@@ -68,7 +74,13 @@ def _safe_open_for_writing(path):
         fd = os.open(path, flags, 0o600)
     except FileExistsError:
         _check_symlink(path)
-        fd = os.open(path, os.O_WRONLY | os.O_TRUNC | _O_NOFOLLOW, 0o600)
+        # O_CREAT is absent, so a mode argument is ignored for a file that
+        # already exists; passing 0o600 here had no effect.  Apply the mode
+        # to the open descriptor instead, so the already-exists path carries
+        # the same restrictive permissions as the creation path.
+        fd = os.open(path, os.O_WRONLY | os.O_TRUNC | _O_NOFOLLOW)
+        if _fchmod is not None:
+            _fchmod(fd, 0o600)
     return os.fdopen(fd, 'wb')
 
 def _safe_open_for_reading(path):
