@@ -1017,12 +1017,11 @@ def _create_capsule(pointer, name, context, destructor):
         for i in range(1, uname.count('.')+1):
             names = uname.rsplit('.', i)
             try:
-                module = __import__(names[0])
-            except ImportError:
-                pass
-            obj = module
-            for attr in names[1:]:
-                obj = getattr(obj, attr)
+                obj = __import__(names[0])
+                for attr in names[1:]:
+                    obj = getattr(obj, attr)
+            except (ImportError, AttributeError):
+                continue # this split didn't resolve, try a shorter module path
             capsule = obj
             attr_found = True
             break
