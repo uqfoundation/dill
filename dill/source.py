@@ -49,6 +49,20 @@ def isdynamic(obj):
     return False
 
 
+def _lambdacode(lhs, rhs):
+    """get the code object for 'lambda lhs : rhs', or None if it won't compile
+
+    the lambda is compiled instead of evaluated, so that nothing taken from
+    the raw line of code runs (e.g. a default argument expression)"""
+    try:
+        code = compile("lambda %s : %s" % (lhs,rhs), '<string>', 'eval')
+    except Exception:
+        return None
+    for const in code.co_consts:
+        if iscode(const): return const
+    return None
+
+
 def _matchlambda(func, line):
     """check if lambda object 'func' matches raw line of code 'line'"""
     from .detect import code as getcode
@@ -56,9 +70,8 @@ def _matchlambda(func, line):
     dummy = lambda : '__this_is_a_big_dummy_function__'
     # process the line (removing leading whitespace, etc)
     lhs,rhs = line.split('lambda ',1)[-1].split(":", 1) #FIXME: if !1 inputs
-    try: #FIXME: unsafe
-        _ = eval("lambda %s : %s" % (lhs,rhs), globals(),locals())
-    except Exception: _ = dummy
+    _ = _lambdacode(lhs,rhs)
+    if _ is None: _ = dummy
     # get code objects, for comparison
     _, code = getcode(_).co_code, getcode(func).co_code
     # check if func is in closure
@@ -78,9 +91,8 @@ def _matchlambda(func, line):
     # check if func is a double lambda
     if (line.count('lambda ') > 1) and (lhs in freevars(func).keys()):
         _lhs,_rhs = rhs.split('lambda ',1)[-1].split(":",1) #FIXME: if !1 inputs
-        try: #FIXME: unsafe
-            _f = eval("lambda %s : %s" % (_lhs,_rhs), globals(),locals())
-        except Exception: _f = dummy
+        _f = _lambdacode(_lhs,_rhs)
+        if _f is None: _f = dummy
         # get code objects, for comparison
         _, code = getcode(_f).co_code, getcode(func).co_code
         if len(_) != len(code): return False
