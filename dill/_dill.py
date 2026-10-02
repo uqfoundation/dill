@@ -1900,7 +1900,13 @@ def save_type(pickler, obj, postproc_list=None):
             if qualname is not None:
                 postproc_list.append((setattr, (obj, '__qualname__', qualname)))
 
-            if not hasattr(obj, '__orig_bases__'):
+            # NOTE: __orig_bases__ is only meaningful when set on obj itself.
+            # A subclass of a generic class that does not subscript it (e.g.
+            # `class C(GenericBase)`) inherits the parent's __orig_bases__, and
+            # rebuilding from those would recreate the class with the *parent's*
+            # bases, silently dropping the parent from the MRO.
+            orig_bases = obj.__dict__.get('__orig_bases__')
+            if orig_bases is None:
                 _save_with_postproc(pickler, (_create_type, (
                     type(obj), obj.__name__, obj.__bases__, _dict
                 )), obj=obj, postproc_list=postproc_list)
@@ -1916,7 +1922,7 @@ def save_type(pickler, obj, postproc_list=None):
                     _dict_update = None
 
                 _save_with_postproc(pickler, (new_class, (
-                    obj.__name__, obj.__orig_bases__, _metadict, _dict_update
+                    obj.__name__, orig_bases, _metadict, _dict_update
                 )), obj=obj, postproc_list=postproc_list)
             logger.trace(pickler, "# T2")
         else:
