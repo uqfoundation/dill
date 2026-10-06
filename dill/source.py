@@ -40,11 +40,23 @@ def isfrommain(obj):
     return False
 
 
+def _is_repl_filename(file):
+    """True for interpreter buffers: <stdin>, Python 3.13+ <python-input-N>, IPython."""
+    if not file:
+        return True
+    name = file.replace('\\', '/').rsplit('/', 1)[-1]
+    return (
+        name == '<stdin>'
+        or name.startswith('<python-input-')
+        or name.startswith('<ipython-input-')
+    )
+
+
 def isdynamic(obj):
     "check if object was built in the interpreter"
     try: file = getfile(obj)
     except TypeError: file = None
-    if file == '<stdin>' and isfrommain(obj):
+    if _is_repl_filename(file) and isfrommain(obj):
         return True
     return False
 
@@ -115,7 +127,8 @@ def findsource(object):
     module = getmodule(object)
     try: file = getfile(module)
     except TypeError: file = None
-    is_module_main = (module and module.__name__ == '__main__' and not file)
+    is_module_main = (module and module.__name__ == '__main__'
+                      and _is_repl_filename(file))
     if IS_IPYTHON and is_module_main:
         #FIXME: quick fix for functions and classes in IPython interpreter
         try:
@@ -202,7 +215,7 @@ def findsource(object):
     if iscode(object):
         if not hasattr(object, 'co_firstlineno'):
             raise IOError('could not find function definition')
-        stdin = object.co_filename == '<stdin>'
+        stdin = _is_repl_filename(object.co_filename)
         if stdin:
             lnum = len(lines) - 1 # can't get lnum easily, so leverage pat
             if not pat1: pat1 = r'^(\s*def\s)|(.*(?<!\w)lambda(:|\s))|^(\s*@)'
