@@ -710,6 +710,9 @@ def _getimport(head, tail, alias='', verify=True, builtin=False):
     #        (could fix in 'namespace' to check obj for closure)
     if verify and not head.startswith('dill.'):# weird behavior for dill
        #print(_str)
+        if not all(i.isidentifier() for i in tail.split('.')) \
+           or (head and not all(i.isidentifier() for i in head.split('.'))): #XXX: as in getsource
+            raise SyntaxError('invalid syntax')
         try: exec(_str) #XXX: check if == obj? (name collision)
         except ImportError: #XXX: better top-down or bottom-up recursion?
             _head = head.rsplit(".",1)[0] #(or get all, then compare == obj?)
