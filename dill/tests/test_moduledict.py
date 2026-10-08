@@ -48,7 +48,24 @@ def test_doctest():
     doctest.testmod()
 
 
+def test_named_dict():
+    for protocol in range(dill.HIGHEST_PROTOCOL + 1):
+        for name in ('', None, False, 42, 'not_a_module', 'logging'):
+            value = {'__name__': name, 'value': [1, 2]}
+            copied = dill.copy([value, value], protocol=protocol)
+            assert copied[0] == value
+            assert copied[0] is copied[1]
+            assert copied[0] is not value
+
+
+def test_module_dict_reference():
+    for protocol in range(dill.HIGHEST_PROTOCOL + 1):
+        assert dill.copy(logging.__dict__, protocol=protocol) is logging.__dict__
+
+
 if __name__ == '__main__':
     test_decorated()
     test_normal()
     test_doctest()
+    test_named_dict()
+    test_module_dict_reference()
