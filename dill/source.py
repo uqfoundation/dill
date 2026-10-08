@@ -235,7 +235,9 @@ def findsource(object):
     except AttributeError: pass
     if isclass(object):
         name = object.__name__
-        pat = re.compile(r'^(\s*)class\s*' + name + r'\b')
+        # __name__ is not required to be an identifier, so escape it to keep
+        # it a literal rather than letting it act as part of the pattern
+        pat = re.compile(r'^(\s*)class\s*' + re.escape(name) + r'\b')
         # make some effort to find the best matching class definition:
         # use the one with the least indentation, which is the one
         # that's most probably not inside a function definition.
@@ -853,7 +855,7 @@ def _closuredimport(func, alias='', builtin=False):
         else: # we have to "hack" a bit... and maybe be lucky
             encl = outermost(func)
             # pattern: 'func = enclosing(fobj'
-            pat = r'.*[\w\s]=\s*'+getname(encl)+r'\('+getname(fobj)
+            pat = r'.*[\w\s]=\s*'+re.escape(getname(encl))+r'\('+re.escape(getname(fobj))
             mod = getname(getmodule(encl))
             #HACK: get file containing 'outer' function; is func there?
             lines,_ = findsource(encl)
@@ -880,7 +882,7 @@ def _closuredimport(func, alias='', builtin=False):
             lines,_ = findsource(name)
             # pattern: 'func = enclosing('
             candidate = [line for line in lines if getname(name) in line and \
-                         re.match(r'.*[\w\s]=\s*'+getname(name)+r'\(', line)]
+                         re.match(r'.*[\w\s]=\s*'+re.escape(getname(name))+r'\(', line)]
             if not len(candidate): raise TypeError('import could not be found')
             candidate = candidate[-1]
             name = candidate.split('=',1)[0].split()[-1].strip()
