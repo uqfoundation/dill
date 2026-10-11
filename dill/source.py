@@ -153,7 +153,8 @@ def findsource(object):
         lines = [readline.get_history_item(i)+'\n' for i in range(1,lbuf+1)]
     else:
         try: # special handling for class instances
-            if not isclass(object) and isclass(type(object)): # __class__
+            if (not (isclass(object) or isfunction(object) or ismethod(object))
+                and isclass(type(object))): # __class__
                 file = getfile(module)
                 sourcefile = getsourcefile(module)
             else: # builtins fail with a TypeError

@@ -173,7 +173,52 @@ def test_safe():
   except SyntaxError:
     pass
 
+
+def test_cross_module_wrapped_source():
+  from dill.source import findsource
+  from importlib import import_module, invalidate_caches
+  from pathlib import Path
+  from tempfile import TemporaryDirectory
+
+  decorator_source = ('from functools import wraps\n' + '\n' * 30 +
+    'def decorate(function):\n'
+    '    @wraps(function)\n'
+    '    def wrapper(*args, **kwargs):\n'
+    '        return function(*args, **kwargs)\n'
+    '    return wrapper\n')
+  target_source = (
+    'from _dill_source_decorator import decorate\n'
+    '@decorate\n'
+    'def function():\n'
+    '    return 42\n'
+    'class Example:\n'
+    '    @decorate\n'
+    '    def method(self):\n'
+    '        return 42\n')
+
+  with TemporaryDirectory() as directory:
+    Path(directory, '_dill_source_decorator.py').write_text(decorator_source)
+    Path(directory, '_dill_source_target.py').write_text(target_source)
+    sys.path.insert(0, directory)
+    try:
+      invalidate_caches()
+      target = import_module('_dill_source_target')
+      for function in (target.function, target.Example().method):
+        lines, lineno = findsource(function)
+        assert lines == decorator_source.splitlines(True)
+        assert lines[lineno] == '    @wraps(function)\n'
+        assert getsource(function) == (
+          '    @wraps(function)\n'
+          '    def wrapper(*args, **kwargs):\n'
+          '        return function(*args, **kwargs)\n')
+    finally:
+      sys.path.remove(directory)
+      for name in ('_dill_source_decorator', '_dill_source_target'):
+        sys.modules.pop(name, None)
+      invalidate_caches()
+
 if __name__ == '__main__':
+    test_cross_module_wrapped_source()
     test_getsource()
     test_itself()
     test_builtin()
