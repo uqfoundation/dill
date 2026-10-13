@@ -64,6 +64,11 @@ def test_matchlambda():
   assert ds._matchlambda(squared, 'squared = lambda x:x**2\n')
   assert ds._matchlambda(ts.f, 'f = lambda x: x**2\n')
   assert ds._matchlambda(ts.squared, 'squared = lambda x:x**2\n')
+  # a candidate line is only compiled, so nothing in it is run
+  import builtins
+  line = "# g = lambda n=setattr(__import__('builtins'),'_ran',True): n\n"
+  assert not ds._matchlambda(f, line)
+  assert not hasattr(builtins, '_ran')
 
 
 def test_findsource():
