@@ -100,6 +100,7 @@ try:
 except ImportError:
     HAS_CTYPES = False
     IS_PYPY = False
+OLDPYPY7323 = IS_PYPY and (sys.pypy_version_info[:3] < (7,3,23))
 NumpyUfuncType = None
 NumpyDType = None
 NumpyArrayType = None
@@ -686,13 +687,15 @@ def _create_code(*args):
         LNOTAB = b''
 
     with match(args) as m:
-        # Python 3.11/3.12a (18 members)
+        # Python 3.11/3.12a PyPy 3.12 (18 members)
         if m.case((
             'argcount', 'posonlyargcount', 'kwonlyargcount', 'nlocals', 'stacksize', 'flags',     # args[0:6]
             'code', 'consts', 'names', 'varnames', 'filename', 'name', 'qualname', 'firstlineno', # args[6:14]
             'linetable', 'exceptiontable', 'freevars', 'cellvars'                                 # args[14:]
         )):
             if CODE_VERSION == (3,11):
+                if IS_PYPY and OLD312a7 and not OLDPYPY7323: # v7.3.23 - v8.0.0
+                    args = tuple(args[:15]) + tuple(args[16:18]) + (args[15],)
                 return CodeType(
                     *args[:6],
                     args[6].encode() if hasattr(args[6], 'encode') else args[6], # code
@@ -700,10 +703,10 @@ def _create_code(*args):
                     args[14].encode() if hasattr(args[14], 'encode') else args[14], # linetable
                     args[15].encode() if hasattr(args[15], 'encode') else args[15], # exceptiontable
                     args[16],
-                    args[17],
+                    args[17].encode() if hasattr(args[17], 'encode') else args[17], # pypy-3.11.16
                 )
             fields = m.fields
-        # PyPy 3.11 7.3.19+ (17 members)
+        # PyPy 3.11 7.3.19-7.3.21* (17 members)
         elif m.case((
             'argcount', 'posonlyargcount', 'kwonlyargcount', 'nlocals', 'stacksize', 'flags', # args[0:6]
             'code', 'consts', 'names', 'varnames', 'filename', 'name', 'qualname',            # args[6:13]
@@ -762,13 +765,15 @@ def _create_code(*args):
             'linetable', 'endlinetable', 'columntable', 'exceptiontable', 'freevars', 'cellvars'  # args[14:]
         )):
             if CODE_VERSION == (3,11,'a'):
+                if IS_PYPY and OLD312a7 and not OLDPYPY7323: # v7.3.23 - v8.0.0
+                    args = tuple(args[:17]) + tuple(args[18:20]) + (args[17],)
                 return CodeType(
                     *args[:6],
                     args[6].encode() if hasattr(args[6], 'encode') else args[6], # code
                     *args[7:14],
                     *(a.encode() if hasattr(a, 'encode') else a for a in args[14:18]), # linetable-exceptiontable
                     args[18],
-                    args[19],
+                    args[19].encode() if hasattr(args[19], 'encode') else args[19], # pypy-3.11.6
                 )
             fields = m.fields
         else:
@@ -783,8 +788,11 @@ def _create_code(*args):
     fields.setdefault('endlinetable', None)         # from python != 3.11a
     fields.setdefault('columntable', None)          # from python != 3.11a
 
-    args = (fields[k].encode() if k in ENCODE_PARAMS and hasattr(fields[k], 'encode') else fields[k]
+    args = tuple(fields[k].encode() if k in ENCODE_PARAMS and hasattr(fields[k], 'encode') else fields[k]
             for k in CODE_PARAMS)
+    if IS_PYPY and OLD312a7 and not OLDPYPY7323: # v7.3.23 - v8.0.0
+        if len(args) > 17:
+            args = tuple(args[:-3]) + tuple(args[-2:]) + (args[-3],)
     return CodeType(*args)
 
 def _create_ftype(ftypeobj, func, args, kwds):
@@ -1009,12 +1017,11 @@ def _create_capsule(pointer, name, context, destructor):
         for i in range(1, uname.count('.')+1):
             names = uname.rsplit('.', i)
             try:
-                module = __import__(names[0])
-            except ImportError:
-                pass
-            obj = module
-            for attr in names[1:]:
-                obj = getattr(obj, attr)
+                obj = __import__(names[0])
+                for attr in names[1:]:
+                    obj = getattr(obj, attr)
+            except (ImportError, AttributeError):
+                continue # this split didn't resolve, try a shorter module path
             capsule = obj
             attr_found = True
             break
@@ -1032,11 +1039,14 @@ def _create_capsule(pointer, name, context, destructor):
         return capsule
 
 def _getattr(objclass, name, repr_str):
-    # hack to grab the reference directly
-    try: #XXX: works only for __builtin__ ?
-        attr = repr_str.split("'")[3]
-        return eval(attr+'.__dict__["'+name+'"]')
-    except Exception:
+    attr = None
+    if IS_PYPY:
+        try: # hack to grab the reference directly
+            attr = repr_str.split("'")[3]
+            attr = eval(attr+'.__dict__["'+name+'"]')
+        except Exception: pass
+    if attr is None:
+        # grab the descriptor off its owning class, repr_str is not evaluated
         try:
             attr = objclass.__dict__
             if type(attr) is DictProxyType:
@@ -1048,7 +1058,7 @@ def _getattr(objclass, name, repr_str):
                 attr = getattr(objclass,name)
         except (AttributeError, KeyError):
             attr = getattr(objclass,name)
-        return attr
+    return attr
 
 def _get_attr(self, name):
     # stop recursive pickling
@@ -1253,7 +1263,7 @@ def save_module_dict(pickler, obj):
         pickler.write(bytes('c__main__\n__dict__\n', 'UTF-8'))  #XXX: works in general?
         logger.trace(pickler, "# D3")
     elif '__name__' in obj and obj != _main_module.__dict__ \
-            and type(obj['__name__']) is str \
+            and type(obj['__name__']) is str and obj['__name__'] \
             and obj is getattr(_import_module(obj['__name__'],True), '__dict__', None):
         logger.trace(pickler, "D4: %s", _repr_dict(obj)) # obj
         pickler.write(bytes('c%s\n__dict__\n' % obj['__name__'], 'UTF-8'))
@@ -1354,6 +1364,22 @@ def save_generic_alias(pickler, obj):
         StockPickler.save_reduce(pickler, *obj.__reduce__(), obj=obj)
         logger.trace(pickler, "# Ga2")
     return
+
+def _create_typevar(args, kwargs):
+    return typing.TypeVar(*args, **kwargs)
+
+@register(typing.TypeVar)
+def save_typevar(pickler, obj):
+    logger.trace(pickler, "Tv: %s", obj)
+    args = (obj.__name__,) + obj.__constraints__
+    kwargs = {
+        "bound": obj.__bound__,
+        "covariant": obj.__covariant__,
+        "contravariant": obj.__contravariant__,
+        "infer_variance": getattr(obj, "__infer_variance__", False),
+    }
+    pickler.save_reduce(_create_typevar, (args, kwargs), obj=obj)
+    logger.trace(pickler, "# Tv")
 
 if ThreadHandleType:
     @register(ThreadHandleType)

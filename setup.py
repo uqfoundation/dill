@@ -13,6 +13,12 @@ if sys.version_info < (3, 10):
     unsupported = 'Versions of Python before 3.10 are not supported'
     raise ValueError(unsupported)
 
+# throw warning for pypy v7.3.22 - v7.3.23
+if (7,3,21) < getattr(sys, 'pypy_version_info', (0,0,0))[:3] < (8,0,0):
+    unsupported = 'PyPy v7.3.22 and v7.3.23 are not supported'
+    import warnings
+    warnings.warn(unsupported) # Unpickler broken in pypy v7.3.22 - v7.3.23
+
 # get distribution meta info
 here = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(here)
@@ -67,6 +73,7 @@ setup_kwds = dict(
         'Programming Language :: Python :: 3.12',
         'Programming Language :: Python :: 3.13',
         'Programming Language :: Python :: 3.14',
+        'Programming Language :: Python :: 3.15',
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy',
         'Topic :: Scientific/Engineering',

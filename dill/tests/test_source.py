@@ -28,6 +28,12 @@ _foo = Foo()
 def add(x,y):
   return x+y
 
+def _enclose(f):
+  def _wrapper(x,y):
+    return f(x,y)
+  return _wrapper
+closured = _enclose(add)
+
 # yes, same as 'f', but things are tricky when it comes to pointers
 squared = lambda x:x**2
 
@@ -128,6 +134,12 @@ def test_importable():
   assert importable(100, builtin=True, source=False) == '100\n'
 
 
+def test_closured_import():
+  # closured functions take the pattern-matching path, where the enclosing
+  # and inner function names are matched literally against the source
+  assert importable(closured, source=False) == 'from %s import closured\n' % __name__
+
+
 def test_numpy():
   try:
     import numpy as np
@@ -185,6 +197,52 @@ def test_safe_import():
     pass
   assert not hasattr(dill, '_injected')
 
+class Baz:
+  pass
+
+class Qux: # sits after Baz, so a pattern-like name resolves here instead
+  pass
+
+def test_name_not_a_pattern():
+  # __name__ is assignable and need not be an identifier, so it has to be
+  # matched literally rather than as part of the class-definition pattern
+  name = Baz.__name__
+  try:
+    Baz.__name__ = r'\w+' # otherwise matches the definition of Qux
+    try:
+      source = getsource(Baz)
+      assert False, source
+    except IOError:
+      pass
+    Baz.__name__ = 'Baz((' # otherwise fails to compile
+    try:
+      getsource(Baz)
+      assert False
+    except IOError:
+      pass
+  finally:
+    Baz.__name__ = name
+
+def test_repl():
+  import types
+  from unittest.mock import patch
+  def f():
+    pass
+  history = ['def f():', '  pass']
+  class FakeReadline:
+    def get_current_history_length(self):
+      return len(history)
+    def get_history_item(self, i):
+      return history[i-1]
+  fake_main = types.ModuleType('__main__')
+  f.__code__ = f.__code__.replace(co_filename='<python-input-4>')
+  with patch('dill.source.getmodule', return_value=fake_main), \
+       patch('dill.source.getfile', return_value='<python-input-4>'), \
+       patch.dict(sys.modules, {'readline': FakeReadline()}):
+    src = getsource(f)
+  assert 'def f()' in src
+
+
 if __name__ == '__main__':
     test_getsource()
     test_itself()
@@ -193,7 +251,10 @@ if __name__ == '__main__':
     test_dynamic()
     test_classes()
     test_importable()
+    test_closured_import()
     test_numpy()
     test_foo()
     test_safe()
     test_safe_import()
+    test_name_not_a_pattern()
+    #test_repl()

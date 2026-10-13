@@ -381,6 +381,35 @@ def test_symlink_toctou():
         with suppress(OSError):
             os.rmdir(tmpdir)
 
+def test_fallback_permissions():
+    """a pre-existing session file must be tightened to 0600 before session
+    state is written into it, not left at whatever mode it already had"""
+    import tempfile
+    if os.name != 'posix' or not hasattr(os, 'fchmod'):
+        return  # POSIX permission bits only; the fix is a no-op elsewhere
+    tmpdir = tempfile.mkdtemp()
+    session_path = os.path.join(tmpdir, 'session-perms.pkl')
+    try:
+        # pre-create with permissive bits, set explicitly so umask is irrelevant
+        with open(session_path, 'wb') as f:
+            f.write(b'')
+        os.chmod(session_path, 0o666)
+        assert os.stat(session_path).st_mode & 0o777 == 0o666
+
+        # the FileExistsError fallback must tighten it, not leave it readable
+        dill.dump_module(session_path)
+        assert os.stat(session_path).st_mode & 0o777 == 0o600
+
+        # and must not loosen an already-tightened file on re-save
+        os.chmod(session_path, 0o644)
+        dill.dump_module(session_path)
+        assert os.stat(session_path).st_mode & 0o777 == 0o600
+    finally:
+        with suppress(OSError):
+            os.remove(session_path)
+        with suppress(OSError):
+            os.rmdir(tmpdir)
+
 if __name__ == '__main__':
     test_session_main(refimported=False)
     test_session_main(refimported=True)
@@ -391,3 +420,4 @@ if __name__ == '__main__':
     test_symlink_rejected()
     test_default_path_warning()
     test_symlink_toctou()
+    test_fallback_permissions()
