@@ -40,13 +40,39 @@ def isfrommain(obj):
     return False
 
 
+def _is_repl_filename(file):
+    """True for interpreter buffers: <stdin>, Python 3.13+ <python-input-N>, IPython."""
+    if not file:
+        return True
+    name = file.replace('\\', '/').rsplit('/', 1)[-1]
+    return (
+        name == '<stdin>'
+        or name.startswith('<python-input-')
+        or name.startswith('<ipython-input-')
+    )
+
+
 def isdynamic(obj):
     "check if object was built in the interpreter"
     try: file = getfile(obj)
     except TypeError: file = None
-    if file == '<stdin>' and isfrommain(obj):
+    if _is_repl_filename(file) and isfrommain(obj):
         return True
     return False
+
+
+def _lambdacode(lhs, rhs):
+    """get the code object for 'lambda lhs : rhs', or None if it won't compile
+
+    the lambda is compiled instead of evaluated, so that nothing taken from
+    the raw line of code runs (e.g. a default argument expression)"""
+    try:
+        code = compile("lambda %s : %s" % (lhs,rhs), '<string>', 'eval')
+    except Exception:
+        return None
+    for const in code.co_consts:
+        if iscode(const): return const
+    return None
 
 
 def _matchlambda(func, line):
@@ -56,9 +82,8 @@ def _matchlambda(func, line):
     dummy = lambda : '__this_is_a_big_dummy_function__'
     # process the line (removing leading whitespace, etc)
     lhs,rhs = line.split('lambda ',1)[-1].split(":", 1) #FIXME: if !1 inputs
-    try: #FIXME: unsafe
-        _ = eval("lambda %s : %s" % (lhs,rhs), globals(),locals())
-    except Exception: _ = dummy
+    _ = _lambdacode(lhs,rhs)
+    if _ is None: _ = dummy
     # get code objects, for comparison
     _, code = getcode(_).co_code, getcode(func).co_code
     # check if func is in closure
@@ -78,9 +103,8 @@ def _matchlambda(func, line):
     # check if func is a double lambda
     if (line.count('lambda ') > 1) and (lhs in freevars(func).keys()):
         _lhs,_rhs = rhs.split('lambda ',1)[-1].split(":",1) #FIXME: if !1 inputs
-        try: #FIXME: unsafe
-            _f = eval("lambda %s : %s" % (_lhs,_rhs), globals(),locals())
-        except Exception: _f = dummy
+        _f = _lambdacode(_lhs,_rhs)
+        if _f is None: _f = dummy
         # get code objects, for comparison
         _, code = getcode(_f).co_code, getcode(func).co_code
         if len(_) != len(code): return False
@@ -115,7 +139,8 @@ def findsource(object):
     module = getmodule(object)
     try: file = getfile(module)
     except TypeError: file = None
-    is_module_main = (module and module.__name__ == '__main__' and not file)
+    is_module_main = (module and module.__name__ == '__main__'
+                      and _is_repl_filename(file))
     if IS_IPYTHON and is_module_main:
         #FIXME: quick fix for functions and classes in IPython interpreter
         try:
@@ -140,15 +165,18 @@ def findsource(object):
     # use readline when working in interpreter (i.e. __main__ and not file)
     elif is_module_main:
         try:
-            import readline
-            err = ''
+            from _pyrepl.readline import _wrapper as readline
         except ImportError:
-            import sys
-            err = sys.exc_info()[1].args[0]
-            if sys.platform[:3] == 'win':
-                err += ", please install 'pyreadline'"
-        if err:
-            raise IOError(err)
+            try:
+                import readline
+                err = ''
+            except ImportError:
+                import sys
+                err = sys.exc_info()[1].args[0]
+                if sys.platform[:3] == 'win':
+                    err += ", please install 'pyreadline'"
+            if err:
+                raise IOError(err)
         lbuf = readline.get_current_history_length()
         lines = [readline.get_history_item(i)+'\n' for i in range(1,lbuf+1)]
     else:
@@ -202,7 +230,7 @@ def findsource(object):
     if iscode(object):
         if not hasattr(object, 'co_firstlineno'):
             raise IOError('could not find function definition')
-        stdin = object.co_filename == '<stdin>'
+        stdin = _is_repl_filename(object.co_filename)
         if stdin:
             lnum = len(lines) - 1 # can't get lnum easily, so leverage pat
             if not pat1: pat1 = r'^(\s*def\s)|(.*(?<!\w)lambda(:|\s))|^(\s*@)'

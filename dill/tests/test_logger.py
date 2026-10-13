@@ -53,6 +53,27 @@ def test_trace_to_file(stream_trace):
     file_trace, stream_trace = regdict.sub(r'\1{}>', file_trace), regdict.sub(r'\1{}>', stream_trace)
     assert file_trace == stream_trace
 
+def test_trace_file_permissions():
+    # a trace redirected to a new file must not be group/other accessible;
+    # it can contain object reprs and whatever log() writes
+    import os, platform
+    if os.name != 'posix' or platform.python_implementation() == 'PyPy':
+        return
+    d = tempfile.mkdtemp()
+    path = os.path.join(d, 'trace.log')
+    old_umask = os.umask(0o022)  # a permissive umask exposes a missing mode
+    try:
+        with detect.trace(path) as log:
+            log("secret = %r", {'token': 's3cr3t'})
+            dill.dumps(test_obj)
+        bits = os.stat(path).st_mode & 0o777
+        assert bits & 0o077 == 0, "trace file is group/other accessible: %o" % bits
+    finally:
+        os.umask(old_umask)
+        if os.path.exists(path):
+            os.remove(path)
+        os.rmdir(d)
+
 if __name__ == '__main__':
     logger.removeHandler(stderr_handler)
     test_logging(should_trace=False)
@@ -68,3 +89,4 @@ if __name__ == '__main__':
     test_logging(should_trace=False)
     assert logger.getEffectiveLevel() == loglevel
     test_trace_to_file(stream_trace)
+    test_trace_file_permissions()
