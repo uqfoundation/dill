@@ -173,7 +173,7 @@ def test_safe():
   except SyntaxError:
     pass
 
-def test_python314_repl_filename():
+def test_repl():
   import types
   from unittest.mock import patch
   def f():
@@ -203,4 +203,4 @@ if __name__ == '__main__':
     test_numpy()
     test_foo()
     test_safe()
-    test_python314_repl_filename()
+    #test_repl()

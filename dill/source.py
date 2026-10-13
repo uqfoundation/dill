@@ -165,15 +165,18 @@ def findsource(object):
     # use readline when working in interpreter (i.e. __main__ and not file)
     elif is_module_main:
         try:
-            import readline
-            err = ''
+            from _pyrepl.readline import _wrapper as readline
         except ImportError:
-            import sys
-            err = sys.exc_info()[1].args[0]
-            if sys.platform[:3] == 'win':
-                err += ", please install 'pyreadline'"
-        if err:
-            raise IOError(err)
+            try:
+                import readline
+                err = ''
+            except ImportError:
+                import sys
+                err = sys.exc_info()[1].args[0]
+                if sys.platform[:3] == 'win':
+                    err += ", please install 'pyreadline'"
+            if err:
+                raise IOError(err)
         lbuf = readline.get_current_history_length()
         lines = [readline.get_history_item(i)+'\n' for i in range(1,lbuf+1)]
     else:
