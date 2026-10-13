@@ -139,6 +139,9 @@ def findsource(object):
     module = getmodule(object)
     try: file = getfile(module)
     except TypeError: file = None
+    if file and file.endswith('_pyrepl/__main__.py'):
+        import sys #XXX: assumes only 3.14.0a0 > python > 3.12.99f0
+        file = None if (0x30e00a0 > sys.hexversion > 0x30c63f0) else file
     is_module_main = (module and module.__name__ == '__main__'
                       and _is_repl_filename(file))
     if IS_IPYTHON and is_module_main:
