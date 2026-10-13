@@ -257,6 +257,19 @@ def trace(arg: Union[bool, TextIO, str, os.PathLike] = None, *, mode: str = 'a')
         return TraceManager(file=arg, mode=mode)
     logger.setLevel(logging.INFO if arg else logging.WARNING)
 
+def _restrict_new_logfile(file):
+    # logging.FileHandler creates the log at the process umask (world-readable
+    # by default), but a redirected trace embeds object reprs and whatever the
+    # yielded log() function writes.  Pre-create a *new* target owner-only so
+    # the handler inherits 0o600; leave an existing file's permissions alone.
+    if os.name != 'posix':
+        return
+    try:
+        fd = os.open(os.fspath(file), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except (FileExistsError, OSError):
+        return
+    os.close(fd)
+
 class TraceManager(contextlib.AbstractContextManager):
     """context manager version of trace(); can redirect the trace to a file"""
     def __init__(self, file, mode):
@@ -270,6 +283,7 @@ class TraceManager(contextlib.AbstractContextManager):
             if self.file_is_stream:
                 self.handler = logging.StreamHandler(self.file)
             else:
+                _restrict_new_logfile(self.file)
                 self.handler = logging.FileHandler(self.file, self.mode)
             adapter.removeHandler(stderr_handler)
             adapter.addHandler(self.handler)
