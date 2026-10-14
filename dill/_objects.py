@@ -15,6 +15,7 @@ __all__ = ['registered','failures','succeeds']
 # helper imports
 import warnings; warnings.filterwarnings("ignore", category=DeprecationWarning)
 import sys
+from types import GeneratorType
 import queue as Queue
 #import dbm as anydbm #XXX: delete foo
 from io import BytesIO as StringIO
@@ -385,8 +386,9 @@ X = a['OrderedDictType']
 d["OdictKeysType"] = X.keys()
 d["OdictValuesType"] = X.values()
 d["OdictItemsType"] = X.items()
-a["OdictIteratorType"] = iter(X.keys()) #FIXME: list_iterator
-del X
+z = x if isinstance(iter(X.keys()), GeneratorType) else a
+z["OdictIteratorType"] = iter(X.keys()) #FIXME: list_iterator
+del X, z
 #FIXME: list_iterator
 a['DictionaryItemIteratorType'] = iter(type.__dict__.items())
 a['DictionaryKeyIteratorType'] = iter(type.__dict__.keys())

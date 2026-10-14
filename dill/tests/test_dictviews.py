@@ -8,6 +8,9 @@
 
 import dill
 from dill._dill import OLD310, MAPPING_PROXY_TRICK, DictProxyType
+import subprocess
+import sys
+from collections import OrderedDict
 
 def test_dictproxy():
     assert dill.copy(DictProxyType({'a': 2}))
@@ -33,7 +36,43 @@ def test_dictproxy_trick():
         assert dict(all_views[1]) == x
         assert dict(seperate_views[1]) == new_x
 
+def test_pure_python_ordereddict_views():
+    # Select the stdlib fallback in a subprocess without changing this process.
+    ordered = OrderedDict([('b', 2), ('a', 1)])
+    artifacts = [dill.dumps(tuple(getattr(ordered, name)() for name in
+                                 ('keys', 'values', 'items')), protocol=protocol)
+                 for protocol in (4, 5)]
+    subprocess.run([sys.executable, '-c', '''
+import _collections
+import collections
+import importlib
+import runpy
+import sys
+
+native = getattr(_collections, 'OrderedDict', None)
+if native is not None:
+    del _collections.OrderedDict
+importlib.reload(collections)
+if native is not None:
+    _collections.OrderedDict = native
+assert isinstance(collections.OrderedDict.keys, type(lambda: None))
+import dill
+
+ordered = collections.OrderedDict([('b', 2), ('a', 1)])
+for name in ('keys', 'values', 'items'):
+    view = getattr(ordered, name)()
+    for protocol in (4, 5):
+        restored = dill.loads(dill.dumps(view, protocol=protocol))
+        assert type(restored) is type(view)
+        assert list(restored) == list(view)
+for data in dill.loads(sys.stdin.buffer.read()):
+    restored = dill.loads(data)
+    assert [list(view) for view in restored] == [['b', 'a'], [2, 1], [('b', 2), ('a', 1)]]
+runpy.run_module('dill.tests.test_registered', run_name='__main__')
+'''], input=dill.dumps(artifacts), check=True)
+
 if __name__ == '__main__':
     test_dictproxy()
     test_dictviews()
     test_dictproxy_trick()
+    test_pure_python_ordereddict_views()
