@@ -11,6 +11,8 @@ from dill._dill import OLD310, MAPPING_PROXY_TRICK, DictProxyType
 import subprocess
 import sys
 from collections import OrderedDict
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 def test_dictproxy():
     assert dill.copy(DictProxyType({'a': 2}))
@@ -38,16 +40,29 @@ def test_dictproxy_trick():
 
 def test_pure_python_ordereddict_views():
     # Select the stdlib fallback in a subprocess without changing this process.
+    coverage = sys.modules.get('coverage')
+    cov = coverage.Coverage.current() if coverage is not None else None
+    mode = ('branch' if cov.get_option('run:branch') else 'lines') if cov else 'none'
     ordered = OrderedDict([('b', 2), ('a', 1)])
     artifacts = [dill.dumps(tuple(getattr(ordered, name)() for name in
                                  ('keys', 'values', 'items')), protocol=protocol)
                  for protocol in (4, 5)]
-    subprocess.run([sys.executable, '-c', '''
+    with TemporaryDirectory() as directory:
+        data_file = str(Path(directory) / 'child.coverage')
+        subprocess.run([sys.executable, '-c', '''
 import _collections
 import collections
 import importlib
 import runpy
 import sys
+
+# Use the same package as the parent, even when running from a source checkout.
+sys.path.insert(0, sys.argv[2])
+cov = None
+if sys.argv[1] != 'none':
+    import coverage
+    cov = coverage.Coverage(data_file=sys.argv[3], branch=sys.argv[1] == 'branch')
+    cov.start()
 
 native = getattr(_collections, 'OrderedDict', None)
 if native is not None:
@@ -69,7 +84,16 @@ for data in dill.loads(sys.stdin.buffer.read()):
     restored = dill.loads(data)
     assert [list(view) for view in restored] == [['b', 'a'], [2, 1], [('b', 2), ('a', 1)]]
 runpy.run_module('dill.tests.test_registered', run_name='__main__')
-'''], input=dill.dumps(artifacts), check=True)
+if cov is not None:
+    cov.stop()
+    cov.save()
+''', mode, str(Path(dill.__file__).resolve().parent.parent), data_file],
+            input=dill.dumps(artifacts), check=True)
+        if cov is not None:
+            # Include real child execution using an isolated temporary file.
+            data = coverage.CoverageData(basename=data_file)
+            data.read()
+            cov.get_data().update(data)
 
 if __name__ == '__main__':
     test_dictproxy()
