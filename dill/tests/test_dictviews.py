@@ -53,11 +53,10 @@ def test_pure_python_ordereddict_views():
 import _collections
 import collections
 import importlib
+import importlib.util
 import runpy
 import sys
 
-# Use the same package as the parent, even when running from a source checkout.
-sys.path.insert(0, sys.argv[2])
 cov = None
 if sys.argv[1] != 'none':
     import coverage
@@ -71,7 +70,11 @@ importlib.reload(collections)
 if native is not None:
     _collections.OrderedDict = native
 assert isinstance(collections.OrderedDict.keys, type(lambda: None))
-import dill
+# Load the parent's package without putting site-packages ahead of the stdlib.
+spec = importlib.util.spec_from_file_location('dill', sys.argv[2])
+dill = importlib.util.module_from_spec(spec)
+sys.modules['dill'] = dill
+spec.loader.exec_module(dill)
 
 ordered = collections.OrderedDict([('b', 2), ('a', 1)])
 for name in ('keys', 'values', 'items'):
@@ -87,7 +90,7 @@ runpy.run_module('dill.tests.test_registered', run_name='__main__')
 if cov is not None:
     cov.stop()
     cov.save()
-''', mode, str(Path(dill.__file__).resolve().parent.parent), data_file],
+''', mode, str(Path(dill.__file__).resolve()), data_file],
             input=dill.dumps(artifacts), check=True)
         if cov is not None:
             # Include real child execution using an isolated temporary file.
