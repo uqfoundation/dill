@@ -513,6 +513,53 @@ def test_recreated_file_permissions():
             os.remove(pname)
 
 
+def test_binary_file_contents():
+    import tempfile
+    from pathlib import Path
+
+    contents = bytes(range(256))
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / 'binary.dat'
+        for protocol in range(dill.HIGHEST_PROTOCOL + 1):
+            for mode in ('rb', 'r+b', 'wb', 'w+b', 'ab', 'a+b'):
+                path.write_bytes(contents)
+                with path.open(mode) as stream:
+                    if 'w' in mode:
+                        stream.write(contents)
+                    stream.seek(2)
+                    expected_mode = stream.mode
+                    dumped = dill.dumps(stream, protocol=protocol,
+                                        fmode=dill.FILE_FMODE)
+                path.write_bytes(b'changed')
+
+                with dill.loads(dumped) as restored:
+                    assert restored.mode == expected_mode
+                    assert restored.tell() == 2
+                    restored.flush()
+                    assert path.read_bytes() == contents
+                    if 'r' in mode or '+' in mode:
+                        assert restored.read() == contents[2:]
+
+
+def test_legacy_binary_file_contents():
+    import tempfile
+    from pathlib import Path
+
+    class LegacyFile:
+        def __reduce__(self):
+            return (dill._dill._create_filehandle,
+                    (str(path), 'rb', 2, False, open, False,
+                     dill.FILE_FMODE, 'legacy content'))
+
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / 'legacy.dat'
+        dumped = dill.dumps(LegacyFile())
+        with dill.loads(dumped) as restored:
+            assert restored.mode == 'rb'
+            assert restored.tell() == 2
+            assert restored.read() == b'gacy content'
+
+
 #bench(True, dill.HANDLE_FMODE, False)
 #bench(True, dill.FILE_FMODE, False)
 #bench(True, dill.CONTENTS_FMODE, True)
@@ -523,3 +570,5 @@ if __name__ == '__main__':
     test_nostrictio_filefmode()
     test_nostrictio_contentsfmode()
     test_recreated_file_permissions()
+    test_binary_file_contents()
+    test_legacy_binary_file_contents()
