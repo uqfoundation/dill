@@ -84,7 +84,7 @@ import gc
 # import zlib
 import abc
 import dataclasses
-from weakref import ReferenceType, ProxyType, CallableProxyType
+from weakref import ReferenceType, ProxyType, CallableProxyType, KeyedRef
 from collections import OrderedDict
 from enum import Enum, EnumMeta
 from functools import partial
@@ -976,6 +976,12 @@ def _create_weakref(obj, *args):
         return ref(UserDict(), *args)
     return ref(obj, *args)
 
+def _create_keyedref(obj, callback, key):
+    if obj is None: # it's dead
+        from collections import UserDict
+        obj = UserDict()
+    return KeyedRef(obj, callback, key)
+
 def _create_weakproxy(obj, callable=False, *args):
     from weakref import proxy
     if obj is None: # it's dead
@@ -1700,6 +1706,14 @@ def save_weakref(pickler, obj):
    #refobj = ctypes.pythonapi.PyWeakref_GetObject(obj) # dead returns "None"
     pickler.save_reduce(_create_weakref, (refobj,), obj=obj)
     logger.trace(pickler, "# R1")
+    return
+
+@register(KeyedRef)
+def save_keyedref(pickler, obj):
+    logger.trace(pickler, "R3: %s", obj)
+    pickler.save_reduce(_create_keyedref, (obj(), obj.__callback__, None),
+                        state=(None, {'key': obj.key}), obj=obj)
+    logger.trace(pickler, "# R3")
     return
 
 @register(ProxyType)
