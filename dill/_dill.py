@@ -2257,14 +2257,9 @@ def check(obj, *args, **kwds):
     finally:
         if fail and verbose:
             print("DUMP FAILED")
-    #FIXME: fails if python interpreter path contains spaces
-    # Use the following instead (which also processes the 'ignore' keyword):
-    #    ignore = kwds.pop('ignore', None)
-    #    unpickle = "dill.loads(%s, ignore=%s)"%(repr(_obj), repr(ignore))
-    #    cmd = [python, "-c", "import dill; print(%s)"%unpickle]
-    #    msg = "SUCCESS" if not subprocess.call(cmd) else "LOAD FAILED"
-    msg = "%s -c import dill; print(dill.loads(%s))" % (python, repr(_obj))
-    msg = "SUCCESS" if not subprocess.call(msg.split(None,2)) else "LOAD FAILED"
+    #FIXME: the 'ignore' keyword is not handled on load
+    cmd = [python, "-c", "import dill; print(dill.loads(%s))" % repr(_obj)]
+    msg = "SUCCESS" if not subprocess.call(cmd) else "LOAD FAILED"
     if verbose:
         print(msg)
     return

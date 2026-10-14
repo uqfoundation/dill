@@ -49,6 +49,29 @@ def test_python(verbose=None):
     raise_check(f, python=None, verbose=verbose)
 
 
+def test_python_path_with_spaces():
+    import dill
+    import os
+    import subprocess
+    import tempfile
+    import venv
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory(prefix='dill check ') as directory:
+        venv.EnvBuilder(with_pip=False, system_site_packages=True).create(directory)
+        executable = Path(directory) / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
+        site_packages = subprocess.check_output(
+            [str(executable), '-c', 'import sysconfig; print(sysconfig.get_path("purelib"))'], text=True
+        ).strip()
+        (Path(site_packages) / 'dill-test.pth').write_text(
+            str(Path(dill.__file__).resolve().parent.parent) + '\n', encoding='utf-8'
+        )
+        with capture('stdout') as output:
+            check({'answer': 42}, python=str(executable), verbose=True)
+        assert 'SUCCESS' in output.getvalue()
+        assert 'LOAD FAILED' not in output.getvalue()
+
+
 #TODO: test incompatible versions
 #TODO: test dump failure
 #TODO: test load failure
@@ -60,3 +83,4 @@ if __name__ == '__main__':
     test_byref()
     test_protocol()
     test_python()
+    test_python_path_with_spaces()
