@@ -217,14 +217,14 @@ def findsource(object):
     if ismethod(object):
         name = object.__name__
         if name == '<lambda>': pat1 = r'(.*(?<!\w)lambda(:|\s))'
-        else: pat1 = r'^(\s*def\s)'
+        else: pat1 = r'^(\s*(?:async\s+)?def\s)'
         object = object.__func__
     if isfunction(object):
         name = object.__name__
         if name == '<lambda>':
             pat1 = r'(.*(?<!\w)lambda(:|\s))'
             obj = object #XXX: better a copy?
-        else: pat1 = r'^(\s*def\s)'
+        else: pat1 = r'^(\s*(?:async\s+)?def\s)'
         object = object.__code__
     if istraceback(object):
         object = object.tb_frame
@@ -235,11 +235,13 @@ def findsource(object):
             raise IOError('could not find function definition')
         stdin = _is_repl_filename(object.co_filename)
         if stdin:
+            if not name and object.co_name.isidentifier():
+                name = object.co_name
             lnum = len(lines) - 1 # can't get lnum easily, so leverage pat
-            if not pat1: pat1 = r'^(\s*def\s)|(.*(?<!\w)lambda(:|\s))|^(\s*@)'
+            if not pat1: pat1 = r'^(\s*(?:async\s+)?def\s)|(.*(?<!\w)lambda(:|\s))|^(\s*@)'
         else:
             lnum = object.co_firstlineno - 1
-            pat1 = r'^(\s*def\s)|(.*(?<!\w)lambda(:|\s))|^(\s*@)'
+            pat1 = r'^(\s*(?:async\s+)?def\s)|(.*(?<!\w)lambda(:|\s))|^(\s*@)'
         pat1 = re.compile(pat1); pat2 = re.compile(pat2)
        #XXX: candidate_lnum = [n for n in range(lnum) if pat1.match(lines[n])]
         while lnum > 0: #XXX: won't find decorators in <stdin> ?
@@ -249,7 +251,14 @@ def findsource(object):
                 if name == '<lambda>': # hackery needed to confirm a match
                     if _matchlambda(obj, line): break
                 else: # not a lambda, just look for the name
-                    if name in line: # need to check for decorator...
+                    definition = line
+                    end = lnum
+                    while definition.rstrip().endswith('\\') and end + 1 < len(lines):
+                        end += 1
+                        definition += lines[end]
+                    if not name or re.search(r'^\s*(?:async\s+)?def(?:\s|\\\r?\n)+'
+                                             + re.escape(name) + r'(?=\s*[\[(\\])',
+                                             definition, re.M):
                         hats = 0
                         for _lnum in range(lnum-1,-1,-1):
                             if pat2.match(lines[_lnum]): hats += 1
@@ -315,7 +324,7 @@ def getblocks(object, lstrip=False, enclosing=False, locate=False):
         if lstrip: block = _outdent(block)
         return ([block], [lnum]) if locate is True else [block]
 
-    pat1 = r'^(\s*def\s)|(.*(?<!\w)lambda(:|\s))'; pat1 = re.compile(pat1)
+    pat1 = r'^(\s*(?:async\s+)?def\s)|(.*(?<!\w)lambda(:|\s))'; pat1 = re.compile(pat1)
     pat2 = r'^(\s*@)'; pat2 = re.compile(pat2)
    #pat3 = r'^(\s*class\s)'; pat3 = re.compile(pat3) #XXX: enclosing class?
     #FIXME: bound methods need enclosing class (and then instantiation)
@@ -454,7 +463,7 @@ def getsource(object, alias='', lstrip=False, enclosing=False, \
                 if not line.startswith('@'): break
                 skip += 1
             #XXX: use regex from findsource / getsourcelines ?
-            if lines[skip].lstrip().startswith('def '): # we have a function
+            if re.match(r'^\s*(?:async\s+)?def\s', lines[skip]): # we have a function
                 if alias != object.__name__:
                     lines.append('\n%s = %s\n' % (alias, object.__name__))
             elif 'lambda ' in lines[skip]: # we have a lambda
