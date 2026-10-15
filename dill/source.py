@@ -23,6 +23,7 @@ __all__ = ['findsource', 'getsourcelines', 'getsource', 'indent', 'outdent', \
            '_importable', 'importable','isdynamic', 'isfrommain']
 
 import linecache
+from functools import lru_cache
 import re
 from inspect import (getblock, getfile, getmodule, getsourcefile, indentsize,
                      isbuiltin, isclass, iscode, isframe, isfunction, ismethod,
@@ -291,6 +292,63 @@ def findsource(object):
     raise IOError('could not find code object')
 
 
+
+@lru_cache(maxsize=8)
+def _lambda_source_index(lines):
+    """Index lambdas by line, retaining only a few recent source versions."""
+    import ast
+    import warnings
+    source = ''.join(lines)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        try:
+            tree = ast.parse(source)
+        except (SyntaxError, ValueError, RecursionError):
+            return source, {}
+    candidates = {}
+    for parent in ast.walk(tree):
+        for node in ast.iter_child_nodes(parent):
+            if isinstance(node, ast.Lambda):
+                bound = isinstance(parent, (ast.Assign, ast.AnnAssign, ast.NamedExpr))
+                candidates.setdefault(node.lineno, []).append((node, bound))
+    return source, candidates
+
+
+def _anonymous_lambda_source(func, lines):
+    """Extract a uniquely located lambda used inside another expression."""
+    if ismethod(func):
+        func = func.__func__
+    if not isfunction(func) or func.__code__.co_name != '<lambda>':
+        return None
+    if _is_repl_filename(func.__code__.co_filename):
+        return None
+    lnum = func.__code__.co_firstlineno - 1
+    source, index = _lambda_source_index(tuple(lines))
+    candidates = index.get(lnum + 1, ())
+    # Preserve existing assignments and ambiguous or unavailable source.
+    if len(candidates) != 1 or candidates[0][1]:
+        return None
+    import ast
+    import warnings
+    node = candidates[0][0]
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        try:
+            expression = ast.get_source_segment(source, node)
+            if expression is None:
+                return None
+            # A multiline argument can rely on its enclosing call's parentheses.
+            if '\n' in expression:
+                expression = '(' + expression + ')'
+            # Older AST versions can report imprecise spans inside f-strings.
+            if not isinstance(ast.parse(expression, mode='eval').body, ast.Lambda):
+                return None
+        except (SyntaxError, ValueError, RecursionError):
+            return None
+    return (expression + '\n').splitlines(keepends=True), lnum
+
+
+
 def getblocks(object, lstrip=False, enclosing=False, locate=False):
     """Return a list of source lines and starting line number for an object.
     Interactively-defined objects refer to lines in the interpreter's history.
@@ -302,6 +360,12 @@ def getblocks(object, lstrip=False, enclosing=False, locate=False):
     DEPRECATED: use 'getsourcelines' instead
     """
     lines, lnum = findsource(object)
+
+    if not enclosing:
+        extracted = _anonymous_lambda_source(object, lines)
+        if extracted is not None:
+            block, lnum = extracted
+            return ([block], [lnum]) if locate is True else [block]
 
     if ismodule(object):
         if lstrip: lines = _outdent(lines)
@@ -457,7 +521,7 @@ def getsource(object, alias='', lstrip=False, enclosing=False, \
             if lines[skip].lstrip().startswith('def '): # we have a function
                 if alias != object.__name__:
                     lines.append('\n%s = %s\n' % (alias, object.__name__))
-            elif 'lambda ' in lines[skip]: # we have a lambda
+            elif hascode.co_name == '<lambda>': # we have a lambda
                 if alias != lines[skip].split('=')[0].strip():
                     lines[skip] = '%s = %s' % (alias, lines[skip])
             else: # ...try to use the object's name
@@ -650,7 +714,9 @@ def getname(obj, force=False, fqn=False): #XXX: throw(?) to raise error on fail?
         #       if obj.func_closure: ...use logic from getimportable, etc ?
         name = obj.__name__
         if name == '<lambda>':
-            return getsource(obj).split('=',1)[0].strip()
+            # Names still come from the assignment, not an extracted expression.
+            lines, lnum = findsource(obj)
+            return ''.join(getblock(lines[lnum:])).split('=',1)[0].strip()
         # handle some special cases
         if module.__name__ in ['builtins','__builtin__']:
             if name == 'ellipsis': name = 'EllipsisType'
@@ -933,6 +999,12 @@ def _closuredsource(func, alias=''):
     #      - fails if name of freevars are reused
     #      - can unnecessarily duplicate function code
     from .detect import freevars
+    target_alias = alias
+    if not alias and isfunction(func) and func.__code__.co_name == '<lambda>':
+        try: name = getname(func)
+        except (TypeError, IOError): name = None
+        if name and name.isidentifier():
+            target_alias = name
     free_vars = freevars(func)
     func_vars = {}
     # split into 'funcs' and 'non-funcs'
@@ -947,7 +1019,7 @@ def _closuredsource(func, alias=''):
         # if source doesn't start with '@', use name as the alias
         if not src.lstrip().startswith('@'): #FIXME: 'enclose' in dummy;
             src = importable(fobj,alias=name)#        wrong ref 'name'
-            org = getsource(func, alias, enclosing=False, lstrip=True)
+            org = getsource(func, target_alias, enclosing=False, lstrip=True)
             src = (src, org) # undecorated first, then target
         else: #NOTE: reproduces the code!
             org = getsource(func, enclosing=True, lstrip=False)
@@ -956,7 +1028,7 @@ def _closuredsource(func, alias=''):
         func_vars[name] = src
     src = ''.join(free_vars.values())
     if not func_vars: #FIXME: 'enclose' in dummy; wrong ref 'name'
-        org = getsource(func, alias, force=True, enclosing=False, lstrip=True)
+        org = getsource(func, target_alias, force=True, enclosing=False, lstrip=True)
         src = (src, org) # variables first, then target
     else:
         src = (src, None) # just variables        (better '' instead of None?)
