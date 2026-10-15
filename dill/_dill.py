@@ -872,7 +872,8 @@ def _create_filehandle(name, mode, position, closed, open, strictio, fmode, fdat
         try:
             #FIXME: missing: *buffering*, encoding, softspace
             if fmode == FILE_FMODE:
-                f = open(name, mode if "w" in mode else "w")
+                f = open(name, mode if "w" in mode else
+                         "wb" if isinstance(fdata, bytes) else "w")
                 f.write(fdata)
                 if "w" not in mode:
                     f.close()
@@ -1433,9 +1434,8 @@ def _save_file(pickler, obj, open_):
         else:
             position = obj.tell()
     if is_dill(pickler, child=True) and pickler._fmode == FILE_FMODE:
-        f = open_(obj.name, "r")
-        fdata = f.read()
-        f.close()
+        with open_(obj.name, "rb" if "b" in obj.mode else "r") as f:
+            fdata = f.read()
     else:
         fdata = ""
     if is_dill(pickler, child=True):
