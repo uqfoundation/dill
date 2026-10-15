@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+#
+# Author: Ilya Khalafi (@IlyaKhalafi)
+# Copyright (c) 2026 The Uncertainty Quantification Foundation.
+# License: 3-clause BSD.  The full license text is available at:
+#  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 """Tests for warning handling in dill.pickles."""
 
 import warnings
