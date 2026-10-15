@@ -8,6 +8,11 @@
 
 import dill
 from dill._dill import OLD310, MAPPING_PROXY_TRICK, DictProxyType
+import subprocess
+import sys
+from collections import OrderedDict
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 def test_dictproxy():
     assert dill.copy(DictProxyType({'a': 2}))
@@ -33,7 +38,68 @@ def test_dictproxy_trick():
         assert dict(all_views[1]) == x
         assert dict(seperate_views[1]) == new_x
 
+def test_pure_python_ordereddict_views():
+    # Select the stdlib fallback in a subprocess without changing this process.
+    coverage = sys.modules.get('coverage')
+    cov = coverage.Coverage.current() if coverage is not None else None
+    mode = ('branch' if cov.get_option('run:branch') else 'lines') if cov else 'none'
+    ordered = OrderedDict([('b', 2), ('a', 1)])
+    artifacts = [dill.dumps(tuple(getattr(ordered, name)() for name in
+                                 ('keys', 'values', 'items')), protocol=protocol)
+                 for protocol in (4, 5)]
+    with TemporaryDirectory() as directory:
+        data_file = str(Path(directory) / 'child.coverage')
+        subprocess.run([sys.executable, '-c', '''
+import _collections
+import collections
+import importlib
+import importlib.util
+import runpy
+import sys
+
+cov = None
+if sys.argv[1] != 'none':
+    import coverage
+    cov = coverage.Coverage(data_file=sys.argv[3], branch=sys.argv[1] == 'branch')
+    cov.start()
+
+native = getattr(_collections, 'OrderedDict', None)
+if native is not None:
+    del _collections.OrderedDict
+importlib.reload(collections)
+if native is not None:
+    _collections.OrderedDict = native
+assert isinstance(collections.OrderedDict.keys, type(lambda: None))
+# Load the parent's package without putting site-packages ahead of the stdlib.
+spec = importlib.util.spec_from_file_location('dill', sys.argv[2])
+dill = importlib.util.module_from_spec(spec)
+sys.modules['dill'] = dill
+spec.loader.exec_module(dill)
+
+ordered = collections.OrderedDict([('b', 2), ('a', 1)])
+for name in ('keys', 'values', 'items'):
+    view = getattr(ordered, name)()
+    for protocol in (4, 5):
+        restored = dill.loads(dill.dumps(view, protocol=protocol))
+        assert type(restored) is type(view)
+        assert list(restored) == list(view)
+for data in dill.loads(sys.stdin.buffer.read()):
+    restored = dill.loads(data)
+    assert [list(view) for view in restored] == [['b', 'a'], [2, 1], [('b', 2), ('a', 1)]]
+runpy.run_module('dill.tests.test_registered', run_name='__main__')
+if cov is not None:
+    cov.stop()
+    cov.save()
+''', mode, str(Path(dill.__file__).resolve()), data_file],
+            input=dill.dumps(artifacts), check=True)
+        if cov is not None:
+            # Include real child execution using an isolated temporary file.
+            data = coverage.CoverageData(basename=data_file)
+            data.read()
+            cov.get_data().update(data)
+
 if __name__ == '__main__':
     test_dictproxy()
     test_dictviews()
     test_dictproxy_trick()
+    test_pure_python_ordereddict_views()

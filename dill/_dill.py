@@ -86,6 +86,7 @@ import abc
 import dataclasses
 from weakref import ReferenceType, ProxyType, CallableProxyType
 from collections import OrderedDict
+import _collections
 from enum import Enum, EnumMeta
 from functools import partial
 from operator import itemgetter, attrgetter
@@ -1325,6 +1326,9 @@ for __dicttype in (
       dict,
       OrderedDict
 ):
+    # Pure Python views already pickle their state without a custom reducer.
+    if __dicttype is OrderedDict and OrderedDict is not getattr(_collections, 'OrderedDict', None):
+        continue
     __obj = __dicttype()
     for __funcname, __savefunc in save_dict_view(__dicttype):
         __tview = type(getattr(__obj, __funcname)())
