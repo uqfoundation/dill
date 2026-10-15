@@ -49,7 +49,6 @@ Major Features
 * cell, method, unboundmethod, module, code, methodwrapper,
 * methoddescriptor, getsetdescriptor, memberdescriptor, wrapperdescriptor,
 * dictproxy, slice, notimplemented, ellipsis, quit
-* keyed weak references used by weak value dictionaries
 
 ``dill`` cannot yet pickle these standard types:
 
