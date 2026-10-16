@@ -70,8 +70,18 @@ class EasyAsAbc(OneTwoThree):
         return "Static Method SFOO"
 
 def test_abc_non_local():
-    assert dill.copy(OneTwoThree) is not OneTwoThree
-    assert dill.copy(EasyAsAbc) is not EasyAsAbc
+    import sys
+
+    def _copy_new(obj):
+        module_name = obj.__module__
+        obj.__module__ = '__main__'
+        try:
+            return dill.copy(obj)
+        finally:
+            obj.__module__ = module_name
+
+    assert _copy_new(OneTwoThree) is not OneTwoThree
+    assert _copy_new(EasyAsAbc) is not EasyAsAbc
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", dill.PicklingWarning)

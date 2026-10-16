@@ -9,6 +9,8 @@ import logging
 import re
 import tempfile
 
+import pytest
+
 import dill
 from dill import detect
 from dill.logger import stderr_handler, adapter as logger
@@ -17,6 +19,10 @@ try:
     from StringIO import StringIO
 except ImportError:
     from io import StringIO
+
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:Test functions should return None:pytest.PytestReturnNotNoneWarning"
+)
 
 test_obj = {'a': (1, 2), 'b': object(), 'f': lambda x: x**2, 'big': list(range(10))}
 
