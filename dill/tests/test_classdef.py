@@ -63,6 +63,11 @@ else:
     class customIntList(list[int]):
         pass
 
+# module-level TypeVar for the generic hierarchy built in the issue #766 test
+import abc
+import typing
+_T766 = typing.TypeVar('_T766')
+
 # test pickles for class instances
 def test_class_instances():
     assert dill.pickles(o)
@@ -242,6 +247,23 @@ def test_slots():
 def test_origbases():
     assert dill.copy(customIntList).__orig_bases__ == customIntList.__orig_bases__
 
+def test_unsubscripted_generic_subclass():
+    # a subclass that does not subscript its generic base has no __orig_bases__
+    # of its own; rebuilding it from the inherited one drops the base from the
+    # MRO, so the abstract method looks unimplemented (issue #766)
+    class GenericInterface(abc.ABC, typing.Generic[_T766]):
+        @abc.abstractmethod
+        def execute(self): ...
+
+    class GenericBase(GenericInterface[_T766], abc.ABC):
+        def execute(self): return 'base'
+
+    class Unsubscripted(GenericBase):
+        pass
+
+    assert '__orig_bases__' not in Unsubscripted.__dict__
+    assert dill.copy(Unsubscripted()).execute() == 'base'
+
 def test_attr():
     import attr
     @attr.s
@@ -335,6 +357,7 @@ if __name__ == '__main__':
     test_method_decorator()
     test_slots()
     test_origbases()
+    test_unsubscripted_generic_subclass()
     test_metaclass()
     test_enummeta()
     test_inherit()
