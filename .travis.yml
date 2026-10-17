@@ -25,18 +25,22 @@ matrix:
         - python: '3.15t-dev'
           env:
 
+        - python: '3.16t-dev'
+          env:
+
         - python: 'pypy3.10-7.3.19'
           env:
 
         - python: 'pypy3.11-7.3.20'
           env:
 
-        - python: 'pypy3.12-8.0.0'
+        - python: 'pypy3.12-8.0.1'
           env:
 
     allow_failures:
         - python: '3.15t-dev' # prerelease
-        - python: 'pypy3.12-8.0.0' # missing
+        - python: '3.16t-dev' # missing
+        - python: 'pypy3.12-8.0.1' # missing
     fast_finish: true
 
 cache:
