@@ -8,6 +8,9 @@ import dill
 
 
 def test_wrapper_state():
+    # Pure-Python wrappers use the function reducer, not save_lru_cache.
+    if dill._dill.LRUCacheType is None:
+        return
     for maxsize in (0, 2, 128, None):
         for typed in (False, True):
             cached = functools.lru_cache(maxsize=maxsize, typed=typed)(lambda x: x * 2)
