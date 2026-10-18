@@ -1532,7 +1532,7 @@ if LRUCacheType is not None:
             wrapper = Reduce(lru_cache, args, is_callable=True)
         else:
             wrapper = lru_cache
-        pickler.save_reduce(wrapper, (obj.__wrapped__,), obj=obj)
+        pickler.save_reduce(wrapper, (obj.__wrapped__,), state=obj.__dict__, obj=obj)
         logger.trace(pickler, "# LRU")
         return
 
