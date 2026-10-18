@@ -1380,18 +1380,40 @@ def save_generic_alias(pickler, obj):
 def _create_typevar(args, kwargs):
     return typing.TypeVar(*args, **kwargs)
 
+def _locate_typevar(obj, pickler=None):
+    # TypeVars have no __qualname__, so look them up by name in their module
+    module_name = getattr(obj, '__module__', None)
+    if module_name in ['__main__', None] or \
+            pickler and is_dill(pickler, child=False) and pickler._session and module_name == pickler._main.__name__:
+        return False
+    module = _import_module(module_name, safe=True)
+    return getattr(module, obj.__name__, None) is obj
+
+def _get_typevar_kwargs(obj):
+    # only pass the options that are set, as some (e.g. infer_variance and
+    # default) are not accepted by older versions of python
+    kwargs = {}
+    bound = getattr(obj, '__bound__', None)
+    if bound is not None:
+        kwargs['bound'] = bound
+    for attr in ('covariant', 'contravariant', 'infer_variance'):
+        if getattr(obj, '__%s__' % attr, False):
+            kwargs[attr] = True
+    if getattr(obj, 'has_default', lambda: False)(): # python >= 3.13
+        kwargs['default'] = obj.__default__
+    return kwargs
+
 @register(typing.TypeVar)
 def save_typevar(pickler, obj):
-    logger.trace(pickler, "Tv: %s", obj)
+    if _locate_typevar(obj, pickler):
+        logger.trace(pickler, "Tv2: %s", obj)
+        StockPickler.save_global(pickler, obj, name=obj.__name__)
+        logger.trace(pickler, "# Tv2")
+        return
+    logger.trace(pickler, "Tv1: %s", obj)
     args = (obj.__name__,) + obj.__constraints__
-    kwargs = {
-        "bound": obj.__bound__,
-        "covariant": obj.__covariant__,
-        "contravariant": obj.__contravariant__,
-        "infer_variance": getattr(obj, "__infer_variance__", False),
-    }
-    pickler.save_reduce(_create_typevar, (args, kwargs), obj=obj)
-    logger.trace(pickler, "# Tv")
+    pickler.save_reduce(_create_typevar, (args, _get_typevar_kwargs(obj)), obj=obj)
+    logger.trace(pickler, "# Tv1")
 
 if ThreadHandleType:
     @register(ThreadHandleType)
