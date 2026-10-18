@@ -26,7 +26,11 @@ import warnings
 import pathlib
 import tempfile
 
-TEMPDIR = pathlib.PurePath(tempfile.gettempdir())
+try:
+    TEMPDIR = tempfile.gettempdir()
+except FileNotFoundError:
+    TEMPDIR = os.curdir
+TEMPDIR = pathlib.PurePath(TEMPDIR)
 SESSION_TEMPFILE = str(TEMPDIR/'session.pkl')
 
 # Type hints.

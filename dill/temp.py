@@ -169,6 +169,8 @@ def loadIO(buffer, **kwds):
 
     buffer: buffer object
 
+    Additional keyword arguments are passed to dill.load.
+
     >>> dumpfile = dill.temp.dumpIO([1, 2, 3, 4, 5])
     >>> dill.temp.loadIO(dumpfile)
     [1, 2, 3, 4, 5]
@@ -177,11 +179,13 @@ def loadIO(buffer, **kwds):
     from io import BytesIO as StringIO
     value = getattr(buffer, 'getvalue', buffer) # value or buffer.getvalue
     if value != buffer: value = value() # buffer.getvalue()
-    return pickle.load(StringIO(value))
+    return pickle.load(StringIO(value), **kwds)
 
 def dumpIO(object, **kwds):
     """dill.dump of object to a buffer.
 Loads with "dill.temp.loadIO".  Returns the buffer object.
+
+Additional keyword arguments are passed to dill.dump.
 
     >>> dumpfile = dill.temp.dumpIO([1, 2, 3, 4, 5])
     >>> dill.temp.loadIO(dumpfile)
@@ -190,7 +194,7 @@ Loads with "dill.temp.loadIO".  Returns the buffer object.
     import dill as pickle
     from io import BytesIO as StringIO
     file = StringIO()
-    pickle.dump(object, file)
+    pickle.dump(object, file, **kwds)
     file.flush()
     return file
 
