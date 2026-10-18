@@ -7,6 +7,8 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 import sys
+from io import BytesIO
+import dill
 from dill.temp import dump, dump_source, dumpIO, dumpIO_source
 from dill.temp import load, load_source, loadIO, loadIO_source
 WINDOWS = sys.platform[:3] == 'win'
@@ -40,6 +42,28 @@ def test_pickle_to_stream():
     dumpfile = dumpIO(x)
     _x = loadIO(dumpfile)
     assert _x == x
+
+def test_buffer_pickle_protocol():
+    value = {'a': [1, 2, 3]}
+    for protocol in range(dill.HIGHEST_PROTOCOL + 1):
+        with dumpIO(value, protocol=protocol) as buffer:
+            assert buffer.getvalue() == dill.dumps(value, protocol=protocol)
+            assert loadIO(buffer) == value
+
+
+def test_buffer_unpickle_encoding():
+    legacy = b"S'\\xff'\np0\n."
+    with BytesIO(legacy) as buffer:
+        for source in (legacy, buffer):
+            assert loadIO(source, encoding='latin1') == '\xff'
+            assert loadIO(source, encoding='bytes') == b'\xff'
+        assert not buffer.closed
+
+
+def test_buffer_unpickle_errors():
+    legacy = b"S'\\xff'\np0\n."
+    assert loadIO(legacy, errors='replace') == '\ufffd'
+
 
 ### now testing the objects ###
 f = lambda x: x**2
@@ -98,6 +122,9 @@ if __name__ == '__main__':
     test_code_to_stream()
     test_pickle_to_tempfile()
     test_pickle_to_stream()
+    test_buffer_pickle_protocol()
+    test_buffer_unpickle_encoding()
+    test_buffer_unpickle_errors()
     test_two_arg_functions()
     test_one_arg_functions()
     test_the_rest()
