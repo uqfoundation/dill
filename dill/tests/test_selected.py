@@ -110,10 +110,20 @@ def test_typing():
   assert x == dill.copy(x)
   x = typing.Tuple[()].copy_with(())
   assert x == dill.copy(x)
-  x = typing.TypeVar("T", bound=int)
+  x = dill.copy(typing.TypeVar("T", bound=int))
   assert isinstance(x, typing.TypeVar)
   assert x.__name__ == "T"
   assert x.__bound__ == int
+  x = dill.copy(typing.TypeVar("T", int, str, covariant=True))
+  assert x.__constraints__ == (int, str)
+  assert x.__covariant__ and not x.__contravariant__
+  # a TypeVar that can be found in its module is pickled by reference
+  assert dill.copy(typing.AnyStr) is typing.AnyStr
+  x = typing.List[typing.AnyStr]
+  assert x == dill.copy(x)
+  if hasattr(typing, 'NoDefault'): # python >= 3.13
+    x = dill.copy(typing.TypeVar("T", default=int))
+    assert x.has_default() and x.__default__ is int
   return
 
 
