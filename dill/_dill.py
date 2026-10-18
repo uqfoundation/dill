@@ -102,6 +102,7 @@ except ImportError:
     HAS_CTYPES = False
     IS_PYPY = False
 OLDPYPY7323 = IS_PYPY and (sys.pypy_version_info[:3] < (7,3,23))
+OLDPYPY8001 = IS_PYPY and (sys.pypy_version_info[:3] < (8,0,1))
 NumpyUfuncType = None
 NumpyDType = None
 NumpyArrayType = None
@@ -703,7 +704,7 @@ def _create_code(*args):
             'linetable', 'exceptiontable', 'freevars', 'cellvars'                                 # args[14:]
         )):
             if CODE_VERSION == (3,11):
-                if IS_PYPY and OLD312a7 and not OLDPYPY7323: # v7.3.23 - v8.0.0
+                if IS_PYPY and OLDPYPY8001 and not OLDPYPY7323:
                     args = tuple(args[:15]) + tuple(args[16:18]) + (args[15],)
                 return CodeType(
                     *args[:6],
@@ -774,7 +775,7 @@ def _create_code(*args):
             'linetable', 'endlinetable', 'columntable', 'exceptiontable', 'freevars', 'cellvars'  # args[14:]
         )):
             if CODE_VERSION == (3,11,'a'):
-                if IS_PYPY and OLD312a7 and not OLDPYPY7323: # v7.3.23 - v8.0.0
+                if IS_PYPY and OLDPYPY8001 and not OLDPYPY7323:
                     args = tuple(args[:17]) + tuple(args[18:20]) + (args[17],)
                 return CodeType(
                     *args[:6],
@@ -799,7 +800,7 @@ def _create_code(*args):
 
     args = tuple(fields[k].encode() if k in ENCODE_PARAMS and hasattr(fields[k], 'encode') else fields[k]
             for k in CODE_PARAMS)
-    if IS_PYPY and OLD312a7 and not OLDPYPY7323: # v7.3.23 - v8.0.0
+    if IS_PYPY and OLDPYPY8001 and not OLDPYPY7323:
         if len(args) > 17:
             args = tuple(args[:-3]) + tuple(args[-2:]) + (args[-3],)
     return CodeType(*args)

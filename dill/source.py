@@ -41,12 +41,12 @@ def isfrommain(obj):
 
 
 def _is_repl_filename(file):
-    """True for interpreter buffers: <stdin>, Python 3.13+ <python-input-N>, IPython."""
+    """True for interpreter buffers, including code.InteractiveConsole and IPython."""
     if not file:
         return True
     name = file.replace('\\', '/').rsplit('/', 1)[-1]
     return (
-        name == '<stdin>'
+        name in ('<stdin>', '<console>')
         or name.startswith('<python-input-')
         or name.startswith('<ipython-input-')
     )
@@ -142,8 +142,15 @@ def findsource(object):
     if file and file.endswith('_pyrepl/__main__.py'):
         import sys #XXX: assumes only 3.14.0a0 > python > 3.12.99f0
         file = None if (0x30e00a0 > sys.hexversion > 0x30c63f0) else file
-    is_module_main = (module and module.__name__ == '__main__'
-                      and _is_repl_filename(file))
+    is_module_main = module and module.__name__ == '__main__'
+    if is_module_main:
+        # Consoles such as python -m asyncio retain the bootstrap module's file.
+        # The callable's own filename still identifies its interactive source.
+        try:
+            is_module_main = (_is_repl_filename(file)
+                              or _is_repl_filename(getfile(object)))
+        except TypeError:
+            is_module_main = _is_repl_filename(file)
     if IS_IPYTHON and is_module_main:
         #FIXME: quick fix for functions and classes in IPython interpreter
         try:

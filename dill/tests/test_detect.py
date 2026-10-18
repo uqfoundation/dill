@@ -147,7 +147,10 @@ def test_lambdify():
     settings['recurse'] = True
     x = symbols("x")
     y = x**2
-    f = lambdify([x], y)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        f = lambdify([x], y)
     z = min
     d = globals()
     globalvars(f, recurse=True, builtin=True)
