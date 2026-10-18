@@ -124,7 +124,31 @@ def test_typing():
   if hasattr(typing, 'NoDefault'): # python >= 3.13
     x = dill.copy(typing.TypeVar("T", default=int))
     assert x.has_default() and x.__default__ is int
+  x = dill.copy(typing.ParamSpec("P", bound=int))
+  assert isinstance(x, typing.ParamSpec)
+  assert x.__name__ == "P"
+  assert x.__bound__ == int
+  if hasattr(typing, 'TypeVarTuple'): # python >= 3.11
+    x = dill.copy(typing.TypeVarTuple("Ts"))
+    assert isinstance(x, typing.TypeVarTuple)
+    assert x.__name__ == "Ts"
   return
+
+def test_type_params():
+  # PEP 695 type parameters are not found in the module they claim (typing)
+  import sys
+  if sys.hexversion < 0x30c00b1: # python < 3.12
+    return
+  ns = {}
+  exec("class Foo[T: int, *Ts, **P]: pass", ns)
+  T, Ts, P = ns['Foo'].__type_params__
+  for x in (T, Ts, P):
+    y = dill.copy(x)
+    assert type(y) is type(x)
+    assert y.__name__ == x.__name__
+  assert dill.copy(T).__bound__ is int
+  Foo = dill.copy(ns['Foo'])
+  assert [type(x) for x in Foo.__type_params__] == [type(T), type(Ts), type(P)]
 
 
 if __name__ == '__main__':
@@ -133,3 +157,4 @@ if __name__ == '__main__':
   test_class()
   test_class_descriptors()
   test_typing()
+  test_type_params()

@@ -1377,11 +1377,12 @@ def save_generic_alias(pickler, obj):
         logger.trace(pickler, "# Ga2")
     return
 
-def _create_typevar(args, kwargs):
-    return typing.TypeVar(*args, **kwargs)
+def _create_typevar(args, kwargs, typevar=typing.TypeVar):
+    return typevar(*args, **kwargs)
 
 def _locate_typevar(obj, pickler=None):
-    # TypeVars have no __qualname__, so look them up by name in their module
+    # TypeVars (and ParamSpecs, TypeVarTuples) have no __qualname__,
+    # so look them up by name in their module
     module_name = getattr(obj, '__module__', None)
     if module_name in ['__main__', None] or \
             pickler and is_dill(pickler, child=False) and pickler._session and module_name == pickler._main.__name__:
@@ -1403,6 +1404,7 @@ def _get_typevar_kwargs(obj):
         kwargs['default'] = obj.__default__
     return kwargs
 
+@register(typing.ParamSpec)
 @register(typing.TypeVar)
 def save_typevar(pickler, obj):
     if _locate_typevar(obj, pickler):
@@ -1411,9 +1413,13 @@ def save_typevar(pickler, obj):
         logger.trace(pickler, "# Tv2")
         return
     logger.trace(pickler, "Tv1: %s", obj)
-    args = (obj.__name__,) + obj.__constraints__
-    pickler.save_reduce(_create_typevar, (args, _get_typevar_kwargs(obj)), obj=obj)
+    args = (obj.__name__,) + getattr(obj, '__constraints__', ())
+    kwargs = _get_typevar_kwargs(obj)
+    pickler.save_reduce(_create_typevar, (args, kwargs, type(obj)), obj=obj)
     logger.trace(pickler, "# Tv1")
+
+if hasattr(typing, 'TypeVarTuple'): # python >= 3.11
+    register(typing.TypeVarTuple)(save_typevar)
 
 if ThreadHandleType:
     @register(ThreadHandleType)
