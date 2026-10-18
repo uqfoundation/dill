@@ -84,14 +84,18 @@ def test_cached_code_object_matches_the_definition():
 
 
 def test_pyrepl_nested_block_entry():
-    source = 'def outer():\n    def inner():\n        return 1\n    return inner\n'
-    main = ModuleType('__main__')
-    exec(compile(source, '<python-input-5>', 'exec'), main.__dict__)
-    history = History(['marker = 1', source.rstrip('\n'), 'inner = outer()'])
-    pyrepl = ModuleType('_pyrepl.readline')
-    pyrepl._wrapper = history
-    with patch.dict(sys.modules, {'__main__': main, '_pyrepl.readline': pyrepl}):
-        assert getsource(main.outer(), enclosing=True) == source
+    for definition in ('def', 'async def'):
+        source = ('def outer():\n    %s inner():\n'
+                  '        return 1\n    return inner\n') % definition
+        main = ModuleType('__main__')
+        exec(compile(source, '<python-input-5>', 'exec'), main.__dict__)
+        history = History(['marker = 1', source.rstrip('\n'), 'inner = outer()'])
+        pyrepl = ModuleType('_pyrepl.readline')
+        pyrepl._wrapper = history
+        with patch.dict(sys.modules, {'__main__': main, '_pyrepl.readline': pyrepl}):
+            inner = main.outer()
+            assert getsourcelines(inner) == (source.splitlines(True)[1:3], 2)
+            assert getsource(inner, enclosing=True) == source
 
 
 def test_pyrepl_decorated_code_entry():
@@ -105,6 +109,20 @@ def test_pyrepl_decorated_code_entry():
     with patch.dict(sys.modules, {'__main__': main, '_pyrepl.readline': pyrepl}), \
          patch('dill.source.getmodule', return_value=main):
         assert getsource(main.target.__code__) == source
+
+
+def test_missing_history_entry():
+    main = ModuleType('__main__')
+    exec(compile('def target():\n    return 1\n', '<python-input-7>', 'exec'),
+         main.__dict__)
+    history = History([None])
+    for reader in ('readline', 'pyrepl'):
+        pyrepl = ModuleType('_pyrepl.readline')
+        pyrepl._wrapper = history
+        modules = {'__main__': main, 'readline': history,
+                   '_pyrepl.readline': pyrepl if reader == 'pyrepl' else None}
+        with patch.dict(sys.modules, modules):
+            assert getsource(main.target, force=True) == 'from __main__ import target\n'
 
 
 def test_continued_definition_names():
@@ -153,6 +171,7 @@ if __name__ == '__main__':
     test_cached_code_object_matches_the_definition()
     test_pyrepl_nested_block_entry()
     test_pyrepl_decorated_code_entry()
+    test_missing_history_entry()
     test_continued_definition_names()
     test_file_async_method_source()
     test_file_async_enclosing_source()
