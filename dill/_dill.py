@@ -484,6 +484,14 @@ def register(t):
         return func
     return proxy
 
+@register(float)
+def save_float(pickler, obj):
+    numpy = sys.modules.get('numpy')
+    if numpy is not None and obj is getattr(numpy, 'nan', None):
+        pickler.save_reduce(getattr, (numpy, 'nan'), obj=obj)
+    else:
+        StockPickler.save_float(pickler, obj)
+
 def _revert_extension():
     """drop dill-registered types from pickle's dispatch table"""
     for type, func in list(StockPickler.dispatch.items()):
