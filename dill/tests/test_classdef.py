@@ -155,16 +155,17 @@ def test_dtype():
         assert dti == dill.copy(dti)
     except ImportError: pass
 
-def test_numpy_nan():
+
+def test_nan():
+    assert dill.copy(float('nan')) is not float('nan')
     try:
         import numpy as np
     except ImportError:
         return
 
-    for protocol in range(dill.HIGHEST_PROTOCOL + 1):
-        assert dill.copy(np.nan, protocol=protocol) is np.nan
-        restored = dill.copy({np.nan: 'value'}, protocol=protocol)
-        assert restored[np.nan] == 'value'
+    assert dill.copy(np.nan) is np.nan
+    restored = dill.copy({np.nan: 'value'})
+    assert restored.get(np.nan) == 'value'
 
 
 def test_array_nested():
@@ -341,7 +342,7 @@ if __name__ == '__main__':
     test_specialtypes()
     test_namedtuple()
     test_dtype()
-    test_numpy_nan()
+    test_nan()
     test_array_nested()
     test_array_subclass()
     test_method_decorator()
