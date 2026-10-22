@@ -156,6 +156,18 @@ def test_dtype():
     except ImportError: pass
 
 
+def test_nan():
+    #assert dill.copy(float('nan')) is not float('nan')
+    try:
+        import numpy as np
+    except ImportError:
+        return
+
+    assert dill.copy(np.nan) is np.nan
+    restored = dill.copy({np.nan: 'value'})
+    assert restored.get(np.nan) == 'value'
+
+
 def test_array_nested():
     try:
         import numpy as np
@@ -330,6 +342,7 @@ if __name__ == '__main__':
     test_specialtypes()
     test_namedtuple()
     test_dtype()
+    test_nan()
     test_array_nested()
     test_array_subclass()
     test_method_decorator()
