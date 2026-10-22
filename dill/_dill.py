@@ -484,14 +484,6 @@ def register(t):
         return func
     return proxy
 
-@register(float)
-def save_float(pickler, obj):
-    numpy = sys.modules.get('numpy')
-    if numpy is not None and obj is getattr(numpy, 'nan', None):
-        pickler.save_reduce(getattr, (numpy, 'nan'), obj=obj)
-    else:
-        StockPickler.save_float(pickler, obj)
-
 def _revert_extension():
     """drop dill-registered types from pickle's dispatch table"""
     for type, func in list(StockPickler.dispatch.items()):
@@ -1184,6 +1176,24 @@ def _save_with_postproc(pickler, reduction, is_pickler_dill=None, obj=Getattr.NO
                 pickler.save_reduce(*reduction)
             # pop None created by calling preprocessing step off stack
             pickler.write(POP)
+
+@register(float)
+def save_float(pickler, obj):
+    numpy = sys.modules.get('numpy')
+    special = False
+    if numpy is not None:
+        if obj is numpy.nan or obj is numpy.inf: special = True
+    if special is False: #XXX: no logger
+        StockPickler.save_float(pickler, obj)
+    elif obj is numpy.nan:
+        logger.trace(pickler, "Nan: %s", obj)
+        pickler.save_reduce(getattr, (numpy, 'nan'), obj=obj)
+        logger.trace(pickler, "# Nan")
+    elif obj is numpy.inf:
+        logger.trace(pickler, "Inf: %s", obj)
+        pickler.save_reduce(getattr, (numpy, 'inf'), obj=obj)
+        logger.trace(pickler, "# Inf")
+    return
 
 #@register(CodeType)
 #def save_code(pickler, obj):
