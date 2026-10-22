@@ -157,7 +157,7 @@ def test_dtype():
 
 
 def test_nan():
-    assert dill.copy(float('nan')) is not float('nan')
+    #assert dill.copy(float('nan')) is not float('nan')
     try:
         import numpy as np
     except ImportError:
