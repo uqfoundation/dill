@@ -136,10 +136,21 @@ def fib(n):
 
 def test_recursive_function():
     global fib
-    fib2 = copy(fib, recurse=True)
+    import types
+
+    fib2_original = copy(fib, recurse=True)
+    fib2 = types.FunctionType(
+        fib2_original.__code__,
+        dict(fib2_original.__globals__),
+        fib2_original.__name__,
+        fib2_original.__defaults__,
+        fib2_original.__closure__,
+    )
+    fib2.__dict__.update(fib2_original.__dict__)
     fib3 = copy(fib)
     fib4 = fib
     del fib
+    fib2.__globals__['fib'] = fib2
     assert fib2(5) == 5
     for _fib in (fib3, fib4):
         try:
