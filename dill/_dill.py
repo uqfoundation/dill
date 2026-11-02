@@ -2323,10 +2323,16 @@ def check(obj, *args, **kwds):
     finally:
         if fail and verbose:
             print("DUMP FAILED")
-    msg = "import dill; print(dill.loads(%s, ignore=" % repr(_obj)
-    msg += "True))" if ignore else "False))"
-    msg = [python, "-c", msg] 
-    msg = "SUCCESS" if not subprocess.call(msg) else "LOAD FAILED"
+    # Pass the pickled bytes to the child over stdin rather than embedding
+    # them (as a repr()) in the "-c" command string: a large object's pickle
+    # can exceed the OS's command-line argument length limit (E2BIG on
+    # Linux/macOS, WinError 206 on Windows), while stdin has no such limit.
+    # Passing `python` as its own argv entry (instead of splitting a
+    # formatted string) also avoids failing when the interpreter path itself
+    # contains spaces.
+    code = "import sys, dill; print(dill.loads(sys.stdin.buffer.read(), ignore=%s))" % bool(ignore)
+    returncode = subprocess.run([python, "-c", code], input=_obj).returncode
+    msg = "SUCCESS" if not returncode else "LOAD FAILED"
     if verbose:
         print(msg)
     return
