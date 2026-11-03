@@ -44,9 +44,8 @@ def parents(obj, objtype, depth=1, ignore=()): #XXX: objtype=object ?
     edge_func = gc.get_referents # looking for refs, not back_refs
     predicate = lambda x: isinstance(x, objtype) # looking for parent type
    #if objtype is None: predicate = lambda x: True #XXX: in obj.mro() ?
-    ignore = (ignore,) if not hasattr(ignore, '__len__') else ignore
-    ignore = (id(obj) for obj in ignore)
-    chain = find_chain(obj, predicate, edge_func, depth)[::-1]
+    ignore = _ignore_ids(ignore)
+    chain = find_chain(obj, predicate, edge_func, depth, ignore)[::-1]
     #XXX: should pop off obj... ?
     return chain
 
@@ -67,11 +66,15 @@ def children(obj, objtype, depth=1, ignore=()): #XXX: objtype=object ?
     edge_func = gc.get_referrers # looking for back_refs, not refs
     predicate = lambda x: isinstance(x, objtype) # looking for child type
    #if objtype is None: predicate = lambda x: True #XXX: in obj.mro() ?
-    ignore = (ignore,) if not hasattr(ignore, '__len__') else ignore
-    ignore = (id(obj) for obj in ignore)
+    ignore = _ignore_ids(ignore)
     chain = find_chain(obj, predicate, edge_func, depth, ignore)
     #XXX: should pop off obj... ?
     return chain
+
+def _ignore_ids(ignore):
+    if not isinstance(ignore, tuple):
+        return (id(ignore),)
+    return tuple(map(id, ignore)) + ((id(ignore),) if ignore else ())
 
 
 # more generic helper function (cut-n-paste from objgraph)
@@ -85,7 +88,8 @@ def find_chain(obj, predicate, edge_func, max_depth=20, extra_ignore=()):
     depth = {id(obj): 0}
     parent = {id(obj): None}
     ignore = set(extra_ignore)
-    ignore.add(id(extra_ignore))
+    if extra_ignore:
+        ignore.add(id(extra_ignore))
     ignore.add(id(queue))
     ignore.add(id(depth))
     ignore.add(id(parent))
