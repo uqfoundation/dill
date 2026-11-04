@@ -61,7 +61,9 @@ def test_children_ignore():
     x = []
     ignore = (x,)
     assert ignore in children(x, tuple, depth=1)
-    assert children(x, tuple, depth=1, ignore=ignore) == [x]
+    chain = children(x, tuple, depth=1, ignore=ignore)
+    # PyPy may expose other tuples referring to x; only this tuple is ignored.
+    assert all(obj is not ignore for obj in chain)
 
 a, b, c = 1, 2, 3
 
