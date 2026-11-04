@@ -38,6 +38,7 @@ def test_unicode_source_aliases():
         if not WINDOWS:  #see: https://bugs.python.org/issue14243
             with dump_source(len, alias=alias) as pyfile:
                 assert load_source(pyfile) is len
+                assert load_source(pyfile, mode='rb', alias=alias) is len
 
 
 # pickle to tempfile
