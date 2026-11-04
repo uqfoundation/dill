@@ -67,7 +67,7 @@ def test_python_path_with_spaces():
             str(Path(dill.__file__).resolve().parent.parent) + '\n', encoding='utf-8'
         )
         with capture('stdout') as output:
-            check({'answer': 42}, python=str(executable), verbose=True)
+            check(f, python=str(executable), verbose=True)
         assert 'SUCCESS' in output.getvalue()
         assert 'LOAD FAILED' not in output.getvalue()
 
