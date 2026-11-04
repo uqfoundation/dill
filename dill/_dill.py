@@ -2244,6 +2244,7 @@ def check(obj, *args, **kwds):
    # all other args and kwds are passed to dill.dumps #FIXME: ignore on load
     verbose = kwds.pop('verbose', False)
     python = kwds.pop('python', None)
+    ignore = kwds.pop('ignore', None)
     if python is None:
         import sys
         python = sys.executable
@@ -2257,9 +2258,10 @@ def check(obj, *args, **kwds):
     finally:
         if fail and verbose:
             print("DUMP FAILED")
-    #FIXME: the 'ignore' keyword is not handled on load
-    cmd = [python, "-c", "import dill; print(dill.loads(%s))" % repr(_obj)]
-    msg = "SUCCESS" if not subprocess.call(cmd) else "LOAD FAILED"
+    msg = "import dill; print(dill.loads(%s, ignore=" % repr(_obj)
+    msg += "True))" if ignore else "False))"
+    msg = [python, "-c", msg] 
+    msg = "SUCCESS" if not subprocess.call(msg) else "LOAD FAILED"
     if verbose:
         print(msg)
     return
