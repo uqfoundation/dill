@@ -41,8 +41,7 @@ def capture(stream='stdout'):
 
 
 def b(x): # deal with b'foo' versus 'foo'
-    import codecs
-    return codecs.latin_1_encode(x)[0]
+    return x.encode('utf-8')
 
 def load_source(file, **kwds):
     """load an object that was stored with dill.temp.dump_source
@@ -59,6 +58,8 @@ def load_source(file, **kwds):
     """
     alias = kwds.pop('alias', None)
     mode = kwds.pop('mode', 'r')
+    if 'b' not in mode:
+        kwds.setdefault('encoding', 'utf-8')
     fname = getattr(file, 'name', file) # fname=file.name or fname=file (if str)
     source = open(fname, mode=mode, **kwds).read()
     if not alias:
