@@ -422,8 +422,8 @@ x['GzipFileType'] = gzip.GzipFile(fileobj=_fileW)
 # generic operating system services (CH 15)
 a['StreamHandlerType'] = logging.StreamHandler()
 # numeric and mathematical types (CH 9)
-z = a if sys.hexversion < 0x30e00a1 else x
-z['CountType'] = itertools.count(0) #FIXME: __reduce__ removed in 3.14.0a1
+z = a if (sys.hexversion < 0x30e00a1 or (HAS_CTYPES and not IS_PYPY)) else x
+z['CountType'] = itertools.count(0)
 z['ChainType'] = itertools.chain('0','1')
 z['ProductType'] = itertools.product('0','1')
 z['CycleType'] = itertools.cycle('0')
