@@ -2356,4 +2356,8 @@ def _extend():
 
 del diff, _use_diff, use_diff
 
+# python 3.14 removed the pickling methods of itertools objects
+if HAS_CTYPES and not IS_PYPY and sys.hexversion >= 0x30e00a1:
+    from . import _itertools
+
 # EOF
