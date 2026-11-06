@@ -560,6 +560,39 @@ def test_legacy_binary_file_contents():
             assert restored.read() == b'gacy content'
 
 
+def test_exclusive_file_contents():
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / 'exclusive.dat'
+        for mode in ('x', 'x+', 'xb', 'x+b'):
+            binary = 'b' in mode
+            contents = b'original' if binary else 'original'
+            suffix = b' suffix' if binary else ' suffix'
+            with path.open(mode) as stream:
+                stream.write(contents)
+                expected_mode = stream.mode
+                dumped = dill.dumps(stream, fmode=dill.FILE_FMODE)
+
+            path.write_bytes(b'replacement')
+            try:
+                dill.loads(dumped)
+            except dill.UnpicklingError:
+                pass
+            else:
+                raise AssertionError('exclusive creation did not fail')
+            assert path.read_bytes() == b'replacement'
+
+            path.unlink()
+            with dill.loads(dumped) as restored:
+                assert restored.mode == expected_mode
+                assert restored.tell() == len(contents)
+                restored.write(suffix)
+            assert path.read_bytes() == b'original suffix'
+            path.unlink()
+
+
 #bench(True, dill.HANDLE_FMODE, False)
 #bench(True, dill.FILE_FMODE, False)
 #bench(True, dill.CONTENTS_FMODE, True)
@@ -572,3 +605,4 @@ if __name__ == '__main__':
     test_recreated_file_permissions()
     test_binary_file_contents()
     test_legacy_binary_file_contents()
+    test_exclusive_file_contents()
