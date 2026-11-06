@@ -30,6 +30,17 @@ def test_code_to_stream():
     _f = loadIO_source(pyfile)
     assert _f(4) == f(4)
 
+def test_unicode_source_aliases():
+    for alias in ('café', 'λ'):
+        with dumpIO_source(len, alias=alias) as buffer:
+            assert loadIO_source(buffer) is len
+            assert loadIO_source(buffer.getvalue()) is len
+        if not WINDOWS:  #see: https://bugs.python.org/issue14243
+            with dump_source(len, alias=alias) as pyfile:
+                assert load_source(pyfile) is len
+                assert load_source(pyfile, mode='rb', alias=alias) is len
+
+
 # pickle to tempfile
 def test_pickle_to_tempfile():
     if not WINDOWS:  #see: https://bugs.python.org/issue14243
@@ -120,6 +131,7 @@ def test_the_rest():
 if __name__ == '__main__':
     test_code_to_tempfile()
     test_code_to_stream()
+    test_unicode_source_aliases()
     test_pickle_to_tempfile()
     test_pickle_to_stream()
     test_buffer_pickle_protocol()
