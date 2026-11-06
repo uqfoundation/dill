@@ -7,7 +7,7 @@
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
 from dill.detect import baditems, badobjects, badtypes, errors, parent, parents, at, globalvars
-from dill.detect import children
+from dill.detect import children, nestedglobals
 from dill import settings
 from dill._dill import IS_PYPY
 from pickle import PicklingError
@@ -113,6 +113,18 @@ def test_globals():
     #assert set(res) == set(['True'])
 
 
+def test_nestedglobals_recurse():
+    def outer():
+        a
+        def inner():
+            b
+            def innermost():
+                c
+
+    assert set(nestedglobals(outer, recurse=False)) == {'a'}
+    assert set(nestedglobals(outer)) == {'a', 'b', 'c'}
+
+
 #98 dill ignores __getstate__ in interactive lambdas
 bar = [0]
 
@@ -185,6 +197,7 @@ if __name__ == '__main__':
     test_parents_ignore()
     test_children_ignore()
     test_globals()
+    test_nestedglobals_recurse()
     test_getstate()
     test_deleted()
     test_lambdify()

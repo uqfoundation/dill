@@ -146,7 +146,7 @@ def nestedglobals(func, recurse=True):
     names = set()
     with capture('stdout') as out:
         try:
-            dis.dis(func) #XXX: dis.dis(None) disassembles last traceback
+            dis.dis(func, depth=0) #XXX: dis.dis(None) disassembles last traceback
         except IndexError:
             pass #FIXME: HACK for IS_PYPY (3.11)
     for line in out.getvalue().splitlines():
