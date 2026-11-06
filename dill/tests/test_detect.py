@@ -6,7 +6,8 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
-from dill.detect import baditems, badobjects, badtypes, errors, parent, at, globalvars
+from dill.detect import baditems, badobjects, badtypes, errors, parent, parents, at, globalvars
+from dill.detect import children
 from dill import settings
 from dill._dill import IS_PYPY
 from pickle import PicklingError
@@ -43,6 +44,26 @@ def test_parent():
     if IS_PYPY: assert parent(obj, int) is None
     else: assert parent(obj, int) is x[-1] # python oddly? finds last int
     assert at(id(at)) is at
+
+def test_parents_ignore():
+    if not IS_PYPY:
+        value = {(): 1}
+        assert parents(value, tuple, depth=1)[-1] == ()
+
+    x = [4,5,6,7]
+    listiter = iter(x)
+    if not IS_PYPY:
+        assert parents(listiter, list, depth=1)[-1] is x
+    assert parents(listiter, list, depth=1, ignore=x) == [listiter]
+    assert parents(listiter, list, depth=1, ignore=(x,)) == [listiter]
+
+def test_children_ignore():
+    x = []
+    ignore = (x,)
+    assert ignore in children(x, tuple, depth=1)
+    chain = children(x, tuple, depth=1, ignore=ignore)
+    # PyPy may expose other tuples referring to x; only this tuple is ignored.
+    assert all(obj is not ignore for obj in chain)
 
 a, b, c = 1, 2, 3
 
@@ -161,6 +182,8 @@ def test_lambdify():
 if __name__ == '__main__':
     test_bad_things()
     test_parent()
+    test_parents_ignore()
+    test_children_ignore()
     test_globals()
     test_getstate()
     test_deleted()
