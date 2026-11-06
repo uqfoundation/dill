@@ -72,6 +72,26 @@ def test_python_path_with_spaces():
         assert 'LOAD FAILED' not in output.getvalue()
 
 
+class _Big(object):
+    # Pickles to a large payload (enough to have exceeded the OS's
+    # command-line argument length limit under the old embed-in-argv
+    # approach), but prints as a single short line: check()'s child
+    # process unconditionally prints the unpickled object, so a large
+    # __repr__/__str__ here would flood the test suite's output.
+    def __init__(self, n):
+        self.data = list(range(n))
+
+    def __repr__(self):
+        return '_Big(%d)' % len(self.data)
+
+
+def test_large_object(verbose=None):
+    # Regression test for check() embedding the pickled object's repr() in
+    # a "-c" command string: a large enough object used to exceed the OS's
+    # command-line argument length limit instead of being piped over stdin.
+    raise_check(_Big(200000), verbose=verbose)
+
+
 #TODO: test incompatible versions
 #TODO: test dump failure
 #TODO: test load failure
@@ -84,3 +104,4 @@ if __name__ == '__main__':
     test_protocol()
     test_python()
     test_python_path_with_spaces()
+    test_large_object()
