@@ -129,6 +129,31 @@ def test_metadata_aliases():
         assert set(namespace) == set(before)
 
 
+def custom_module(function):
+    function.__module__ = "custom.module"
+    return function
+
+
+@custom_module
+def custom_module_function():
+    # Make the decorator an explicit source dependency too.
+    return 42 if custom_module else 0
+
+
+def test_metadata_alias_module_override():
+    namespace = {"__name__":"destination"}
+    restored, _ = restore(custom_module_function, "__name__", namespace)
+    assert restored() == 42
+    assert restored.__module__ == "custom.module"
+
+
+def test_name_alias_recursion():
+    namespace = {"__name__":"destination"}
+    restored, _ = restore(factorial, "__name__", namespace)
+    assert restored(5) == 120
+    assert restored.__module__ == "destination"
+
+
 def test_nested_closure():
     result, namespace = restore(nested_factory(2)(3), "exported")
     assert result(4) == 9
@@ -270,6 +295,26 @@ def test_source_analysis_does_not_warn():
             sys.modules.pop(name, None)
 
 
+def test_no_symtable_dependency():
+    from unittest.mock import patch
+    original_import = builtins.__import__
+
+    def without_symtable(name, *args, **kwargs):
+        if name in ("symtable", "_symtable"):
+            raise ImportError("symbol table extension is unavailable")
+        return original_import(name, *args, **kwargs)
+
+    with patch.object(builtins, "__import__", without_symtable):
+        namespace = {"offset":object()}
+        sentinel = namespace["offset"]
+        first, _ = restore(offset_factory(1), "first", namespace)
+        second, _ = restore(offset_factory(10), "second", namespace)
+    assert first(0) == 1
+    assert second(0) == 10
+    assert namespace["offset"] is sentinel
+    assert set(namespace) == {"__builtins__", "offset", "first", "second"}
+
+
 def test_imports_and_plain_source():
     assert importable(plain, source=False) == "from %s import plain\n" % __name__
     assert importable(plain, source=True) == (
@@ -284,6 +329,9 @@ if __name__ == "__main__":
     test_aliases()
     test_nested_closure()
     test_metadata_aliases()
+    test_metadata_alias_module_override()
+    test_name_alias_recursion()
+    test_no_symtable_dependency()
     test_global_reads_and_writes()
     test_shared_dependencies()
     test_recursion()

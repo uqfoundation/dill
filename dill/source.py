@@ -985,6 +985,74 @@ def _closuredsource(func, alias=''):
     # FIXME: remove duplicates (however, order is important...)
     return func_vars
 
+
+def _source_binding_names(tree):
+    """Find bindings in the module scope without descending into local scopes."""
+    import ast
+
+    class Bindings(ast.NodeVisitor):
+        def __init__(self):
+            self.names = set()
+
+        def visit_Name(self, node):
+            if isinstance(node.ctx, (ast.Store, ast.Del)):
+                self.names.add(node.id)
+
+        def visit_Import(self, node):
+            for alias in node.names:
+                self.names.add(alias.asname or alias.name.split('.')[0])
+
+        def visit_ImportFrom(self, node):
+            for alias in node.names:
+                self.names.add(alias.asname or alias.name)
+
+        def visit_FunctionDef(self, node):
+            self.names.add(node.name)
+            for decorator in node.decorator_list:
+                self.visit(decorator)
+            self.visit(node.args)
+            if node.returns is not None:
+                self.visit(node.returns)
+
+        visit_AsyncFunctionDef = visit_FunctionDef
+
+        def visit_Lambda(self, node):
+            self.visit(node.args)
+
+        def visit_ClassDef(self, node):
+            self.names.add(node.name)
+            for expression in node.decorator_list + node.bases + node.keywords:
+                self.visit(expression)
+
+        def visit_comprehension(self, node):
+            # Loop targets are local to the comprehension. Named expressions
+            # in its iterable, filters or result can bind in the module scope.
+            self.visit(node.iter)
+            for condition in node.ifs:
+                self.visit(condition)
+
+        def visit_ExceptHandler(self, node):
+            if node.name is not None:
+                self.names.add(node.name)
+            self.generic_visit(node)
+
+        def visit_MatchAs(self, node):
+            if node.name is not None:
+                self.names.add(node.name)
+            self.generic_visit(node)
+
+        visit_MatchStar = visit_MatchAs
+
+        def visit_MatchMapping(self, node):
+            if node.rest is not None:
+                self.names.add(node.rest)
+            self.generic_visit(node)
+
+    visitor = Bindings()
+    visitor.visit(tree)
+    return visitor.names
+
+
 def importable(obj, alias='', source=None, builtin=True):
     """get an importable string (i.e. source code or the import string)
     for the given object, including any required objects from the enclosing
@@ -1015,29 +1083,24 @@ def importable(obj, alias='', source=None, builtin=True):
     if not name or not name.isidentifier():
         return src
 
-    # Keep plain definitions and imports unchanged. Looking at module symbols
-    # excludes local names inside functions and classes.
-    import symtable
+    # Parse without re-emitting warnings from the original source. AST works
+    # on PyPy too, where the optional _symtable extension may be unavailable.
+    import ast
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', SyntaxWarning)
         warnings.simplefilter('ignore', DeprecationWarning)
         try:
-            symbols = symtable.symtable(src, '<dill.source>', 'exec').get_symbols()
+            tree = ast.parse(src)
         except SyntaxError:
             return src
-    bound = {s.get_name() for s in symbols if s.is_assigned() or s.is_imported()}
+    bound = _source_binding_names(tree)
     if name not in bound:
         # A decorated callable can have its wrapper's name while its source
         # recreates the original decorated definition.
-        import ast
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', SyntaxWarning)
-            warnings.simplefilter('ignore', DeprecationWarning)
-            body = ast.parse(src).body
-        if not body:
+        if not tree.body:
             return src
-        last = body[-1]
+        last = tree.body[-1]
         if alias or not isinstance(last, (ast.FunctionDef, ast.AsyncFunctionDef,
                                           ast.ClassDef)):
             return src
@@ -1055,7 +1118,12 @@ def importable(obj, alias='', source=None, builtin=True):
         '    namespace = {{key: value for key, value in globals().items()\n'
         "                 if key in ('__name__', '__package__', '__builtins__')}}\n"
         '    exec({source!r}, namespace)\n'
-        '    return namespace[{name!r}]\n'
+        '    result = namespace[{name!r}]\n'
+        # PyPy reads __module__ lazily from the function's globals. An alias
+        # named __name__ must not make that metadata point at the function.
+        "    if {name!r} == '__name__' and result.__module__ is result:\n"
+        "        result.__module__ = globals().get('__name__')\n"
+        '    return result\n'
     ).format(name=name, source=src)
 
 
