@@ -956,20 +956,23 @@ def _closuredsource(func, alias=''):
     # split into 'funcs' and 'non-funcs'
     for name,obj in list(free_vars.items()):
         if not isfunction(obj):
-            # get source for 'non-funcs'
-            free_vars[name] = getsource(obj, force=True, alias=name)
+            # Builtin callables have no Python source, but can be imported.
+            if isbuiltin(obj):
+                free_vars[name] = getimport(obj, alias=name, builtin=True)
+            else:
+                free_vars[name] = getsource(obj, force=True, alias=name)
             continue
         # get source for 'funcs'
         fobj = free_vars.pop(name)
         src = getsource(fobj, alias) # DO NOT include dependencies
         # if source doesn't start with '@', use name as the alias
         if not src.lstrip().startswith('@'): #FIXME: 'enclose' in dummy;
-            src = importable(fobj,alias=name)#        wrong ref 'name'
+            src = _importable_string(fobj,alias=name)# wrong ref 'name'
             org = getsource(func, alias, enclosing=False, lstrip=True)
             src = (src, org) # undecorated first, then target
         else: #NOTE: reproduces the code!
             org = getsource(func, enclosing=True, lstrip=False)
-            src = importable(fobj, alias, source=True) # include dependencies
+            src = _importable_string(fobj, alias, source=True) # include dependencies
             src = (org, src) # target first, then decorated
         func_vars[name] = src
     src = ''.join(free_vars.values())
@@ -997,7 +1000,60 @@ def importable(obj, alias='', source=None, builtin=True):
     obj is the object to inspect. If alias is provided, then rename the
     object with the given alias. If builtin=True, then force an import for
     builtins where possible.
+
+    When function or method source needs additional bindings, it is executed
+    in a private namespace and only its name (or alias) is exported. Dependencies
+    within one export share that namespace, while separate exports are isolated.
+    Simple definitions and imports are returned directly. Executed source has
+    the filename '<string>', so inspecting it again requires the original
+    object or the returned source string.
     """
+    src = _importable_string(obj, alias, source, builtin)
+    if not (isfunction(obj) or ismethod(obj)):
+        return src
+    name = alias or getname(obj)
+    if not name or not name.isidentifier():
+        return src
+
+    # Keep plain definitions and imports unchanged. Looking at module symbols
+    # excludes local names inside functions and classes.
+    import symtable
+    try:
+        symbols = symtable.symtable(src, '<dill.source>', 'exec').get_symbols()
+    except SyntaxError:
+        return src
+    bound = {s.get_name() for s in symbols if s.is_assigned() or s.is_imported()}
+    if name not in bound:
+        # A decorated callable can have its wrapper's name while its source
+        # recreates the original decorated definition.
+        import ast
+        body = ast.parse(src).body
+        if not body:
+            return src
+        last = body[-1]
+        if alias or not isinstance(last, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                          ast.ClassDef)):
+            return src
+        name = last.name
+    if not bound.difference((name,)):
+        return src
+
+    # Use the requested name without binding it until the factory has run:
+    # aliases such as __builtins__ must not replace the module context early.
+    # Import builtins locally since the destination may shadow exec/globals.
+    return (
+        '@(lambda factory: factory())\n'
+        'def {name}():\n'
+        '    from builtins import exec, globals\n'
+        '    namespace = {{key: value for key, value in globals().items()\n'
+        "                 if key in ('__name__', '__package__', '__builtins__')}}\n"
+        '    exec({source!r}, namespace)\n'
+        '    return namespace[{name!r}]\n'
+    ).format(name=name, source=src)
+
+
+def _importable_string(obj, alias='', source=None, builtin=True):
+    """Assemble source before the outermost importable call isolates it."""
     #NOTE: we always 'force', and 'lstrip' as necessary
     #NOTE: for 'enclosing', use importable(outermost(obj))
     if source is None:
