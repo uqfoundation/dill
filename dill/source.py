@@ -1018,16 +1018,23 @@ def importable(obj, alias='', source=None, builtin=True):
     # Keep plain definitions and imports unchanged. Looking at module symbols
     # excludes local names inside functions and classes.
     import symtable
-    try:
-        symbols = symtable.symtable(src, '<dill.source>', 'exec').get_symbols()
-    except SyntaxError:
-        return src
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', SyntaxWarning)
+        warnings.simplefilter('ignore', DeprecationWarning)
+        try:
+            symbols = symtable.symtable(src, '<dill.source>', 'exec').get_symbols()
+        except SyntaxError:
+            return src
     bound = {s.get_name() for s in symbols if s.is_assigned() or s.is_imported()}
     if name not in bound:
         # A decorated callable can have its wrapper's name while its source
         # recreates the original decorated definition.
         import ast
-        body = ast.parse(src).body
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', SyntaxWarning)
+            warnings.simplefilter('ignore', DeprecationWarning)
+            body = ast.parse(src).body
         if not body:
             return src
         last = body[-1]

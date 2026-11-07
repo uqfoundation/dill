@@ -236,6 +236,40 @@ def test_class_alias_compatibility():
         del sys.modules[module.__name__]
 
 
+
+def test_source_analysis_does_not_warn():
+    import importlib.util
+    from pathlib import Path
+    import sys
+    from tempfile import TemporaryDirectory
+    import warnings
+    name = "_dill_source_escape"
+    with TemporaryDirectory() as directory:
+        path = Path(directory, name + ".py")
+        path.write_text("def function():\n    return '" + chr(92) + "d'\n")
+        spec = importlib.util.spec_from_file_location(name, path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", SyntaxWarning)
+                warnings.simplefilter("ignore", DeprecationWarning)
+                spec.loader.exec_module(module)
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("error")
+                source = importable(module.function, alias="exported", source=True)
+            assert not caught
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", SyntaxWarning)
+                warnings.simplefilter("ignore", DeprecationWarning)
+                namespace = {}
+                exec(source, namespace)
+            assert namespace["exported"]() == chr(92) + "d"
+            assert set(namespace) == {"__builtins__", "exported"}
+        finally:
+            sys.modules.pop(name, None)
+
+
 def test_imports_and_plain_source():
     assert importable(plain, source=False) == "from %s import plain\n" % __name__
     assert importable(plain, source=True) == (
@@ -257,6 +291,7 @@ if __name__ == "__main__":
     test_module_context()
     test_separate_locals()
     test_imports_and_plain_source()
+    test_source_analysis_does_not_warn()
     test_temp_roundtrips()
     test_builtin_dependency()
     test_class_alias_compatibility()
