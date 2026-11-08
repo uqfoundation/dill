@@ -151,6 +151,34 @@ def test_type_params():
   assert [type(x) for x in Foo.__type_params__] == [type(T), type(Ts), type(P)]
 
 
+def test_type_alias():
+  # PEP 695 type aliases that are not module attributes
+  import sys
+  if sys.hexversion < 0x30c00b1: # python < 3.12
+    return
+  import typing
+  # a dynamically created alias is not a module attribute
+  x = dill.copy(typing.TypeAliasType('MyAlias', list[int]))
+  assert type(x) is typing.TypeAliasType
+  assert x.__name__ == 'MyAlias'
+  assert x.__value__ == list[int]
+  # an alias scoped to a class body is not a module attribute either
+  ns = {}
+  exec("class C:\n  type ClassAlias = set[str]", ns)
+  C = dill.copy(ns['C'])
+  assert type(C.ClassAlias) is typing.TypeAliasType
+  assert C.ClassAlias.__name__ == 'ClassAlias'
+  assert C.ClassAlias.__value__ == set[str]
+  # an alias that is a module attribute is pickled by reference
+  ns2 = {'__name__': '__main__'}
+  exec("type Alias = dict[str, int]", ns2)
+  sys.modules['__main__'].Alias = ns2['Alias']
+  try:
+    assert dill.copy(ns2['Alias']) is ns2['Alias']
+  finally:
+    del sys.modules['__main__'].Alias
+
+
 if __name__ == '__main__':
   test_frame_related()
   test_dict_contents()
@@ -158,3 +186,4 @@ if __name__ == '__main__':
   test_class_descriptors()
   test_typing()
   test_type_params()
+  test_type_alias()
