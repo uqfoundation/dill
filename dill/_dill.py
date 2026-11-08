@@ -1439,6 +1439,31 @@ def save_typevar(pickler, obj):
 if hasattr(typing, 'TypeVarTuple'): # python >= 3.11
     register(typing.TypeVarTuple)(save_typevar)
 
+if hasattr(typing, 'TypeAliasType'): # python >= 3.12
+    def _create_typealias(name, value, type_params=(), typealias=typing.TypeAliasType):
+        try:
+            return typealias(name, value, type_params=type_params)
+        except TypeError: # python 3.12 accepts no type_params
+            return typealias(name, value)
+
+    @register(typing.TypeAliasType)
+    def save_typealias(pickler, obj):
+        # a type alias that is a module attribute is pickled by reference;
+        # all others (dynamically created or scoped to a class or function
+        # body) can only be pickled by value
+        module_name = getattr(obj, '__module__', None)
+        module = _import_module(module_name, safe=True) # None if not importable
+        if module and getattr(module, obj.__name__, None) is obj:
+            logger.trace(pickler, "Ta2: %s", obj)
+            StockPickler.save_global(pickler, obj, name=obj.__name__)
+            logger.trace(pickler, "# Ta2")
+            return
+        logger.trace(pickler, "Ta1: %s", obj)
+        type_params = getattr(obj, '__type_params__', ())
+        pickler.save_reduce(_create_typealias, (obj.__name__, obj.__value__, type_params), obj=obj)
+        logger.trace(pickler, "# Ta1")
+        return
+
 if ThreadHandleType:
     @register(ThreadHandleType)
     def save_thread_handle(pickler, obj):
