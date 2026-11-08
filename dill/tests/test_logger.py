@@ -5,8 +5,10 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
+import contextlib
 import logging
 import re
+from os.path import join
 import tempfile
 
 import dill
@@ -74,6 +76,51 @@ def test_trace_file_permissions():
             os.remove(path)
         os.rmdir(d)
 
+def test_nested_trace_redirects():
+    for raise_error in (False, True):
+        with StringIO() as outer, StringIO() as inner, StringIO() as errors:
+            old_level = logger.getEffectiveLevel()
+            with contextlib.redirect_stderr(errors):
+                with detect.trace(outer) as log:
+                    log('outer-before')
+                    try:
+                        with detect.trace(inner) as inner_log:
+                            inner_log('inner-only')
+                            if raise_error:
+                                raise RuntimeError('leave inner trace')
+                    except RuntimeError:
+                        pass
+                    log('outer-after')
+            assert outer.getvalue() == 'outer-before\nouter-after\n'
+            assert inner.getvalue() == 'inner-only\n'
+            assert errors.getvalue() == ''
+            assert logger.getEffectiveLevel() == old_level
+
+
+def test_trace_redirect_exit_order():
+    with tempfile.TemporaryDirectory() as directory, StringIO() as errors:
+        first_path = join(directory, 'first.log')
+        second_path = join(directory, 'second.log')
+        first = detect.trace(first_path)
+        second = detect.trace(second_path)
+        old_level = logger.getEffectiveLevel()
+        try:
+            with contextlib.redirect_stderr(errors):
+                first.__enter__()('first-only')
+                second.__enter__()('second-only')
+                first.__exit__()
+                second.__exit__()
+                with detect.trace() as log:
+                    log('after-redirects')
+        finally:
+            logger.setLevel(old_level)
+        assert errors.getvalue() == 'after-redirects\n'
+        with open(first_path) as f:
+            assert f.read() == 'first-only\n'
+        with open(second_path) as f:
+            assert f.read() == 'second-only\n'
+
+
 if __name__ == '__main__':
     logger.removeHandler(stderr_handler)
     test_logging(should_trace=False)
@@ -90,3 +137,5 @@ if __name__ == '__main__':
     assert logger.getEffectiveLevel() == loglevel
     test_trace_to_file(stream_trace)
     test_trace_file_permissions()
+    test_nested_trace_redirects()
+    test_trace_redirect_exit_order()

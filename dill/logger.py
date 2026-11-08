@@ -213,6 +213,8 @@ logger.propagate = False
 adapter = TraceAdapter(logger)
 stderr_handler = logging._StderrHandler()
 adapter.addHandler(stderr_handler)
+# Keep exited redirects from being restored by contexts that outlive them.
+_trace_handlers = [stderr_handler]
 
 def trace(arg: Union[bool, TextIO, str, os.PathLike] = None, *, mode: str = 'a') -> None:
     """print a trace through the stack when pickling; useful for debugging
@@ -278,22 +280,26 @@ class TraceManager(contextlib.AbstractContextManager):
         self.redirect = file is not None
         self.file_is_stream = hasattr(file, 'write')
     def __enter__(self):
-        if self.redirect:
-            stderr_handler.flush()
-            if self.file_is_stream:
-                self.handler = logging.StreamHandler(self.file)
-            else:
-                _restrict_new_logfile(self.file)
-                self.handler = logging.FileHandler(self.file, self.mode)
-            adapter.removeHandler(stderr_handler)
-            adapter.addHandler(self.handler)
-        self.old_level = adapter.getEffectiveLevel()
-        adapter.setLevel(logging.INFO)
+        with logging._lock:
+            if self.redirect:
+                _trace_handlers[-1].flush()
+                if self.file_is_stream:
+                    self.handler = logging.StreamHandler(self.file)
+                else:
+                    _restrict_new_logfile(self.file)
+                    self.handler = logging.FileHandler(self.file, self.mode)
+                adapter.removeHandler(_trace_handlers[-1])
+                adapter.addHandler(self.handler)
+                _trace_handlers.append(self.handler)
+            self.old_level = adapter.getEffectiveLevel()
+            adapter.setLevel(logging.INFO)
         return adapter.info
     def __exit__(self, *exc_info):
-        adapter.setLevel(self.old_level)
-        if self.redirect:
-            adapter.removeHandler(self.handler)
-            adapter.addHandler(stderr_handler)
-            if not self.file_is_stream:
-                self.handler.close()
+        with logging._lock:
+            adapter.setLevel(self.old_level)
+            if self.redirect:
+                adapter.removeHandler(self.handler)
+                _trace_handlers.remove(self.handler)
+                adapter.addHandler(_trace_handlers[-1])
+                if not self.file_is_stream:
+                    self.handler.close()
