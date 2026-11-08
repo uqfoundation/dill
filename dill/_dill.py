@@ -873,10 +873,10 @@ def _create_filehandle(name, mode, position, closed, open, strictio, fmode, fdat
         try:
             #FIXME: missing: *buffering*, encoding, softspace
             if fmode == FILE_FMODE:
-                f = open(name, mode if "w" in mode else
+                f = open(name, mode if "w" in mode or "x" in mode else
                          "wb" if isinstance(fdata, bytes) else "w")
                 f.write(fdata)
-                if "w" not in mode:
+                if "w" not in mode and "x" not in mode:
                     f.close()
                     f = open(name, mode)
             elif name == '<fdopen>': # file did not exist
