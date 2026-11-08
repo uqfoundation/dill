@@ -39,6 +39,23 @@ def test_unicode_source_aliases():
             with dump_source(len, alias=alias) as pyfile:
                 assert load_source(pyfile) is len
                 assert load_source(pyfile, mode='rb', alias=alias) is len
+                assert load_source(pyfile, mode='rb') is len
+
+
+def test_invalid_source_marker():
+    if not WINDOWS:  #see: https://bugs.python.org/issue14243
+        with dump_source(len, alias='length') as pyfile:
+            pyfile.seek(0)
+            pyfile.truncate()
+            pyfile.write(b'length = 1\n#INVALID: length\n')
+            pyfile.flush()
+            for mode in ('r', 'rb'):
+                try:
+                    load_source(pyfile, mode=mode)
+                except IOError as error:
+                    assert 'unknown name for code' in str(error)
+                else:
+                    raise AssertionError('invalid name marker was accepted')
 
 
 # pickle to tempfile
@@ -132,6 +149,7 @@ if __name__ == '__main__':
     test_code_to_tempfile()
     test_code_to_stream()
     test_unicode_source_aliases()
+    test_invalid_source_marker()
     test_pickle_to_tempfile()
     test_pickle_to_stream()
     test_buffer_pickle_protocol()

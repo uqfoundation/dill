@@ -64,10 +64,12 @@ def load_source(file, **kwds):
     source = open(fname, mode=mode, **kwds).read()
     if not alias:
         tag = source.strip().splitlines()[-1].split()
-        if tag[0] != '#NAME:':
+        if tag[0] not in ('#NAME:', b'#NAME:'):
             stub = source.splitlines()[0]
             raise IOError("unknown name for code: %s" % stub)
         alias = tag[-1]
+        if isinstance(alias, bytes):
+            alias = alias.decode('utf-8')
     local = {}
     exec(source, local)
     _ = eval("%s" % alias, local)
