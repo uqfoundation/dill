@@ -59,7 +59,10 @@ def test_data_changed():
 
 def test_property_name():
     assert dill.copy(property()).fget is None
-    named_abstract = abc.abstractproperty(Foo._get_data)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=DeprecationWarning)
+        named_abstract = abc.abstractproperty(Foo._get_data)
     named_abstract.__name__ = 'named_abstract'
     properties = [named_abstract]
     if hasattr(Foo.data, '__name__'):
