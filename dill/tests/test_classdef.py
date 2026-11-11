@@ -8,6 +8,7 @@
 
 import dill
 from enum import EnumMeta
+import abc
 import sys
 dill.settings['recurse'] = True
 
@@ -251,6 +252,31 @@ def test_slots():
     assert dill.copy(y).y == value
     assert dill.copy(Y2(value)).y == value
 
+def test_method_descriptor_attributes():
+    descriptors = (classmethod, staticmethod, abc.abstractclassmethod, abc.abstractstaticmethod)
+    for descriptor in descriptors:
+        def method():
+            return 42
+
+        wrapped = descriptor(method)
+        wrapped.label = 'custom metadata'
+        wrapped.self_reference = wrapped
+        wrapped.__name__ = 'renamed'
+        wrapped.__doc__ = 'custom documentation'
+
+        class Container:
+            method = wrapped
+
+        for protocol in range(dill.HIGHEST_PROTOCOL + 1):
+            restored, restored_class = dill.loads(dill.dumps((wrapped, Container), protocol=protocol))
+            assert restored_class.__dict__['method'] is restored
+            assert restored.label == wrapped.label
+            assert restored.self_reference is restored
+            assert restored.__name__ == 'renamed'
+            assert restored.__doc__ == 'custom documentation'
+            assert restored.__wrapped__ is restored.__func__
+            assert restored.__func__() == 42
+
 def test_origbases():
     assert dill.copy(customIntList).__orig_bases__ == customIntList.__orig_bases__
 
@@ -348,6 +374,7 @@ if __name__ == '__main__':
     test_method_decorator()
     test_slots()
     test_origbases()
+    test_method_descriptor_attributes()
     test_metaclass()
     test_enummeta()
     test_inherit()
