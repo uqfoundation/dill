@@ -437,6 +437,12 @@ class Unpickler(StockUnpickler):
     from .settings import settings
     _session = False
 
+    if StockUnpickler.__init__ is object.__init__:
+        def __new__(cls, *args, **kwds):
+            # Some PyPy versions validate keywords before our __init__ runs.
+            kwds.pop('ignore', None)
+            return StockUnpickler.__new__(cls, *args, **kwds)
+
     def find_class(self, module, name):
         if (module, name) == ('__builtin__', '__main__'):
             return self._main.__dict__ #XXX: above set w/save_module_dict
@@ -448,7 +454,9 @@ class Unpickler(StockUnpickler):
     def __init__(self, *args, **kwds):
         settings = Pickler.settings
         _ignore = kwds.pop('ignore', None)
-        StockUnpickler.__init__(self, *args, **kwds)
+        # PyPy's C unpickler is already initialized by __new__.
+        if StockUnpickler.__init__ is not object.__init__:
+            StockUnpickler.__init__(self, *args, **kwds)
         self._main = _main_module
         self._ignore = settings['ignore'] if _ignore is None else _ignore
 
