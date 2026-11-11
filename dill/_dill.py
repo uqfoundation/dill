@@ -2051,8 +2051,11 @@ def save_type(pickler, obj, postproc_list=None):
 @register(abc.abstractproperty)
 def save_property(pickler, obj):
     logger.trace(pickler, "Pr: %s", obj)
+    state = None
+    if hasattr(obj, '__name__'):
+        state = (None, {'__name__': obj.__name__})
     pickler.save_reduce(type(obj), (obj.fget, obj.fset, obj.fdel, obj.__doc__),
-                        obj=obj)
+                        state=state, obj=obj)
     logger.trace(pickler, "# Pr")
 
 @register(staticmethod)

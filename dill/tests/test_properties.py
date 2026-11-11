@@ -6,6 +6,7 @@
 # License: 3-clause BSD.  The full license text is available at:
 #  - https://github.com/uqfoundation/dill/blob/master/LICENSE
 
+import abc
 import sys
 
 import dill
@@ -56,7 +57,26 @@ def test_data_changed():
         assert res == 1024
 
 
+def test_property_name():
+    assert dill.copy(property()).fget is None
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=DeprecationWarning)
+        named_abstract = abc.abstractproperty(Foo._get_data)
+    named_abstract.__name__ = 'named_abstract'
+    properties = [named_abstract]
+    if hasattr(Foo.data, '__name__'):
+        renamed = property(Foo._get_data)
+        renamed.__name__ = 'renamed'
+        properties.extend((Foo.data, renamed))
+    for original in properties:
+        restored = dill.copy(original)
+        assert restored.__name__ == original.__name__
+        assert restored.fget(Foo()) == 1
+
+
 if __name__ == '__main__':
     test_data_not_none()
     test_data_unchanged()
     test_data_changed()
+    test_property_name()
