@@ -179,6 +179,38 @@ def test_type_alias():
     del sys.modules['__main__'].Alias
 
 
+def test_typeddict():
+  # TypedDict classes are restored through their metaclass, which takes
+  # 'total' as a keyword argument; the total=False and required/optional
+  # key sets must survive the roundtrip
+  import sys
+  if sys.hexversion < 0x30900f0: # python < 3.9.3
+    return
+  import typing
+  ns = {}
+  exec("import typing\nclass TD(typing.TypedDict, total=False):\n"
+       "  a: int\n"
+       "  b: typing.Required[str]", ns)
+  TD = dill.copy(ns['TD'])
+  assert TD.__total__ is False
+  assert TD.__required_keys__ == frozenset({'b'})
+  assert TD.__optional_keys__ == frozenset({'a'})
+  # functional form, also created with total=False
+  FD = typing.TypedDict('FD', {'a': int, 'b': typing.Required[str]}, total=False)
+  FD = dill.copy(FD)
+  assert FD.__required_keys__ == frozenset({'b'})
+  assert FD.__optional_keys__ == frozenset({'a'})
+  # per-key modifiers on a total=True TypedDict are unaffected
+  if hasattr(typing, 'NotRequired'): # python >= 3.11
+    ns2 = {}
+    exec("import typing\nclass TT(typing.TypedDict):\n"
+         "  x: typing.NotRequired[int]", ns2)
+    TT = dill.copy(ns2['TT'])
+    assert TT.__required_keys__ == frozenset()
+    assert TT.__optional_keys__ == frozenset({'x'})
+  return
+
+
 if __name__ == '__main__':
   test_frame_related()
   test_dict_contents()
@@ -187,3 +219,4 @@ if __name__ == '__main__':
   test_typing()
   test_type_params()
   test_type_alias()
+  test_typeddict()

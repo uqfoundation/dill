@@ -2014,6 +2014,15 @@ def save_type(pickler, obj, postproc_list=None):
                 _metadict = {
                     'metaclass': type(obj)
                 }
+                # a TypedDict class computes __required_keys__ and
+                # __optional_keys__ in its metaclass, which takes 'total' as a
+                # keyword argument; without it, every key of a total=False
+                # TypedDict is restored as a required key
+                _typeddict_meta = getattr(typing, '_TypedDictMeta', None)
+                if _typeddict_meta is not None \
+                        and issubclass(type(obj), _typeddict_meta) \
+                        and '__total__' in obj.__dict__:
+                    _metadict['total'] = obj.__dict__['__total__']
 
                 if _dict:
                     _dict_update = PartialType(_setitems, source=_dict)
