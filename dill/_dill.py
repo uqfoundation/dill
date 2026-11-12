@@ -1433,7 +1433,8 @@ def save_typevar(pickler, obj):
     logger.trace(pickler, "Tv1: %s", obj)
     args = (obj.__name__,) + getattr(obj, '__constraints__', ())
     kwargs = _get_typevar_kwargs(obj)
-    pickler.save_reduce(_create_typevar, (args, kwargs, type(obj)), obj=obj)
+    state = (None, {'__module__': obj.__module__})
+    pickler.save_reduce(_create_typevar, (args, kwargs, type(obj)), state=state, obj=obj)
     logger.trace(pickler, "# Tv1")
 
 if hasattr(typing, 'TypeVarTuple'): # python >= 3.11

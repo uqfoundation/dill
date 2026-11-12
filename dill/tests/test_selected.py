@@ -134,6 +134,19 @@ def test_typing():
     assert x.__name__ == "Ts"
   return
 
+def test_typevar_module():
+  import typing
+  types = [typing.TypeVar, typing.ParamSpec]
+  if hasattr(typing, 'TypeVarTuple'): # python >= 3.11
+    types.append(typing.TypeVarTuple)
+  for typevar in types:
+    value = typevar('Local')
+    for protocol in range(dill.HIGHEST_PROTOCOL + 1):
+      assert dill.copy(value, protocol=protocol).__module__ == value.__module__
+    value.__module__ = 'unimportable_typevar_module'
+    for protocol in range(dill.HIGHEST_PROTOCOL + 1):
+      assert dill.copy(value, protocol=protocol).__module__ == value.__module__
+
 def test_type_params():
   # PEP 695 type parameters are not found in the module they claim (typing)
   import sys
@@ -146,6 +159,7 @@ def test_type_params():
     y = dill.copy(x)
     assert type(y) is type(x)
     assert y.__name__ == x.__name__
+    assert y.__module__ == x.__module__
   assert dill.copy(T).__bound__ is int
   Foo = dill.copy(ns['Foo'])
   assert [type(x) for x in Foo.__type_params__] == [type(T), type(Ts), type(P)]
@@ -185,5 +199,6 @@ if __name__ == '__main__':
   test_class()
   test_class_descriptors()
   test_typing()
+  test_typevar_module()
   test_type_params()
   test_type_alias()
