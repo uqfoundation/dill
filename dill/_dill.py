@@ -625,9 +625,15 @@ def _create_enum(metatype, name, bases, members, attrs):
     """
     namespace = metatype.__prepare__(name, bases)
     for key, value in attrs.items():
-        # the metaclass stores a user-defined `__new__` as `_new_member_`
-        # when it builds the class, so undo the rename before seeding
-        if key == '_new_member_':
+        # the metaclass stashes a user-defined `__new__` as `__new_member__`
+        # when it builds the class (py3.10 through py3.13), so undo the rename
+        # before seeding. The sunder `_new_member_` stash is machinery the
+        # metaclass recomputes while rebuilding (on plain enums it holds
+        # `object.__new__`); it must NOT be re-seeded as a user `__new__` --
+        # on pypy a wrapped machinery value defeats the `is` checks in
+        # `EnumType._find_new_`, turning on the unpacking path for members
+        # that take no arguments.
+        if key == '__new_member__':
             key = '__new__'
         namespace[key] = value
     for key, value in members.items():
@@ -2023,12 +2029,11 @@ def save_type(pickler, obj, postproc_list=None):
                 attrs = {key: value for key, value in obj.__dict__.items()
                          if key not in members
                          # skip `_sunder_` machinery attributes, but keep the
-                         # user's `__new__`, which is stored as `_new_member_`
+                         # user's `__new__`, which the metaclass stashes as
+                         # `__new_member__` (py3.10 through py3.13)
                          and not (key.startswith('_') and key.endswith('_')
-                                  and not key.startswith('__')
-                                  and key != '_new_member_')
-                         and key not in ('__weakref__', '__dict__',
-                                         '__new_member__')
+                                  and not key.startswith('__'))
+                         and key not in ('__weakref__', '__dict__')
                          # skip defaults inherited from any base
                          and not any(getattr(base, key, _sentinel) is value
                                      for base in obj.__bases__)}
