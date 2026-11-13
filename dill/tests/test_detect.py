@@ -35,6 +35,21 @@ def test_bad_things():
     n = 2
     assert len(a) is n if 'PicklingError' in a.keys() else n-1
 
+def test_baditems_without_equality():
+    class Unpicklable:
+        def __reduce__(self):
+            raise TypeError("cannot pickle")
+
+        def __eq__(self, other):
+            raise ValueError("no scalar equality")
+
+    first, second = Unpicklable(), Unpicklable()
+    result = baditems([first, second, first, None])
+    assert len(result) == 2
+    assert result[0] is first
+    assert result[1] is second
+
+
 def test_parent():
     x = [4,5,6,7]
     listiter = iter(x)
@@ -193,6 +208,7 @@ def test_lambdify():
 
 if __name__ == '__main__':
     test_bad_things()
+    test_baditems_without_equality()
     test_parent()
     test_parents_ignore()
     test_children_ignore()
