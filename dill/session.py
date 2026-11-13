@@ -651,9 +651,16 @@ def load_module_asdict(
         if filename is None:
             filename = SESSION_TEMPFILE
         file = _safe_open_for_reading(filename)
+    runtime_module = False
     try:
         file = _make_peekable(file)
         main_name = _identify_module(file)
+        # A non-importable module object is registered under the
+        # '__runtime__.' prefix when dumped; strip the prefix to get the
+        # module's own name.
+        runtime_module = main_name.startswith('__runtime__.')
+        if runtime_module:
+            main_name = main_name.partition('.')[-1]
         old_main = sys.modules.get(main_name)
         main = ModuleType(main_name)
         if update:
@@ -662,18 +669,28 @@ def load_module_asdict(
             main.__dict__.update(old_main.__dict__)
         else:
             main.__builtins__ = __builtin__
-        sys.modules[main_name] = main
-        load_module(file, **kwds)
+        if runtime_module:
+            # The saved state belongs to a non-importable module object:
+            # restore it into *main* directly, as load_module() would
+            # otherwise rebuild a throwaway module object from the
+            # '__runtime__.' name.  Don't register *main* in sys.modules --
+            # load_module() registers it under the '__runtime__.' name for
+            # find_class() and removes it afterwards.
+            load_module(file, module=main, **kwds)
+        else:
+            sys.modules[main_name] = main
+            load_module(file, **kwds)
     finally:
         if not hasattr(filename, 'read'):  # if newly opened file
             file.close()
-        try:
-            if old_main is None:
-                del sys.modules[main_name]
-            else:
-                sys.modules[main_name] = old_main
-        except NameError:  # failed before setting old_main
-            pass
+        if not runtime_module:
+            try:
+                if old_main is None:
+                    del sys.modules[main_name]
+                else:
+                    sys.modules[main_name] = old_main
+            except NameError:  # failed before setting old_main
+                pass
     main.__session__ = str(filename)
     return main.__dict__
 
