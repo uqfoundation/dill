@@ -71,6 +71,36 @@ def test_pickle_to_stream():
     _x = loadIO(dumpfile)
     assert _x == x
 
+def test_load_closes_internal_file():
+    import os
+    import tempfile
+    from unittest.mock import patch
+
+    descriptor, name = tempfile.mkstemp()
+    os.close(descriptor)
+    opened = []
+    original_open = open
+    def tracked_open(*args, **kwds):
+        file = original_open(*args, **kwds)
+        opened.append(file)
+        return file
+    try:
+        for payload in (dill.dumps(x), b''):
+            with original_open(name, 'wb') as file:
+                file.write(payload)
+            errors = []
+            with patch('builtins.open', tracked_open):
+                try:
+                    assert load(name) == x
+                except EOFError as error:
+                    errors.append(error)
+            assert bool(errors) == (payload == b'')
+            assert opened[-1].closed
+    finally:
+        for file in opened:
+            file.close()
+        os.remove(name)
+
 def test_buffer_pickle_protocol():
     value = {'a': [1, 2, 3]}
     for protocol in range(dill.HIGHEST_PROTOCOL + 1):
@@ -152,6 +182,7 @@ if __name__ == '__main__':
     test_invalid_source_marker()
     test_pickle_to_tempfile()
     test_pickle_to_stream()
+    test_load_closes_internal_file()
     test_buffer_pickle_protocol()
     test_buffer_unpickle_encoding()
     test_buffer_unpickle_errors()
