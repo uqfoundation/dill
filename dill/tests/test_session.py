@@ -272,6 +272,34 @@ def test_load_module_asdict():
         assert 'y' not in main_vars
         assert 'empty' in main_vars
 
+def test_load_module_asdict_runtime_module():
+    from types import ModuleType
+    import json as real_json  # a name that collides with an imported module
+    collision = ModuleType('json')
+    collision.x = [1, 2, 3]
+    collision.selfref = collision
+
+    session_buffer = BytesIO()
+    dill.dump_module(session_buffer, module=collision)
+
+    session_buffer.seek(0)
+    main_vars = dill.load_module_asdict(session_buffer)
+
+    assert main_vars['x'] == [1, 2, 3]
+    assert main_vars['selfref'].__dict__ is main_vars
+    assert sys.modules['json'] is real_json  # sys.modules restored untouched
+    assert '__runtime__.json' not in sys.modules
+
+    # A runtime module whose name doesn't collide with any imported module.
+    unique = ModuleType('__asdict_runtime__')
+    unique.data = {'k': 'v'}
+    session_buffer = BytesIO()
+    dill.dump_module(session_buffer, module=unique)
+    session_buffer.seek(0)
+    main_vars = dill.load_module_asdict(session_buffer)
+    assert main_vars['data'] == {'k': 'v'}
+    assert '__asdict_runtime__' not in sys.modules
+
 def test_symlink_rejected():
     """symlinks must be rejected by dump_module, load_module, load_module_asdict"""
     import tempfile, warnings
@@ -417,6 +445,7 @@ if __name__ == '__main__':
     test_runtime_module()
     test_refimported_imported_as()
     test_load_module_asdict()
+    test_load_module_asdict_runtime_module()
     test_symlink_rejected()
     test_default_path_warning()
     test_symlink_toctou()
