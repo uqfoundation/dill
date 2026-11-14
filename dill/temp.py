@@ -133,7 +133,8 @@ def load(file, **kwds):
     import dill as pickle
     mode = kwds.pop('mode', 'rb')
     name = getattr(file, 'name', file) # name=file.name or name=file (if str)
-    return pickle.load(open(name, mode=mode, **kwds))
+    with open(name, mode=mode, **kwds) as source:
+        return pickle.load(source)
 
 def dump(object, **kwds):
     """dill.dump of object to a NamedTemporaryFile.
