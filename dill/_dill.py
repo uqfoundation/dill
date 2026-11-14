@@ -457,8 +457,18 @@ class Unpickler(StockUnpickler):
         if type(obj).__module__ == getattr(_main_module, '__name__', '__main__'):
             if not self._ignore:
                 # point obj class to main
-                try: obj.__class__ = getattr(self._main, type(obj).__name__)
-                except (AttributeError,TypeError): pass # defined in a file
+                try:
+                    if isinstance(obj, Enum):
+                        # enum members are singletons of their class, so
+                        # return the live member instead of re-pointing
+                        # `__class__` of the rebuilt member (a re-pointed
+                        # member is no longer identical to -- or equal to --
+                        # the live member)
+                        enum_class = getattr(self._main, type(obj).__name__)
+                        obj = enum_class[obj._name_]
+                    else:
+                        obj.__class__ = getattr(self._main, type(obj).__name__)
+                except (AttributeError, TypeError, KeyError): pass # defined in a file
        #_main_module.__dict__.update(obj.__dict__) #XXX: should update globals ?
         return obj
     load.__doc__ = StockUnpickler.load.__doc__
@@ -603,6 +613,32 @@ def _load_type(name):
 
 def _create_type(typeobj, *args):
     return typeobj(*args)
+
+def _create_enum(metatype, name, bases, members, attrs):
+    """build an enum class from its raw member values
+
+    The enum metaclass builds its members through a prepared namespace
+    (e.g. `enum._EnumDict`), which a pickled plain `dict` snapshot cannot
+    provide. Instead of replaying the introspection-heavy class dict, seed
+    the metaclass' own namespace with the user definitions and the raw
+    member values, and let the metaclass machinery rebuild its internals.
+    """
+    namespace = metatype.__prepare__(name, bases)
+    for key, value in attrs.items():
+        # the metaclass stashes a user-defined `__new__` as `__new_member__`
+        # when it builds the class (py3.10 through py3.13), so undo the rename
+        # before seeding. The sunder `_new_member_` stash is machinery the
+        # metaclass recomputes while rebuilding (on plain enums it holds
+        # `object.__new__`); it must NOT be re-seeded as a user `__new__` --
+        # on pypy a wrapped machinery value defeats the `is` checks in
+        # `EnumType._find_new_`, turning on the unpacking path for members
+        # that take no arguments.
+        if key == '__new_member__':
+            key = '__new__'
+        namespace[key] = value
+    for key, value in members.items():
+        namespace[key] = value
+    return metatype(name, bases, namespace)
 
 def _create_function(fcode, fglobals, fname=None, fdefaults=None,
                      fclosure=None, fdict=None, fkwdefaults=None):
@@ -1980,6 +2016,33 @@ def save_type(pickler, obj, postproc_list=None):
 
             # thanks to Tom Stepleton pointing out pickler._session unneeded
             logger.trace(pickler, "T2: %s", obj)
+
+            # special case: enum classes, whose metaclass builds members
+            # through a prepared namespace (e.g. `enum._EnumDict`), which a
+            # plain dict snapshot cannot provide. Rebuild the class from its
+            # raw member values instead (issues #250, #697).
+            if isinstance(obj, EnumMeta) and obj.__bases__ \
+            and not hasattr(obj, '__orig_bases__'):
+                members = {name: member._value_
+                           for name, member in obj._member_map_.items()}
+                _sentinel = object()
+                attrs = {key: value for key, value in obj.__dict__.items()
+                         if key not in members
+                         # skip `_sunder_` machinery attributes, but keep the
+                         # user's `__new__`, which the metaclass stashes as
+                         # `__new_member__` (py3.10 through py3.13)
+                         and not (key.startswith('_') and key.endswith('_')
+                                  and not key.startswith('__'))
+                         and key not in ('__weakref__', '__dict__')
+                         # skip defaults inherited from any base
+                         and not any(getattr(base, key, _sentinel) is value
+                                     for base in obj.__bases__)}
+                _save_with_postproc(pickler, (_create_enum, (
+                    type(obj), obj.__name__, obj.__bases__, members, attrs
+                )), obj=obj, postproc_list=postproc_list)
+                logger.trace(pickler, "# T2E: %s", obj)
+                return
+
             _dict, attrs = _get_typedict_type(obj, obj.__dict__.copy(), None, postproc_list) # copy dict proxy to a dict
 
            #print (_dict)
