@@ -2007,14 +2007,45 @@ def save_type(pickler, obj, postproc_list=None):
                 postproc_list.append((setattr, (obj, '__qualname__', qualname)))
 
             if not hasattr(obj, '__orig_bases__'):
-                _save_with_postproc(pickler, (_create_type, (
-                    type(obj), obj.__name__, obj.__bases__, _dict
-                )), obj=obj, postproc_list=postproc_list)
+                # a TypedDict class carries its semantics in its metaclass, and a
+                # functional-form TypedDict has no __orig_bases__; restoring it
+                # through _create_type passes its dict base to _TypedDictMeta,
+                # which rejects non-TypedDict bases. Route TypedDict classes
+                # through new_class instead, with an empty base tuple (the
+                # metaclass builds the real dict base itself) and the 'total'
+                # keyword so a total=False TypedDict is restored as such.
+                _typeddict_meta = getattr(typing, '_TypedDictMeta', None)
+                _is_typeddict = _typeddict_meta is not None \
+                    and issubclass(type(obj), _typeddict_meta)
+                if not _is_typeddict:
+                    _save_with_postproc(pickler, (_create_type, (
+                        type(obj), obj.__name__, obj.__bases__, _dict
+                    )), obj=obj, postproc_list=postproc_list)
+                else:
+                    _metadict = {'metaclass': type(obj)}
+                    if '__total__' in obj.__dict__:
+                        _metadict['total'] = obj.__dict__['__total__']
+                    if _dict:
+                        _dict_update = PartialType(_setitems, source=_dict)
+                    else:
+                        _dict_update = None
+                    _save_with_postproc(pickler, (new_class, (
+                        obj.__name__, (), _metadict, _dict_update
+                    )), obj=obj, postproc_list=postproc_list)
             else:
                 # This case will always work, but might be overkill.
                 _metadict = {
                     'metaclass': type(obj)
                 }
+                # a TypedDict class computes __required_keys__ and
+                # __optional_keys__ in its metaclass, which takes 'total' as a
+                # keyword argument; without it, every key of a total=False
+                # TypedDict is restored as a required key
+                _typeddict_meta = getattr(typing, '_TypedDictMeta', None)
+                if _typeddict_meta is not None \
+                        and issubclass(type(obj), _typeddict_meta) \
+                        and '__total__' in obj.__dict__:
+                    _metadict['total'] = obj.__dict__['__total__']
 
                 if _dict:
                     _dict_update = PartialType(_setitems, source=_dict)
