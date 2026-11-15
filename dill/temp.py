@@ -164,8 +164,12 @@ NOTE: Keep the return value for as long as you want your file to exist !
     import tempfile
     kwds.setdefault('delete', True)
     file = tempfile.NamedTemporaryFile(**kwds)
-    pickle.dump(object, file)
-    file.flush()
+    try:
+        pickle.dump(object, file)
+        file.flush()
+    except BaseException:
+        file.close()
+        raise
     return file
 
 def loadIO(buffer, **kwds):
