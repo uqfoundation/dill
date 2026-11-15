@@ -101,6 +101,39 @@ def test_load_closes_internal_file():
             file.close()
         os.remove(name)
 
+def test_failed_dump_closes_tempfile():
+    import os
+    import tempfile
+    from unittest.mock import patch
+
+    original_tempfile = tempfile.NamedTemporaryFile
+    opened = []
+    errors = []
+
+    def tracked_tempfile(*args, **kwds):
+        file = original_tempfile(*args, **kwds)
+        opened.append(file)
+        return file
+
+    class Unpicklable:
+        def __reduce__(self):
+            raise RuntimeError('cannot serialize')
+
+    try:
+        with patch('tempfile.NamedTemporaryFile', tracked_tempfile):
+            try:
+                dump(Unpicklable())
+            except RuntimeError as error:
+                errors.append(error)
+        assert len(errors) == 1
+        assert len(opened) == 1
+        assert opened[0].closed
+        assert not os.path.exists(opened[0].name)
+    finally:
+        for file in opened:
+            file.close()
+
+
 def test_buffer_pickle_protocol():
     value = {'a': [1, 2, 3]}
     for protocol in range(dill.HIGHEST_PROTOCOL + 1):
@@ -183,6 +216,7 @@ if __name__ == '__main__':
     test_pickle_to_tempfile()
     test_pickle_to_stream()
     test_load_closes_internal_file()
+    test_failed_dump_closes_tempfile()
     test_buffer_pickle_protocol()
     test_buffer_unpickle_encoding()
     test_buffer_unpickle_errors()
