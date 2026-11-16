@@ -193,6 +193,54 @@ def test_type_alias():
     del sys.modules['__main__'].Alias
 
 
+def test_typeddict():
+  # TypedDict classes are restored through their metaclass, which takes
+  # 'total' as a keyword argument; the total=False and required/optional
+  # key sets must survive the roundtrip
+  import sys
+  if sys.hexversion < 0x30900f0: # python < 3.9.3
+    return
+  if sys.version_info >= (3, 14): # python >= 3.14
+    # 3.14 rewrote TypedDict annotation handling (PEP 649 style); the
+    # class-body __annotate__ function does not survive dill's by-value
+    # class restoration ('NoneType' object is not iterable in
+    # typing.__annotate__). This fails identically on upstream dill master
+    # (no TypedDict fix), so it is out of scope here.
+    return
+  import typing
+  # class form, saved with total=False: every key must come back optional
+  ns = {}
+  exec("import typing\nclass TD(typing.TypedDict, total=False):\n"
+       "  a: int\n"
+       "  b: str", ns)
+  TD = dill.copy(ns['TD'])
+  assert TD.__total__ is False
+  assert TD.__required_keys__ == frozenset()
+  assert TD.__optional_keys__ == frozenset({'a', 'b'})
+  # functional form, also created with total=False
+  FD = typing.TypedDict('FD', {'a': int, 'b': str}, total=False)
+  FD = dill.copy(FD)
+  assert FD.__required_keys__ == frozenset()
+  assert FD.__optional_keys__ == frozenset({'a', 'b'})
+  # per-key modifiers exist only on python >= 3.11
+  if hasattr(typing, 'Required'): # python >= 3.11
+    ns2 = {}
+    exec("import typing\nclass TD2(typing.TypedDict, total=False):\n"
+         "  a: int\n"
+         "  b: typing.Required[str]", ns2)
+    TD2 = dill.copy(ns2['TD2'])
+    assert TD2.__required_keys__ == frozenset({'b'})
+    assert TD2.__optional_keys__ == frozenset({'a'})
+    # per-key NotRequired on a total=True TypedDict is unaffected
+    ns3 = {}
+    exec("import typing\nclass TT(typing.TypedDict):\n"
+         "  x: typing.NotRequired[int]", ns3)
+    TT = dill.copy(ns3['TT'])
+    assert TT.__required_keys__ == frozenset()
+    assert TT.__optional_keys__ == frozenset({'x'})
+  return
+
+
 if __name__ == '__main__':
   test_frame_related()
   test_dict_contents()
@@ -202,3 +250,4 @@ if __name__ == '__main__':
   test_typevar_module()
   test_type_params()
   test_type_alias()
+  test_typeddict()
