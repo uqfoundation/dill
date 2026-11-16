@@ -336,6 +336,31 @@ def test_inherit(): #NOTE: see issue #612
     assert Bar.__dict__['n'] is Baz.__dict__['n']
 
 
+def test_self_referencing_class(): #NOTE: see issues #650 and #662
+    class Node:
+        def child(self):
+            return Node()
+    Node.registry = {'self': Node}
+    Node.root = Node()
+
+    class Edge:
+        pass
+    Edge.source = Node
+    Node.edge = Edge
+
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', dill.PicklingWarning)
+        for recurse in (False, True):
+            NodeCopy = dill.copy(Node, recurse=recurse)
+            assert NodeCopy is not Node
+            assert NodeCopy.registry['self'] is NodeCopy
+            assert type(NodeCopy.root) is NodeCopy
+            assert NodeCopy.edge is not Edge
+            assert NodeCopy.edge.source is NodeCopy
+            assert type(NodeCopy().child()) is NodeCopy
+
+
 if __name__ == '__main__':
     test_class_instances()
     test_class_objects()
@@ -351,3 +376,4 @@ if __name__ == '__main__':
     test_metaclass()
     test_enummeta()
     test_inherit()
+    test_self_referencing_class()

@@ -1921,6 +1921,74 @@ def _get_typedict_abc(obj, _dict, attrs, postproc_list):
         _dict.pop('_abc_impl', None)
     return _dict, attrs
 
+class _NullFile(object):
+    def write(self, data):
+        return len(data)
+
+# types whose values refer to no other object
+_ATOMIC_TYPES = frozenset((str, bytes, int, float, complex, bool, type(None), type(Ellipsis)))
+
+class _Reached(Exception):
+    pass
+
+class _ReferenceProbe(Pickler):
+    """A Pickler that writes nothing and records whether it meets ``target``.
+
+    ``target`` is replaced by a persistent id, so the rest of a value is
+    pickled as it would be once ``target`` exists. Objects that ``pickler``
+    has already saved are not followed, as ``pickler`` only refers to them.
+    Functions are not followed either: references through their cells and
+    globals are set after the objects that hold them are created. A class
+    that the probe is already saving is not followed again.
+    """
+    def __init__(self, target, pickler):
+        Pickler.__init__(self, _NullFile(), pickler.proto, byref=pickler._byref,
+                         fmode=pickler._fmode, recurse=pickler._recurse)
+        self._main = pickler._main
+        self._session = pickler._session
+        self._trace_depth = None # the probe writes no trace
+        self._target = target
+        self._saved = pickler.memo
+
+    def persistent_id(self, obj):
+        if obj is self._target:
+            self._reached = True
+            raise _Reached
+        if id(obj) in self._saved or isinstance(obj, FunctionType) or \
+                (isinstance(obj, type) and id(obj) in self._postproc):
+            return 1
+        return None
+
+    def save(self, obj, save_persistent_id=True):
+        # skip values that hold no references, and builtin containers of them
+        obj_type = type(obj)
+        if obj_type in _ATOMIC_TYPES:
+            return
+        if obj_type in (list, tuple, set, frozenset):
+            if _ATOMIC_TYPES.issuperset(map(type, obj)):
+                return
+        elif obj_type is dict:
+            if _ATOMIC_TYPES.issuperset(map(type, obj)) and \
+                    _ATOMIC_TYPES.issuperset(map(type, obj.values())):
+                return
+        elif obj_type.__name__ == 'ndarray' and obj_type.__module__ == 'numpy' \
+                and not obj.dtype.hasobject: # numpy pickles a copy of the data
+            return
+        Pickler.save(self, obj, save_persistent_id)
+
+    def refers_to_target(self, value):
+        """Whether pickling ``value`` meets the target."""
+        if type(value) in _ATOMIC_TYPES or type(value) is FunctionType:
+            return False # most entries of a class: no need to start a dump
+        self.clear_memo()
+        self._postproc = OrderedDict([(id(self._target), [])])
+        self._reached = False
+        try:
+            StockPickler.dump(self, value)
+        except Exception: # _Reached, or a value that does not pickle
+            pass
+        return self._reached
+
 @register(TypeType)
 def save_type(pickler, obj, postproc_list=None):
     if obj in _typemap:
@@ -1997,6 +2065,15 @@ def save_type(pickler, obj, postproc_list=None):
                 logger.trace(pickler, "ABC: %s", obj)
                 _dict, attrs = _get_typedict_abc(obj, _dict, attrs, postproc_list)
                 logger.trace(pickler, "# ABC")
+
+            # Entries that refer back to the class cannot be pickled before the
+            # class exists: create it without them and set them afterwards.
+            # An Enum cannot be created from a plain dict, so it is left as is.
+            # A probe does not probe the classes it meets, it only follows them.
+            if not isinstance(obj, EnumMeta) and not isinstance(pickler, _ReferenceProbe):
+                probe = _ReferenceProbe(obj, pickler)
+                for name in [k for (k, v) in _dict.items() if probe.refers_to_target(v)]:
+                    postproc_list.append((setattr, (obj, name, _dict.pop(name))))
 
             qualname = getattr(obj, '__qualname__', None)
             if attrs is not None:
