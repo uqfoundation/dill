@@ -155,6 +155,33 @@ as keyword arguments to several ``dill`` functions:
   top-level script environment use the existing type in the environment
   rather than a possibly different reconstructed type.
 
+The *ignore* option does not recursively replace the types of objects stored
+in attributes or containers. For example, when these classes are defined in
+the top-level script (``__main__``)::
+
+    >>> import dill
+    >>> class Outer:
+    ...     class Inner:
+    ...         pass
+    ...     def __init__(self):
+    ...         self.inner = self.Inner()
+    ...
+    >>> original = Outer()
+    >>> restored = dill.loads(dill.dumps(original), ignore=False)
+    >>> isinstance(restored, Outer), isinstance(restored.inner, Outer.Inner)
+    (True, False)
+
+Use *byref=True* when dumping to preserve references to the existing class
+definitions, including the nested class::
+
+    >>> restored = dill.loads(dill.dumps(original, byref=True), ignore=False)
+    >>> isinstance(restored, Outer), isinstance(restored.inner, Outer.Inner)
+    (True, True)
+
+Pickling classes from ``__main__`` by reference may emit a ``PicklingWarning``.
+The classes must be available by name in the environment where the pickle
+is loaded; their definitions are not stored in the pickle.
+
 The default serialization can also be set globally in *dill.settings*.
 Thus, we can modify how ``dill`` handles references to the global dictionary
 locally or globally::
