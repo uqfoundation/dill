@@ -8,8 +8,19 @@
 test pickling registered objects
 """
 
+import io
+
 import dill
 from dill._objects import failures, registered, succeeds
+
+# Pytest replaces stdio streams with capture objects that are not picklable,
+# which breaks round-tripping a handful of stdlib helpers that hang on to
+# those streams. Point them at simple in-memory buffers so the coverage stays
+# representative regardless of the test harness.
+if 'PrettyPrinterType' in succeeds:
+    succeeds['PrettyPrinterType']._stream = io.StringIO()
+if 'StreamHandlerType' in succeeds:
+    succeeds['StreamHandlerType'].stream = io.StringIO()
 import warnings
 warnings.filterwarnings('ignore')
 

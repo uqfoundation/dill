@@ -12,6 +12,12 @@ import test_mixins as module
 from importlib import reload
 dill.settings['recurse'] = True
 
+# Pytest injects an assertion-rewriting loader that captures handles that
+# are not picklable (e.g. EncodedFile instances). Scrub those hooks so that
+# the module resembles a regular import and can round-trip through dill.
+module.__loader__ = None
+module.__spec__ = None
+
 cached = (module.__cached__ if hasattr(module, "__cached__")
           else module.__file__.split(".", 1)[0] + ".pyc")
 

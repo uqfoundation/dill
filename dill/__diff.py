@@ -41,7 +41,10 @@ def get_attrs(obj):
     if type(obj) in builtins_types \
        or type(obj) is type and obj in builtins_types:
         return
-    return getattr(obj, '__dict__', None)
+    try:
+        return getattr(obj, '__dict__', None)
+    except ReferenceError:
+        return None
 
 
 def get_seq(obj, cache={str: False, frozenset: False, list: True, set: True,
@@ -53,6 +56,8 @@ def get_seq(obj, cache={str: False, frozenset: False, list: True, set: True,
     """
     try:
         o_type = obj.__class__
+    except ReferenceError:
+        return None
     except AttributeError:
         o_type = type(obj)
     hsattr = hasattr
