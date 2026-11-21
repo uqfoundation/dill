@@ -325,7 +325,6 @@ def getblocks(object, lstrip=False, enclosing=False, locate=False):
         if lstrip: lines = _outdent(lines)
         return ([lines], [0]) if locate is True else [lines]
 
-    #XXX: 'enclosing' means: closures only? or classes and files?
     indent = indentsize(lines[lnum])
     block = getblock(lines[lnum:]) #XXX: catch any TokenError here?
 
@@ -333,18 +332,15 @@ def getblocks(object, lstrip=False, enclosing=False, locate=False):
         if lstrip: block = _outdent(block)
         return ([block], [lnum]) if locate is True else [block]
 
-    pat1 = r'^(\s*(?:async\s+)?def\s)|(.*(?<!\w)lambda(:|\s))'; pat1 = re.compile(pat1)
+    pat1 = r'^(\s*(?:(?:async\s+)?def|class)\s)|(.*(?<!\w)lambda(:|\s))'; pat1 = re.compile(pat1)
     pat2 = r'^(\s*@)'; pat2 = re.compile(pat2)
-   #pat3 = r'^(\s*class\s)'; pat3 = re.compile(pat3) #XXX: enclosing class?
-    #FIXME: bound methods need enclosing class (and then instantiation)
-    #       *or* somehow apply a partial using the instance
 
     skip = 0
     line = 0
     blocks = []; _lnum = []
     target = ''.join(block)
     while line <= lnum: #XXX: repeat lnum? or until line < lnum?
-        # see if starts with ('def','lambda') and contains our target block
+        # see if starts with ('def','class','lambda') and contains our target block
         if pat1.match(lines[line]):
             if not skip:
                 try: code = getblock(lines[line:])
@@ -466,11 +462,25 @@ def getsource(object, alias='', lstrip=False, enclosing=False, \
 
     # add an alias to the source code
     if alias:
+        skip = 0
+        for line in lines: # skip lines that are decorators
+            if not line.startswith('@'): break
+            skip += 1
+        if enclosing and re.match(r'^\s*class\s', lines[skip]):
+            # Resolve the requested member within the enclosing class.
+            names = getattr(object, '__qualname__', '').split('.')
+            if names[-1] == '<lambda>': names[-1] = getname(object)
+            if all(name.isidentifier() for name in names):
+                name = names[0]
+                for parent, child in zip(names, names[1:]):
+                    parent = parent.lstrip('_')
+                    if parent and child.startswith('__') and not child.endswith('__'):
+                        child = '_' + parent + child
+                    name += '.' + child
+                if alias != name:
+                    lines.append('\n%s = %s\n' % (alias, name))
+                return ''.join(lines)
         if hascode:
-            skip = 0
-            for line in lines: # skip lines that are decorators
-                if not line.startswith('@'): break
-                skip += 1
             #XXX: use regex from findsource / getsourcelines ?
             if re.match(r'^\s*(?:async\s+)?def\s', lines[skip]): # we have a function
                 if alias != object.__name__:
@@ -927,7 +937,7 @@ def _closuredimport(func, alias='', builtin=False):
     if not func_vars:
         name = outermost(func)
         mod = getname(getmodule(name))
-        if not mod or name is func: # then it can be handled by getimport
+        if not mod or name is func or isclass(name): # not a closure factory
             name = getname(func, force=True) #XXX: better key?
             src = getimport(func, alias=alias, builtin=builtin)
         else:
