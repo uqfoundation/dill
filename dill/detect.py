@@ -52,6 +52,9 @@ def outermost(func): # is analogous to getsource(func,enclosing=True)
     # now only save the objects that generate the enclosing block
     for name,obj in _locals: #XXX: don't really need 'name'
         try:
+            if obj is func and func.__code__.co_name == '<lambda>' and \
+                    func.__code__.co_firstlineno - 1 == lnum:
+                return obj
             if getsourcelines(obj) == (lines,lnum): return obj
         except Exception: #TypeError, IOError
             pass
