@@ -59,6 +59,69 @@ def test_getsource():
   assert getsource(Foo) == 'class Foo(object):\n  def bar(self, x):\n    return x*x+x\n'
   #XXX: add getsource for  _foo, _bar
 
+def test_enclosing_class():
+  expected = 'class Foo(object):\n  def bar(self, x):\n    return x*x+x\n'
+  for method in (Foo.bar, _foo.bar):
+    assert getsource(method, enclosing=True) == expected
+    assert getsource(method) == '  def bar(self, x):\n    return x*x+x\n'
+
+def decorate(cls):
+  return cls
+
+@decorate
+class Enclosing:
+  class Nested:
+    def value(self, x):
+      return x+2
+
+    def __private(self, x):
+      return x+3
+
+    increment = lambda self, x: x+1
+
+    @classmethod
+    def method(cls):
+      return cls.__name__
+
+    @staticmethod
+    async def asynchronous():
+      return 42
+
+def test_nested_enclosing_class():
+  from dill.source import getsourcelines
+  lines, start = getsourcelines(Enclosing)
+  expected = '@decorate\n' + ''.join(lines)
+  for method in (Enclosing.Nested.method, Enclosing.Nested.asynchronous):
+    assert getsource(method, enclosing=True) == expected
+    assert getsourcelines(method, enclosing=True) == (['@decorate\n'] + lines, start-1)
+    namespace = {'decorate': decorate}
+    exec(getsource(method, enclosing=True, alias='extracted'), namespace)
+    assert namespace['extracted'] == getattr(namespace['Enclosing'].Nested, method.__name__)
+    if method.__name__ == 'method':
+      assert namespace['extracted']() == 'Nested'
+    else:
+      import asyncio
+      assert asyncio.run(namespace['extracted']()) == 42
+
+def test_enclosing_class_alias():
+  cases = (
+    (Foo.bar, ('Foo', 'bar'), 20),
+    (_foo.bar, ('Foo', 'bar'), 20),
+    (Enclosing.Nested.value, ('Enclosing', 'Nested', 'value'), 6),
+    (Enclosing.Nested().value, ('Enclosing', 'Nested', 'value'), 6),
+    (Enclosing.Nested._Nested__private, ('Enclosing', 'Nested', '_Nested__private'), 7),
+    (Enclosing.Nested.increment, ('Enclosing', 'Nested', 'increment'), 5),
+  )
+  for method, path, expected in cases:
+    for alias in ('extracted', path[-1]):
+      namespace = {'decorate': decorate}
+      exec(getsource(method, enclosing=True, alias=alias), namespace)
+      owner = namespace[path[0]]
+      for name in path[1:-1]:
+        owner = getattr(owner, name)
+      assert namespace[alias] is getattr(owner, path[-1])
+      assert namespace[alias](owner(), 4) == expected
+
 # test itself
 def test_itself():
   assert getimport(getimport)=='from dill.source import getimport\n'
@@ -245,6 +308,9 @@ def test_repl():
 
 if __name__ == '__main__':
     test_getsource()
+    test_enclosing_class()
+    test_nested_enclosing_class()
+    test_enclosing_class_alias()
     test_itself()
     test_builtin()
     test_imported()
