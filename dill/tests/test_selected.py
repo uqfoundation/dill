@@ -163,6 +163,20 @@ def test_type_params():
   assert dill.copy(T).__bound__ is int
   Foo = dill.copy(ns['Foo'])
   assert [type(x) for x in Foo.__type_params__] == [type(T), type(Ts), type(P)]
+  # PEP 695 generic functions keep their type parameters
+  ns = {}
+  exec("def f[T](x: T) -> T: return x", ns)
+  f = ns['f']
+  for protocol in range(dill.HIGHEST_PROTOCOL + 1):
+    g = dill.copy(f, protocol=protocol)
+    assert [type(x) for x in g.__type_params__] == [type(x) for x in f.__type_params__]
+    assert g.__type_params__[0] is g.__annotations__['x']
+  exec("class C:\n  def m[T](self, x: T) -> T: return x", ns)
+  C = ns['C']
+  D = dill.copy(C)
+  m, m2 = C.__dict__['m'], D.__dict__['m']
+  assert [type(x) for x in m2.__type_params__] == [type(x) for x in m.__type_params__]
+  assert m2.__type_params__[0] is m2.__annotations__['x']
 
 
 def test_type_alias():
