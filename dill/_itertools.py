@@ -106,34 +106,37 @@ def _put(view, name, obj):
     if old:
         _decref(_object(old))
 
-def _save(pickler, obj, func, args):
-    logger.trace(pickler, "It: %s", obj)
-    pickler.save_reduce(func, args, obj=obj)
-    logger.trace(pickler, "# It")
-
-
 @register(itertools.count)
 def save_count(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
     start = _get(view, 'long_cnt') if view.long_cnt else view.cnt
-    _save(pickler, obj, itertools.count, (start, _get(view, 'long_step')))
+    pickler.save_reduce(itertools.count, (start, _get(view, 'long_step')), obj=obj)
+    logger.trace(pickler, "# It")
 
 @register(itertools.repeat)
 def save_repeat(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
     element = _get(view, 'element')
-    _save(pickler, obj, itertools.repeat, (element,) if view.cnt < 0 else (element, view.cnt))
+    args = (element,) if view.cnt < 0 else (element, view.cnt)
+    pickler.save_reduce(itertools.repeat, args, obj=obj)
+    logger.trace(pickler, "# It")
 
 @register(itertools.compress)
 def save_compress(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
-    _save(pickler, obj, itertools.compress, (_get(view, 'data'), _get(view, 'selectors')))
+    pickler.save_reduce(itertools.compress, (_get(view, 'data'), _get(view, 'selectors')), obj=obj)
+    logger.trace(pickler, "# It")
 
 @register(itertools.filterfalse)
 @register(itertools.starmap)
 def save_function_iterator(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
-    _save(pickler, obj, type(obj), (_get(view, 'func'), _get(view, 'it')))
+    pickler.save_reduce(type(obj), (_get(view, 'func'), _get(view, 'it')), obj=obj)
+    logger.trace(pickler, "# It")
 
 
 def _create_dropwhile(func, it, start):
@@ -148,13 +151,19 @@ def _create_takewhile(func, it, stop):
 
 @register(itertools.dropwhile)
 def save_dropwhile(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
-    _save(pickler, obj, _create_dropwhile, (_get(view, 'func'), _get(view, 'it'), view.start))
+    args = (_get(view, 'func'), _get(view, 'it'), view.start)
+    pickler.save_reduce(_create_dropwhile, args, obj=obj)
+    logger.trace(pickler, "# It")
 
 @register(itertools.takewhile)
 def save_takewhile(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
-    _save(pickler, obj, _create_takewhile, (_get(view, 'func'), _get(view, 'it'), view.stop))
+    args = (_get(view, 'func'), _get(view, 'it'), view.stop)
+    pickler.save_reduce(_create_takewhile, args, obj=obj)
+    logger.trace(pickler, "# It")
 
 
 def _create_islice(it, start, stop, step, cnt):
@@ -164,12 +173,16 @@ def _create_islice(it, start, stop, step, cnt):
 
 @register(itertools.islice)
 def save_islice(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
     if not view.it: # exhausted
-        _save(pickler, obj, itertools.islice, (iter(()), 0))
+        pickler.save_reduce(itertools.islice, (iter(()), 0), obj=obj)
+        logger.trace(pickler, "# It")
         return
     stop = None if view.stop == -1 else view.stop
-    _save(pickler, obj, _create_islice, (_get(view, 'it'), view.next, stop, view.step, view.cnt))
+    args = (_get(view, 'it'), view.next, stop, view.step, view.cnt)
+    pickler.save_reduce(_create_islice, args, obj=obj)
+    logger.trace(pickler, "# It")
 
 
 def _create_cycle(it, saved, index):
@@ -183,13 +196,16 @@ def _create_cycle(it, saved, index):
 
 @register(itertools.cycle)
 def save_cycle(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
     if hasattr(view, 'firstpass'): # the first pass lasts while it is set
         first = bool(view.it)
     else: # index is negative during the first pass
         first = view.index < 0
     it = _get(view, 'it') if first else None
-    _save(pickler, obj, _create_cycle, (it, _get(view, 'saved'), -1 if first else view.index))
+    args = (it, _get(view, 'saved'), -1 if first else view.index)
+    pickler.save_reduce(_create_cycle, args, obj=obj)
+    logger.trace(pickler, "# It")
 
 
 def _create_chain(source, *active):
@@ -200,11 +216,14 @@ def _create_chain(source, *active):
 
 @register(itertools.chain)
 def save_chain(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
     if not view.source: # exhausted
-        _save(pickler, obj, itertools.chain, ())
+        pickler.save_reduce(itertools.chain, (), obj=obj)
+        logger.trace(pickler, "# It")
         return
-    _save(pickler, obj, _create_chain, (_get(view, 'source'),) + _opt(view, 'active'))
+    pickler.save_reduce(_create_chain, (_get(view, 'source'),) + _opt(view, 'active'), obj=obj)
+    logger.trace(pickler, "# It")
 
 
 def _create_accumulate(it, func, initial, *total):
@@ -215,9 +234,11 @@ def _create_accumulate(it, func, initial, *total):
 
 @register(itertools.accumulate)
 def save_accumulate(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
     args = (_get(view, 'it'), _get(view, 'binop'), _get(view, 'initial'))
-    _save(pickler, obj, _create_accumulate, args + _opt(view, 'total'))
+    pickler.save_reduce(_create_accumulate, args + _opt(view, 'total'), obj=obj)
+    logger.trace(pickler, "# It")
 
 
 # The combinatoric iterators keep indices into their pools and the result
@@ -237,6 +258,7 @@ def _create_product(pools, state=None):
 
 @register(itertools.product)
 def save_product(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
     pools = _get(view, 'pools')
     if view.stopped:
@@ -245,7 +267,8 @@ def save_product(pickler, obj):
         args = (pools, tuple(view.indices[i] for i in range(len(pools))))
     else:
         args = (pools,)
-    _save(pickler, obj, _create_product, args)
+    pickler.save_reduce(_create_product, args, obj=obj)
+    logger.trace(pickler, "# It")
 
 def _create_combinations(kind, pool, r, state=None):
     obj = kind(pool, r)
@@ -261,6 +284,7 @@ def _create_combinations(kind, pool, r, state=None):
 @register(itertools.combinations)
 @register(itertools.combinations_with_replacement)
 def save_combinations(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
     kind, pool, r = type(obj), _get(view, 'pool'), view.r
     if view.stopped:
@@ -269,7 +293,8 @@ def save_combinations(pickler, obj):
         args = (kind, pool, r, tuple(view.indices[i] for i in range(r)))
     else:
         args = (kind, pool, r)
-    _save(pickler, obj, _create_combinations, args)
+    pickler.save_reduce(_create_combinations, args, obj=obj)
+    logger.trace(pickler, "# It")
 
 def _create_permutations(pool, r, state=None):
     obj = itertools.permutations(pool, r)
@@ -287,6 +312,7 @@ def _create_permutations(pool, r, state=None):
 
 @register(itertools.permutations)
 def save_permutations(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
     pool, r = _get(view, 'pool'), view.r
     if view.stopped:
@@ -296,7 +322,8 @@ def save_permutations(pickler, obj):
         args = (pool, r, (indices, tuple(view.cycles[i] for i in range(r))))
     else:
         args = (pool, r)
-    _save(pickler, obj, _create_permutations, args)
+    pickler.save_reduce(_create_permutations, args, obj=obj)
+    logger.trace(pickler, "# It")
 
 
 def _create_zip_longest(iterables, fillvalue):
@@ -304,6 +331,7 @@ def _create_zip_longest(iterables, fillvalue):
 
 @register(itertools.zip_longest)
 def save_zip_longest(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
     if view.numactive: # an exhausted iterator is set to NULL; it is replaced by ()
         start = view.ittuple + tuple.__basicsize__
@@ -312,7 +340,8 @@ def save_zip_longest(pickler, obj):
         iterables = tuple(_object(a) if a else () for a in addresses)
     else: # exhausted
         iterables = ((),) * view.tuplesize
-    _save(pickler, obj, _create_zip_longest, (iterables, _get(view, 'fillvalue')))
+    pickler.save_reduce(_create_zip_longest, (iterables, _get(view, 'fillvalue')), obj=obj)
+    logger.trace(pickler, "# It")
 
 
 def _create_groupby(it, keyfunc, tgtkey, currkey, currvalue):
@@ -325,19 +354,24 @@ def _create_groupby(it, keyfunc, tgtkey, currkey, currvalue):
 
 @register(itertools.groupby)
 def save_groupby(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
     args = (_get(view, 'it'), _get(view, 'keyfunc'), _opt(view, 'tgtkey'),
             _opt(view, 'currkey'), _opt(view, 'currvalue'))
-    _save(pickler, obj, _create_groupby, args)
+    pickler.save_reduce(_create_groupby, args, obj=obj)
+    logger.trace(pickler, "# It")
 
 @register(itertools._grouper)
 def save_grouper(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
     parent = _get(view, 'parent')
     if _view(parent).currgrouper != id(obj): # the groupby has moved on
-        _save(pickler, obj, iter, ((),))
+        pickler.save_reduce(iter, ((),), obj=obj)
+        logger.trace(pickler, "# It")
         return
-    _save(pickler, obj, itertools._grouper, (parent, _get(view, 'tgtkey')))
+    pickler.save_reduce(itertools._grouper, (parent, _get(view, 'tgtkey')), obj=obj)
+    logger.trace(pickler, "# It")
 
 
 def _create_tee(dataobj, index):
@@ -349,13 +383,17 @@ def _create_tee(dataobj, index):
 
 @register(itertools._tee)
 def save_tee(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
-    _save(pickler, obj, _create_tee, (_get(view, 'dataobj'), view.index))
+    pickler.save_reduce(_create_tee, (_get(view, 'dataobj'), view.index), obj=obj)
+    logger.trace(pickler, "# It")
 
 @register(itertools._tee_dataobject)
 def save_tee_dataobject(pickler, obj):
+    logger.trace(pickler, "It: %s", obj)
     view = _view(obj)
     values = [_object(view.values[i]) for i in range(view.numread)]
     it = _get(view, 'it')
     args = (iter(()) if it is None else it, values, _get(view, 'nextlink'))
-    _save(pickler, obj, itertools._tee_dataobject, args)
+    pickler.save_reduce(itertools._tee_dataobject, args, obj=obj)
+    logger.trace(pickler, "# It")

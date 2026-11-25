@@ -8,19 +8,21 @@
 test pickling itertools objects at each stage of their iteration
 """
 
-import ctypes
 import itertools
 import operator
 import sys
 import warnings
 
 import dill
-from dill._dill import IS_PYPY
+from dill._dill import HAS_CTYPES, IS_PYPY
 
 # python 3.12 and 3.13 warn that itertools objects will stop being picklable
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 steps = 12
+
+# from 3.14, cpython pickles no itertools objects; dill does it with ctypes
+SUPPORTED = IS_PYPY or HAS_CTYPES or sys.hexversion < 0x30e00a1
 
 def check(make, expand=list):
     """copies made after each number of steps continue as the original does"""
@@ -87,6 +89,8 @@ if not IS_PYPY and sys.hexversion >= 0x30e00a1:
     ]
 
 def test_iterators():
+    if not SUPPORTED:
+        return
     for make in cases:
         check(make)
 
@@ -94,6 +98,8 @@ def groups(groupby):
     return [(key, list(group)) for key, group in groupby]
 
 def test_groupby():
+    if not SUPPORTED:
+        return
     check(lambda: itertools.groupby('aaabbbccd'), groups)
     check(lambda: itertools.groupby('aAabBc', str.lower), groups)
     data = 'aaabbbccd'
@@ -113,7 +119,7 @@ def test_groupby():
     assert list(dill.copy(old)) == [] # the groupby has moved past it
 
 def test_tee():
-    if IS_PYPY: # pypy pickles tee objects itself, and loses their position
+    if IS_PYPY or not SUPPORTED: # pypy pickles tee objects itself, and loses their position
         return
     a, b = itertools.tee(iter(range(150))) # more values than one link holds
     for _ in range(70):
@@ -127,8 +133,9 @@ def test_tee():
     assert list(a) == list(range(70, 150))
 
 def test_unknown_layout():
-    if IS_PYPY or sys.hexversion < 0x30e00a1:
+    if IS_PYPY or not HAS_CTYPES or sys.hexversion < 0x30e00a1:
         return
+    import ctypes
     from dill import _itertools
     layouts = _itertools._LAYOUTS[itertools.count]
     # a struct that is not the size of the type is not used
@@ -143,6 +150,8 @@ def test_unknown_layout():
         _itertools._LAYOUTS[itertools.count] = layouts
 
 def test_shared_iterator():
+    if not SUPPORTED:
+        return
     it = iter(range(10))
     head, rest = dill.copy((itertools.islice(it, 3), it))
     assert list(head) == [0, 1, 2]
