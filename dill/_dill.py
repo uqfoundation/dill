@@ -2151,6 +2151,9 @@ def save_function(pickler, obj):
             fattr = getattr(obj, fattrname, None)
             if fattr is not None:
                 state_dict[fattrname] = fattr
+        type_params = getattr(obj, '__type_params__', None) # python >= 3.12 (PEP 695)
+        if type_params:
+            state_dict['__type_params__'] = tuple(type_params)
         if obj.__qualname__ != obj.__name__:
             state_dict['__qualname__'] = obj.__qualname__
         if '__name__' not in globs or obj.__module__ != globs['__name__']:
