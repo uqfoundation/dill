@@ -121,8 +121,11 @@ def test_importable():
   assert importable(Foo.bar, alias='memo', source=False) == 'from %s import bar as memo\n' % __name__
   assert importable(Foo, alias='memo', source=False) == 'from %s import Foo as memo\n' % __name__
   assert importable(squared, alias='memo', source=False) == 'from %s import squared as memo\n' % __name__
-  assert importable(squared, alias='memo', source=True) == 'memo = squared = lambda x:x**2\n'
-  assert importable(add, alias='memo', source=True) == 'def add(x,y):\n  return x+y\n\nmemo = add\n'
+  for function, args, expected in ((squared, (3,), 9), (add, (2,3), 5)):
+    namespace = {}
+    exec(importable(function, alias='memo', source=True), namespace)
+    assert namespace['memo'](*args) == expected
+    assert set(namespace) == {'__builtins__', 'memo'}
   assert importable(None, alias='memo', source=True) == 'memo = None\n'
   assert importable(100, alias='memo', source=True) == 'memo = 100\n'
   assert importable(add, builtin=True, source=False) == 'from %s import add\n' % __name__
