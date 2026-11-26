@@ -1076,7 +1076,13 @@ def _get_attr(self, name):
 def _import_module(import_name, safe=False):
     try:
         if import_name.startswith('__runtime__.'):
-            return sys.modules[import_name]
+            try:
+                return sys.modules[import_name]
+            except KeyError:
+                #XXX: a runtime module that is not registered by
+                #    dill.session.load_module: create it, so the
+                #    module's saved state can be restored
+                return ModuleType(import_name.partition('.')[-1])
         elif '.' in import_name:
             items = import_name.split('.')
             module = '.'.join(items[:-1])
