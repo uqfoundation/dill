@@ -78,7 +78,22 @@ def test_module_is_none():
     assert dill.copy(obj)(3) == obj(3)
 
 
+def test_runtime_module_by_value():
+    from types import ModuleType
+    # a non-importable module with a __file__ is saved by value,
+    # hence it must round-trip without requiring a live import
+    module = ModuleType('dill_test_runtime')
+    module.__file__ = 'dill_test_runtime.py'
+    module.attr = 42
+    pik = dill.dumps(module)
+    restored = dill.loads(pik)
+    assert restored is not module
+    assert restored.__name__ == 'dill_test_runtime'
+    assert restored.attr == 42
+
+
 if __name__ == '__main__':
     test_attributes()
     test_diff_attributes()
     test_module_is_none()
+    test_runtime_module_by_value()
